@@ -7,8 +7,9 @@ class Settings(BaseSettings):
     USER_APP_URL: str = 'https://user-app.vercel.app'
     ADMIN_APP_URL: str = 'https://admin-app.vercel.app'
     ADMIN_USERNAME: str = 'mynus_lab'
-    REFERRAL_BONUS: int = 100
+    REFERRAL_BONUS: int = 500
     STREAK_FREEZE_COST: int = 50
+    PERFECT_SCORE_GIFT_PROBABILITY: float = 0.3
 
     class Config:
         env_file = ".env"

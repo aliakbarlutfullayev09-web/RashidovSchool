@@ -29,7 +29,7 @@ export default function PromoCode({ user }) {
 
   const handleCopyLink = () => {
     impactLight();
-    const link = `t.me/BiologyLmsBot?start=ref_${user.telegram_id}`;
+    const link = `t.me/RashidovSchool_bot?start=ref_${user.telegram_id}`;
     navigator.clipboard.writeText(link).then(() => {
       notificationSuccess();
       alert('Ссылка скопирована!');
@@ -63,10 +63,10 @@ export default function PromoCode({ user }) {
       <div className="glass-strong rounded-3xl p-5 border border-blue-400/30">
         <h3 className="font-bold mb-2 flex items-center space-x-2">
           <span>🎁</span>
-          <span>Пригласи друга — получи 100 🧠</span>
+          <span>Пригласи друга — получи 500 🧠</span>
         </h3>
         <p className="text-xs text-gray-300 mb-4">
-          Поделись ссылкой и получи бонус, когда друг пройдет первый тест.
+          Поделись ссылкой и получи бонус, когда друг зарегистрируется в боте.
         </p>
         <button 
           onClick={handleCopyLink}

@@ -12,15 +12,25 @@ from bot.config import config
 router = Router()
 
 
+from bot.handlers.payments import send_stars_invoice
+
 @router.message(CommandStart())
 async def start_handler(message: Message, command: CommandObject, db_user: dict, pool, state: FSMContext):
     # Сохранить реферальный ID если есть
-    ref_args = command.args
-    if ref_args and ref_args.startswith("ref_"):
-        try:
-            await state.update_data(referrer_id=int(ref_args[4:]))
-        except ValueError:
-            pass
+    args = command.args
+    if args:
+        if args.startswith("ref_"):
+            try:
+                await state.update_data(referrer_id=int(args[4:]))
+            except ValueError:
+                pass
+        elif args.startswith("buy_"):
+            try:
+                stars = int(args[4:])
+                await send_stars_invoice(message, stars)
+                return
+            except ValueError:
+                pass
 
     if db_user:
         # Уже зарегистрирован — приветствие

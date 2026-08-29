@@ -1,10 +1,11 @@
 import asyncio
 import logging
 from aiogram import Bot, Dispatcher
+from aiogram.client.default import DefaultBotProperties
 from bot.config import config
 from bot.db import create_pool
 from bot.middlewares.auth import AuthMiddleware
-from bot.handlers import start, testing, admin, ai_helper
+from bot.handlers import start, testing, admin, ai_helper, payments
 from bot.services.streak import setup_streak_scheduler
 
 logging.basicConfig(level=logging.INFO)
@@ -12,7 +13,7 @@ logging.basicConfig(level=logging.INFO)
 async def main():
     pool = await create_pool(config.DATABASE_URL)
     
-    bot = Bot(token=config.BOT_TOKEN)
+    bot = Bot(token=config.BOT_TOKEN, default=DefaultBotProperties(parse_mode='HTML'))
     dp = Dispatcher()
     
     # Apply auth middleware to messages and callback queries
@@ -30,6 +31,7 @@ async def main():
     dp.include_router(testing.router)
     dp.include_router(admin.router)
     dp.include_router(ai_helper.router)
+    dp.include_router(payments.router)
     
     setup_streak_scheduler(pool)
     
