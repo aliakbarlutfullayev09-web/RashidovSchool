@@ -4,7 +4,8 @@ from aiogram.filters import CommandStart, CommandObject
 from aiogram.fsm.context import FSMContext
 from bot.states.onboarding import OnboardingStates
 from bot.db import create_user, create_referral
-from bot.keyboards.inline import language_keyboard, main_menu_keyboard
+from bot.keyboards.inline import language_keyboard
+from bot.keyboards.reply import main_menu_reply_keyboard
 from bot.utils.messages import msg
 from bot.config import config
 
@@ -26,7 +27,7 @@ async def start_handler(message: Message, command: CommandObject, db_user: dict,
         lang = db_user.get('language', 'ru')
         await message.answer(
             msg('welcome_back', lang, name=db_user['full_name']),
-            reply_markup=main_menu_keyboard(config.USER_APP_URL)
+            reply_markup=main_menu_reply_keyboard(config.USER_APP_URL, lang)
         )
     else:
         # Новый юзер — первый шаг: выбор языка
@@ -77,6 +78,6 @@ async def class_entered(message: Message, state: FSMContext, pool):
 
     await message.answer(
         msg('registered', lang),
-        reply_markup=main_menu_keyboard(config.USER_APP_URL)
+        reply_markup=main_menu_reply_keyboard(config.USER_APP_URL, lang)
     )
     await state.clear()
