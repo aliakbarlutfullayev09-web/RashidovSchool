@@ -9,6 +9,16 @@ export const supabase = createClient(supabaseUrl, supabaseKey);
 const isMock = supabaseUrl.includes('mock');
 
 export const api = {
+  // Реальный запрос пользователя
+  getUser: async (telegramId) => {
+    const { data, error } = await supabase.from('users').select('*').eq('telegram_id', telegramId).single();
+    if (error) {
+      console.error('Error fetching user:', error);
+      return null;
+    }
+    return data;
+  },
+
   getSubjectStats: async (subjectId) => isMock ? mockStats : mockStats, // Using mock for now
   getRedZones: async (subjectId) => isMock ? mockRedZones : mockRedZones,
   createCourse: async (subjectId, title, price) => ({ id: Math.random(), title, price, lessons_count: 0 }),

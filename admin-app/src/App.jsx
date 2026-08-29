@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTelegram } from './hooks/useTelegram';
 import { mockSuperadminUser, mockTeacherUser } from './mock/data';
 import Sidebar from './components/Sidebar';
@@ -7,59 +7,73 @@ import ContentPage from './pages/ContentPage';
 import StaffPage from './pages/StaffPage';
 import UserList from './components/UserList';
 import PromoGenerator from './components/PromoGenerator';
+import { api } from './api/supabase';
 
 function App() {
-  const { tg } = useTelegram();
+  const { tg, user: tgUser } = useTelegram();
   const [activeSection, setActiveSection] = useState('dashboard');
+  const [dbUser, setDbUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  // ── Определение роли ──
-  // В проде: бот передаёт данные через initData
-  // В dev-режиме: используем мок для тестирования
+  // Dev Mode Toggle (сохраняем для тестирования)
   const [mockRole, setMockRole] = useState('superadmin');
-  
-  const getUser = () => {
-    // Попытка получить из Telegram initData
-    if (tg?.initDataUnsafe?.user) {
-      // В реальном приложении роль приходит через start_param или из БД
-      return {
-        ...tg.initDataUnsafe.user,
-        role: tg.initDataUnsafe.start_param || 'teacher',
-        permissions: { can_promo: true, can_gift: true, can_send: true }
-      };
-    }
-    // Фолбэк на мок
-    return mockRole === 'superadmin' ? mockSuperadminUser : mockTeacherUser;
-  };
 
-  const user = getUser();
+  useEffect(() => {
+    async function fetchAuth() {
+      if (tgUser && tgUser.id) {
+        // Пытаемся получить реального пользователя из БД
+        const realUser = await api.getUser(tgUser.id);
+        if (realUser) {
+          // Если юзер супер админ, даем все права
+          const permissions = realUser.role === 'superadmin' 
+            ? { can_promo: true, can_gift: true, can_send: true } 
+            : { can_promo: false, can_gift: false, can_send: false }; // Учителям пока урезаем для безопасности
+            
+          setDbUser({ ...realUser, permissions });
+          setLoading(false);
+          return;
+        }
+      }
+      
+      // Фолбэк для локального запуска в браузере
+      const fallback = mockRole === 'superadmin' ? mockSuperadminUser : mockTeacherUser;
+      setDbUser(fallback);
+      setLoading(false);
+    }
+    fetchAuth();
+  }, [tgUser, mockRole]);
 
   const toggleMockRole = () => {
     setMockRole(prev => prev === 'superadmin' ? 'teacher' : 'superadmin');
-    setActiveSection('dashboard'); // сброс при переключении
+    setActiveSection('dashboard');
   };
 
-  // Защита маршрутов — через useEffect чтобы не вызывать setState в рендере
+  if (loading || !dbUser) {
+    return <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white">Загрузка панели...</div>;
+  }
+
+  // Защита маршрутов
   const effectiveSection = (() => {
-    if (activeSection === 'users' && user.role !== 'superadmin') return 'dashboard';
-    if (activeSection === 'staff' && user.role !== 'superadmin') return 'dashboard';
-    if (activeSection === 'promo' && !user.permissions?.can_promo) return 'dashboard';
+    if (activeSection === 'users' && dbUser.role !== 'superadmin') return 'dashboard';
+    if (activeSection === 'staff' && dbUser.role !== 'superadmin') return 'dashboard';
+    if (activeSection === 'promo' && !dbUser.permissions?.can_promo) return 'dashboard';
     return activeSection;
   })();
 
   const renderContent = () => {
     switch (effectiveSection) {
-      case 'dashboard': return <DashboardPage user={user} />;
-      case 'content': return <ContentPage user={user} />;
-      case 'promo': return <PromoGenerator user={user} />;
+      case 'dashboard': return <DashboardPage user={dbUser} />;
+      case 'content': return <ContentPage user={dbUser} />;
+      case 'promo': return <PromoGenerator user={dbUser} />;
       case 'users': return <UserList />;
       case 'staff': return <StaffPage />;
-      default: return <DashboardPage user={user} />;
+      default: return <DashboardPage user={dbUser} />;
     }
   };
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-slate-900 text-slate-200 font-sans">
-      <Sidebar user={user} activeSection={effectiveSection} onSectionChange={setActiveSection} />
+      <Sidebar user={dbUser} activeSection={effectiveSection} onSectionChange={setActiveSection} />
       
       <main className="flex-1 p-4 md:p-8 overflow-y-auto">
         {renderContent()}
@@ -71,7 +85,7 @@ function App() {
               onClick={toggleMockRole} 
               className="bg-purple-600 hover:bg-purple-700 text-white text-xs px-3 py-2 rounded-full shadow-lg"
             >
-              ⟳ {user.role === 'superadmin' ? 'Teacher' : 'Superadmin'}
+              ⟳ {dbUser.role === 'superadmin' ? 'Teacher' : 'Superadmin'}
             </button>
           </div>
         )}
