@@ -5,7 +5,7 @@ import VideoPlayer from '../components/VideoPlayer';
 import { mockCourses, mockLessons, mockProgress } from '../mock/data';
 import { useHaptic } from '../hooks/useHaptic';
 
-export default function LessonsPage() {
+export default function LessonsPage({ user }) {
   const [selectedNode, setSelectedNode] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const { impactLight } = useHaptic();
@@ -40,7 +40,7 @@ export default function LessonsPage() {
 
   return (
     <div className="h-full flex flex-col overflow-hidden bg-[#0f0c29]">
-      <Header />
+      <Header user={user} />
       
       {/* Скроллируемый список как в YouTube */}
       <div className="flex-1 overflow-y-auto no-scrollbar pb-24 px-4 space-y-8">
