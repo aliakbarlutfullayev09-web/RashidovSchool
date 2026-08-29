@@ -3,8 +3,8 @@ import { useTelegram } from '../hooks/useTelegram';
 
 export default function VideoPlayer({ videoUrl, lessonId, onComplete, onBack }) {
   const videoRef = useRef(null);
+  const maxTimeWatched = useRef(0); // Используем ref вместо state для постоянных обновлений
   const [hasWatchedOnce, setHasWatchedOnce] = useState(false);
-  const [lastAllowedTime, setLastAllowedTime] = useState(0);
   const [isEnded, setIsEnded] = useState(false);
   const { sendData, close } = useTelegram();
 
@@ -13,21 +13,28 @@ export default function VideoPlayer({ videoUrl, lessonId, onComplete, onBack }) 
     if (!video) return;
 
     const handleTimeUpdate = () => {
-      if (!hasWatchedOnce && video.currentTime > lastAllowedTime) {
-        setLastAllowedTime(video.currentTime);
+      if (!hasWatchedOnce) {
+        // Защита: если время внезапно прыгнуло больше чем на 1 секунду вперед — отбрасываем назад
+        if (video.currentTime - maxTimeWatched.current > 1) {
+          video.currentTime = maxTimeWatched.current;
+        } else if (video.currentTime > maxTimeWatched.current) {
+          // Нормальный просмотр — обновляем рекорд времени
+          maxTimeWatched.current = video.currentTime;
+        }
       }
     };
 
     const handleSeeking = () => {
-      if (!hasWatchedOnce && video.currentTime > lastAllowedTime + 1) {
-        video.currentTime = lastAllowedTime;
+      // Строгая проверка при попытке перемотки
+      if (!hasWatchedOnce && video.currentTime > maxTimeWatched.current) {
+        video.currentTime = maxTimeWatched.current;
       }
     };
 
     const handleEnded = () => {
       setHasWatchedOnce(true);
       setIsEnded(true);
-      onComplete(); // might update backend
+      if (onComplete) onComplete(); 
     };
 
     video.addEventListener('timeupdate', handleTimeUpdate);
@@ -39,7 +46,7 @@ export default function VideoPlayer({ videoUrl, lessonId, onComplete, onBack }) 
       video.removeEventListener('seeking', handleSeeking);
       video.removeEventListener('ended', handleEnded);
     };
-  }, [hasWatchedOnce, lastAllowedTime, onComplete]);
+  }, [hasWatchedOnce, onComplete]);
 
   const handleReadyToTest = () => {
     sendData(JSON.stringify({ action: 'test_ready', lesson_id: lessonId }));
