@@ -26,6 +26,14 @@ export default function CourseBuilder({ user, onSelectCourse }) {
     }
   };
 
+  const handleDelete = async (e, id) => {
+    e.stopPropagation();
+    if (window.confirm('Удалить курс и все его уроки?')) {
+      const success = await api.deleteCourse(id);
+      if (success) setCourses(courses.filter(c => c.id !== id));
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="card p-6">
@@ -45,8 +53,15 @@ export default function CourseBuilder({ user, onSelectCourse }) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {courses.map(course => (
-          <div key={course.id} className="card p-5 card-hover cursor-pointer" onClick={() => onSelectCourse(course)}>
-            <h3 className="font-bold text-lg mb-2">{course.title}</h3>
+          <div key={course.id} className="card p-5 card-hover cursor-pointer relative" onClick={() => onSelectCourse(course)}>
+            <button 
+              onClick={(e) => handleDelete(e, course.id)} 
+              className="absolute top-3 right-3 text-red-500 hover:text-red-400 p-1 bg-white/5 hover:bg-white/10 rounded-lg transition-colors"
+              title="Удалить курс"
+            >
+              🗑️
+            </button>
+            <h3 className="font-bold text-lg mb-2 pr-8">{course.title}</h3>
             <div className="flex justify-between text-sm text-slate-400">
               <span>{course.lessons_count} уроков</span>
               <span className={course.price > 0 ? "text-yellow-400" : "text-green-400"}>

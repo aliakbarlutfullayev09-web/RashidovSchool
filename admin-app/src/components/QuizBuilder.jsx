@@ -35,6 +35,14 @@ export default function QuizBuilder({ lessonId, lessonName, courseName, onBack }
     setOptions(newOptions);
   };
 
+  const handleDelete = async (e, id) => {
+    e.stopPropagation();
+    if (window.confirm('Удалить этот вопрос?')) {
+      const success = await api.deleteQuestion(id);
+      if (success) setQuestions(questions.filter(q => q.id !== id));
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2 text-slate-400 text-sm">
@@ -76,12 +84,21 @@ export default function QuizBuilder({ lessonId, lessonName, courseName, onBack }
         <div className="space-y-4">
           <h2 className="text-xl font-bold">Существующие вопросы ({questions.length})</h2>
           {questions.map((q, i) => (
-            <div key={q.id} className="card p-4 relative">
-              <div className="absolute top-4 right-4 text-xs text-slate-400">⏱ {q.timeLimit}с</div>
-              <div className="font-bold mb-2 pr-10">{i + 1}. {q.text}</div>
+            <div key={q.id} className="card p-4 relative group">
+              <div className="absolute top-4 right-4 flex items-center space-x-3">
+                <span className="text-xs text-slate-400">⏱ {q.timeLimit}с</span>
+                <button 
+                  onClick={(e) => handleDelete(e, q.id)} 
+                  className="text-red-500 hover:text-red-400 p-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/5 rounded"
+                  title="Удалить вопрос"
+                >
+                  🗑️
+                </button>
+              </div>
+              <div className="font-bold mb-2 pr-16">{i + 1}. {q.text}</div>
               <div className="space-y-1">
                 {q.options.map((opt, idx) => (
-                  <div key={idx} className={`text-sm p-2 rounded ${idx === q.correctIndex ? 'bg-green-900/30 text-green-400 border border-green-800' : 'bg-slate-800 text-slate-300'}`}>
+                  <div key={idx} className={`text-sm p-2 rounded ${idx === q.correct_option_index ? 'bg-green-900/30 text-green-400 border border-green-800' : 'bg-slate-800 text-slate-300'}`}>
                     {['A', 'B', 'C', 'D'][idx]}. {opt}
                   </div>
                 ))}

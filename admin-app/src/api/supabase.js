@@ -62,6 +62,24 @@ export const api = {
     return l;
   },
 
+  deleteCourse: async (courseId) => {
+    const { error } = await supabase.from('courses').delete().eq('id', courseId);
+    if (error) alert("Ошибка удаления курса: " + error.message);
+    return !error;
+  },
+
+  deleteLesson: async (lessonId) => {
+    const { error } = await supabase.from('lessons').delete().eq('id', lessonId);
+    if (error) alert("Ошибка удаления урока: " + error.message);
+    return !error;
+  },
+
+  deleteQuestion: async (questionId) => {
+    const { error } = await supabase.from('questions').delete().eq('id', questionId);
+    if (error) alert("Ошибка удаления вопроса: " + error.message);
+    return !error;
+  },
+
   createQuestion: async (lessonId, text, options, correctIndex, timeLimit) => {
     const { data: q, error } = await supabase.from('questions').insert([{
       lesson_id: lessonId,

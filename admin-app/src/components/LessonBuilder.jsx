@@ -29,6 +29,14 @@ export default function LessonBuilder({ courseId, courseName, onSelectLesson, on
     }
   };
 
+  const handleDelete = async (e, id) => {
+    e.stopPropagation();
+    if (window.confirm('Удалить этот урок?')) {
+      const success = await api.deleteLesson(id);
+      if (success) setLessons(lessons.filter(l => l.id !== id));
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2 text-slate-400 text-sm">
@@ -76,7 +84,16 @@ export default function LessonBuilder({ courseId, courseName, onSelectLesson, on
                 <div className="text-xs text-blue-400 mt-1">📝 Тест: {lesson.test_question_count} вопросов</div>
               )}
             </div>
-            <div className="text-sm text-slate-400">{lesson.questions_count || 0} вопросов в банке →</div>
+            <div className="flex items-center space-x-4">
+              <div className="text-sm text-slate-400">{lesson.questions_count || 0} вопросов →</div>
+              <button 
+                onClick={(e) => handleDelete(e, lesson.id)} 
+                className="text-red-500 hover:text-red-400 p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors"
+                title="Удалить урок"
+              >
+                🗑️
+              </button>
+            </div>
           </div>
         ))}
         {lessons.length === 0 && <div className="text-slate-500 italic">Пока нет уроков в этом курсе.</div>}
