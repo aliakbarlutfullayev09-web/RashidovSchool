@@ -253,4 +253,3 @@ def get_verdict(stars: int, lang: str = 'ru') -> str:
 def t(key: str, lang: str = 'ru', **kwargs) -> str:
     """Алиас для msg() — обратная совместимость."""
     return msg(key, lang, **kwargs)
-""", "Overwrite": false
