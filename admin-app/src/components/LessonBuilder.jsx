@@ -21,10 +21,12 @@ export default function LessonBuilder({ courseId, courseName, onSelectLesson, on
     if (!title) return;
     const qCount = testQuestionCount ? parseInt(testQuestionCount) : null;
     const newLesson = await api.createLesson(courseId, title, videoUrl, qCount);
-    setLessons([...lessons, newLesson]);
-    setTitle('');
-    setVideoUrl('');
-    setTestQuestionCount('');
+    if (newLesson) {
+      setLessons([...lessons, newLesson]);
+      setTitle('');
+      setVideoUrl('');
+      setTestQuestionCount('');
+    }
   };
 
   return (

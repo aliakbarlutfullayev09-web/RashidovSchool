@@ -20,11 +20,13 @@ export default function QuizBuilder({ lessonId, lessonName, courseName, onBack }
     e.preventDefault();
     if (!text || options.some(o => !o)) return;
     const newQ = await api.createQuestion(lessonId, text, options, correctIndex, timeLimit);
-    setQuestions([...questions, newQ]);
-    setText('');
-    setOptions(['', '', '', '']);
-    setCorrectIndex(0);
-    setTimeLimit(30);
+    if (newQ) {
+      setQuestions([...questions, newQ]);
+      setText('');
+      setOptions(['', '', '', '']);
+      setCorrectIndex(0);
+      setTimeLimit(30);
+    }
   };
 
   const updateOption = (index, value) => {

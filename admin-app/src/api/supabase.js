@@ -22,33 +22,60 @@ export const api = {
   getSubjectStats: async (subjectId) => isMock ? mockStats : mockStats, // Using mock for now
   getRedZones: async (subjectId) => isMock ? mockRedZones : mockRedZones,
   createCourse: async (subjectId, title, price) => {
-    // Временно создаем предмет, если его нет (чтобы не падало)
-    const { data: c } = await supabase.from('courses').insert([{
-      subject_id: subjectId || 1, 
+    let safeSubjectId = subjectId || 1;
+    
+    // Проверяем, есть ли предмет с таким ID
+    const { data: subj } = await supabase.from('subjects').select('id').eq('id', safeSubjectId).single();
+    if (!subj) {
+      // Если предмета нет, создаем его базовым
+      await supabase.from('subjects').insert([{ id: safeSubjectId, name: 'Биология' }]);
+    }
+
+    const { data: c, error } = await supabase.from('courses').insert([{
+      subject_id: safeSubjectId, 
       title, 
       price: parseInt(price) || 0
     }]).select().single();
+    
+    if (error) {
+      console.error("Course creation error:", error);
+      alert("Ошибка при сохранении: " + error.message);
+      return null;
+    }
+    
     return c;
   },
   
   createLesson: async (courseId, title, videoUrl, testQuestionCount) => {
-    const { data: l } = await supabase.from('lessons').insert([{
+    const { data: l, error } = await supabase.from('lessons').insert([{
       course_id: courseId,
       title,
       video_url: videoUrl,
       test_question_count: testQuestionCount
     }]).select().single();
+    
+    if (error) {
+      console.error("Lesson creation error:", error);
+      alert("Ошибка при сохранении урока: " + error.message);
+      return null;
+    }
     return l;
   },
 
   createQuestion: async (lessonId, text, options, correctIndex, timeLimit) => {
-    const { data: q } = await supabase.from('questions').insert([{
+    const { data: q, error } = await supabase.from('questions').insert([{
       lesson_id: lessonId,
       text,
       options,
       correct_option_index: correctIndex,
       time_limit: timeLimit || 30
     }]).select().single();
+    
+    if (error) {
+      console.error("Question creation error:", error);
+      alert("Ошибка при сохранении вопроса: " + error.message);
+      return null;
+    }
     return q;
   },
 

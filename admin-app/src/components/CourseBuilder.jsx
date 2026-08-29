@@ -19,9 +19,11 @@ export default function CourseBuilder({ user, onSelectCourse }) {
     e.preventDefault();
     if (!title) return;
     const newCourse = await api.createCourse(user.subject?.id || 1, title, price);
-    setCourses([...courses, newCourse]);
-    setTitle('');
-    setPrice(0);
+    if (newCourse) {
+      setCourses([...courses, newCourse]);
+      setTitle('');
+      setPrice(0);
+    }
   };
 
   return (
