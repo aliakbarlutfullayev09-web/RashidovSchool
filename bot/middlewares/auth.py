@@ -23,11 +23,18 @@ class AuthMiddleware(BaseMiddleware):
 
         # Если юзер не найден и это не /start и не выбор языка — предложить /start
         if not user:
-            if isinstance(event, Message) and event.text and not event.text.startswith('/start'):
-                await event.answer(msg('please_start'))
-                return
-            elif isinstance(event, CallbackQuery) and not event.data.startswith('lang_'):
-                await event.answer(msg('please_start'), show_alert=True)
-                return
+            state = data.get('state')
+            current_state = await state.get_state() if state else None
+            
+            # Пропускаем, если пользователь находится в процессе регистрации
+            if current_state and current_state.startswith("OnboardingStates"):
+                pass
+            else:
+                if isinstance(event, Message) and event.text and not event.text.startswith('/start'):
+                    await event.answer(msg('please_start'))
+                    return
+                elif isinstance(event, CallbackQuery) and not event.data.startswith('lang_'):
+                    await event.answer(msg('please_start'), show_alert=True)
+                    return
 
         return await handler(event, data)
