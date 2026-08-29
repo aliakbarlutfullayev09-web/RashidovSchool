@@ -1,30 +1,80 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Header from '../components/Header';
 import BottomSheet from '../components/BottomSheet';
 import VideoPlayer from '../components/VideoPlayer';
-import { mockCourses, mockLessons, mockProgress } from '../mock/data';
+import { getCourses, getLessons, getProgress, supabase } from '../api/supabase';
 import { useHaptic } from '../hooks/useHaptic';
 
 export default function LessonsPage({ user }) {
+  const [courses, setCourses] = useState([]);
+  const [lessons, setLessons] = useState([]);
+  const [progresses, setProgresses] = useState([]);
+  
   const [selectedNode, setSelectedNode] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const { impactLight } = useHaptic();
 
+  useEffect(() => {
+    async function loadData() {
+      if (!user) return;
+      const [cData, lData, pData] = await Promise.all([
+        getCourses(1), // Биология
+        getLessons(),
+        getProgress(user.telegram_id)
+      ]);
+      setCourses(cData);
+      setLessons(lData);
+      setProgresses(pData);
+    }
+    loadData();
+  }, [user]);
+
   const handleCardClick = (lesson) => {
     impactLight();
-    const progress = mockProgress.find(p => p.lesson_id === lesson.id) || { is_unlocked: false, stars: 0 };
-    setSelectedNode({ lesson, progress });
+    const progress = progresses.find(p => p.lesson_id === lesson.id) || { is_unlocked: false, stars: 0 };
+    // Если курс бесплатный, все его уроки доступны
+    const course = courses.find(c => c.id === lesson.course_id);
+    if (course && course.price === 0) {
+      progress.is_unlocked = true;
+    }
+    setSelectedNode({ lesson, progress, course });
   };
 
   const handleCloseSheet = () => setSelectedNode(null);
   const handleWatch = () => setIsPlaying(true);
   
-  const handleBuy = () => {
-    alert(`buying course`);
-    setSelectedNode(null);
+  const handleBuy = async () => {
+    if (!selectedNode || !user) return;
+    const { course } = selectedNode;
+    
+    if (user.balance < course.price) {
+      alert('Недостаточно нейронов!');
+      return;
+    }
+    
+    // Списываем баланс
+    const newBalance = user.balance - course.price;
+    await supabase.from('users').update({ balance: newBalance }).eq('telegram_id', user.telegram_id);
+    
+    // Открываем все уроки курса
+    const courseLessons = lessons.filter(l => l.course_id === course.id);
+    const inserts = courseLessons.map(l => ({
+      user_id: user.telegram_id,
+      lesson_id: l.id,
+      is_unlocked: true,
+      stars: 0
+    }));
+    await supabase.from('progress').upsert(inserts);
+    
+    alert(`Курс успешно куплен!`);
+    window.location.reload(); // Простой способ обновить данные
   };
 
-  const handleVideoComplete = () => console.log('Video completed');
+  const handleVideoComplete = () => {
+     console.log('Video completed');
+     // Здесь можно добавлять логику прохождения (тесты и т.д.)
+  };
+  
   const handleVideoBack = () => setIsPlaying(false);
 
   if (isPlaying && selectedNode?.lesson) {
@@ -45,9 +95,15 @@ export default function LessonsPage({ user }) {
       {/* Скроллируемый список как в YouTube */}
       <div className="flex-1 overflow-y-auto no-scrollbar pb-24 px-4 space-y-8">
         
+        {courses.length === 0 && (
+          <div className="text-center text-slate-400 mt-10">
+            Здесь пока нет курсов. Скоро они появятся!
+          </div>
+        )}
+
         {/* Группируем уроки по курсам */}
-        {mockCourses.map(course => {
-          const courseLessons = mockLessons.filter(l => l.course_id === course.id);
+        {courses.map(course => {
+          const courseLessons = lessons.filter(l => l.course_id === course.id);
           if (courseLessons.length === 0) return null;
 
           return (
@@ -56,7 +112,9 @@ export default function LessonsPage({ user }) {
               
               <div className="grid grid-cols-1 gap-5">
                 {courseLessons.map(lesson => {
-                  const progress = mockProgress.find(p => p.lesson_id === lesson.id) || { is_unlocked: false, stars: 0 };
+                  let progress = progresses.find(p => p.lesson_id === lesson.id) || { is_unlocked: false, stars: 0 };
+                  if (course.price === 0) progress.is_unlocked = true;
+                  
                   const isLocked = !progress.is_unlocked;
                   const isCompleted = progress.is_unlocked && progress.stars > 0;
 
@@ -67,16 +125,17 @@ export default function LessonsPage({ user }) {
                       className="group cursor-pointer flex flex-col transition-transform active:scale-95"
                     >
                       {/* Thumbnail (16:9) */}
-                      <div className="relative w-full aspect-video rounded-2xl overflow-hidden bg-slate-800 shadow-lg border border-white/5">
-                        <img 
-                          src={lesson.thumbnail_url || 'https://via.placeholder.com/800x450/1e293b/ffffff?text=Lesson'} 
-                          alt={lesson.title} 
-                          className={`w-full h-full object-cover transition-transform duration-300 group-hover:scale-105 ${isLocked ? 'opacity-40 grayscale' : ''}`}
-                        />
+                      <div className="relative w-full aspect-video rounded-2xl overflow-hidden bg-slate-800 shadow-lg border border-white/5 flex items-center justify-center">
+                        {lesson.video_url ? (
+                           <div className="absolute inset-0 bg-gradient-to-tr from-indigo-900 to-purple-900 opacity-50"></div>
+                        ) : (
+                           <div className="absolute inset-0 bg-slate-800"></div>
+                        )}
+                        <span className="relative z-10 text-4xl opacity-30">🧬</span>
                         
                         {/* Lock Overlay */}
                         {isLocked && (
-                          <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm z-20">
                             <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center text-2xl shadow-xl">
                               🔒
                             </div>
@@ -85,7 +144,7 @@ export default function LessonsPage({ user }) {
 
                         {/* Play Icon (if unlocked) */}
                         {!isLocked && (
-                          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20">
+                          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20 z-20">
                             <div className="w-14 h-14 bg-blue-500/90 rounded-full flex items-center justify-center text-white text-2xl shadow-lg pl-1">
                               ▶
                             </div>
@@ -94,7 +153,7 @@ export default function LessonsPage({ user }) {
 
                         {/* Progress Bar (if watched) */}
                         {isCompleted && (
-                          <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-700">
+                          <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-700 z-30">
                             <div className="h-full bg-blue-500 w-full"></div>
                           </div>
                         )}
@@ -107,7 +166,7 @@ export default function LessonsPage({ user }) {
                             {lesson.title}
                           </h3>
                           <p className="text-sm text-slate-400 mt-1">
-                            {isLocked ? 'Требуется покупка курса' : (isCompleted ? 'Просмотрено' : 'Готово к просмотру')}
+                            {isLocked ? `Требуется покупка: ${course.price} Н` : (isCompleted ? 'Просмотрено' : 'Готово к просмотру')}
                           </p>
                         </div>
                         
@@ -137,6 +196,7 @@ export default function LessonsPage({ user }) {
         onClose={handleCloseSheet}
         lesson={selectedNode?.lesson}
         progress={selectedNode?.progress}
+        course={selectedNode?.course}
         onWatch={handleWatch}
         onBuy={handleBuy}
       />

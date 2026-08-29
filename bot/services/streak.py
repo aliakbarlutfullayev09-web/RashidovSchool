@@ -18,7 +18,10 @@ async def update_user_streak(pool, user_id: int):
     last_active = user['last_active_date']
     today = date.today()
     
-    if last_active < today:
+    if last_active is None:
+        await update_streak(pool, user_id, 1)
+        await update_last_active(pool, user_id)
+    elif last_active < today:
         if (today - last_active).days == 1:
             await update_streak(pool, user_id, user['streak_days'] + 1)
         else:

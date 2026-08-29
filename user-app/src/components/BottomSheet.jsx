@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function BottomSheet({ isOpen, onClose, lesson, progress, onWatch, onBuy }) {
+export default function BottomSheet({ isOpen, onClose, lesson, progress, course, onWatch, onBuy }) {
   if (!isOpen || !lesson) return null;
 
   const isCompleted = progress.is_unlocked && progress.stars > 0;
@@ -18,7 +18,9 @@ export default function BottomSheet({ isOpen, onClose, lesson, progress, onWatch
         <div className="w-12 h-1.5 bg-gray-400 rounded-full mx-auto mb-6 opacity-50" />
         
         <h2 className="text-2xl font-bold mb-1 text-center">{lesson.title}</h2>
-        <p className="text-sm text-gray-300 text-center mb-6">Модуль: {lesson.course_id}</p>
+        <p className="text-sm text-gray-300 text-center mb-6">
+           {course?.title || `Курс ID: ${lesson.course_id}`}
+        </p>
         
         {isCompleted && (
           <div className="flex justify-center space-x-2 text-3xl mb-6">
@@ -32,13 +34,13 @@ export default function BottomSheet({ isOpen, onClose, lesson, progress, onWatch
 
         {!progress.is_unlocked && (
           <div className="text-center mb-6 text-sm text-red-300 bg-red-900 bg-opacity-30 rounded-lg p-3">
-            Урок недоступен. Необходимо купить курс.
+            Урок недоступен. Необходимо купить курс целиком.
           </div>
         )}
 
         {progress.is_unlocked && !isCompleted && (
           <div className="text-center mb-6 text-sm text-blue-200">
-            Ещё не пройден
+            Готов к просмотру
           </div>
         )}
 
@@ -55,9 +57,10 @@ export default function BottomSheet({ isOpen, onClose, lesson, progress, onWatch
           {!progress.is_unlocked && (
             <button 
               onClick={onBuy}
-              className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-4 rounded-2xl shadow-lg transition-transform active:scale-95 text-lg"
+              className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-4 rounded-2xl shadow-lg transition-transform active:scale-95 text-lg flex items-center justify-center space-x-2"
             >
-              🔓 Купить курс
+              <span>🔓 Купить курс</span>
+              {course && <span className="bg-white/20 px-2 py-1 rounded text-sm">{course.price} Н</span>}
             </button>
           )}
           

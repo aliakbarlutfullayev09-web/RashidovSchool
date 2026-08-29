@@ -6,21 +6,25 @@ export default function PromoCode({ user }) {
   const [loading, setLoading] = useState(false);
   const { impactLight, notificationSuccess, notificationError } = useHaptic();
 
-  const handleApply = () => {
-    if (!code) return;
+  const handleApply = async () => {
+    if (!code || !user) return;
     impactLight();
     setLoading(true);
-    setTimeout(() => {
+    
+    import('../api/supabase').then(async ({ applyPromo }) => {
+      const res = await applyPromo(code, user.telegram_id);
       setLoading(false);
-      if (code.toLowerCase() === 'bonus') {
+      
+      if (res.success) {
         notificationSuccess();
-        alert('Промокод применен!');
+        alert(`Промокод применен! Вы получили +${res.bonus} Нейронов!`);
         setCode('');
+        window.location.reload(); // Простой способ обновить баланс на экране
       } else {
         notificationError();
-        alert('Неверный промокод');
+        alert(res.message || 'Ошибка применения промокода');
       }
-    }, 1000);
+    });
   };
 
   const handleCopyLink = () => {
