@@ -21,15 +21,114 @@ export const api = {
 
   getSubjectStats: async (subjectId) => isMock ? mockStats : mockStats, // Using mock for now
   getRedZones: async (subjectId) => isMock ? mockRedZones : mockRedZones,
-  createCourse: async (subjectId, title, price) => ({ id: Math.random(), title, price, lessons_count: 0 }),
-  createLesson: async (courseId, title, videoUrl) => ({ id: Math.random(), title, course_id: courseId, questions_count: 0 }),
-  createQuestion: async (lessonId, text, options, correctIndex, timeLimit) => ({ id: Math.random() }),
-  getCourses: async (subjectId) => isMock ? mockCourses : mockCourses,
-  getLessons: async (courseId) => isMock ? mockLessons.filter(l => l.course_id === courseId) : mockLessons,
-  getQuestions: async (lessonId) => [],
-  generatePromo: async (code, bonus, maxUses, createdBy) => ({ code, bonus, maxUses }),
+  createCourse: async (subjectId, title, price) => {
+    // Временно создаем предмет, если его нет (чтобы не падало)
+    const { data: c } = await supabase.from('courses').insert([{
+      subject_id: subjectId || 1, 
+      title, 
+      price: parseInt(price) || 0
+    }]).select().single();
+    return c;
+  },
+  
+  createLesson: async (courseId, title, videoUrl, testQuestionCount) => {
+    const { data: l } = await supabase.from('lessons').insert([{
+      course_id: courseId,
+      title,
+      video_url: videoUrl,
+      test_question_count: testQuestionCount
+    }]).select().single();
+    return l;
+  },
+
+  createQuestion: async (lessonId, text, options, correctIndex, timeLimit) => {
+    const { data: q } = await supabase.from('questions').insert([{
+      lesson_id: lessonId,
+      text,
+      options,
+      correct_option_index: correctIndex,
+      time_limit: timeLimit || 30
+    }]).select().single();
+    return q;
+  },
+
+  getCourses: async (subjectId) => {
+    const { data } = await supabase.from('courses').select('*, lessons(count)').order('order_index');
+    return (data || []).map(c => ({ ...c, lessons_count: c.lessons?.[0]?.count || 0 }));
+  },
+
+  getLessons: async (courseId) => {
+    const { data } = await supabase.from('lessons').select('*, questions(count)').eq('course_id', courseId).order('order_index');
+    return (data || []).map(l => ({ ...l, questions_count: l.questions?.[0]?.count || 0 }));
+  },
+
+  getQuestions: async (lessonId) => {
+    const { data } = await supabase.from('questions').select('*').eq('lesson_id', lessonId);
+    return data || [];
+  },
+  generatePromo: async (code, bonus, maxUses, createdBy) => {
+    const { data } = await supabase.from('promo_codes').insert([{
+      code,
+      bonus_amount: parseInt(bonus) || 0,
+      max_uses: parseInt(maxUses) || 1,
+      created_by: createdBy
+    }]).select().single();
+    return data ? { code: data.code, bonus: data.bonus_amount, maxUses: data.max_uses } : null;
+  },
   addTeacher: async (telegramId, subjectId, permissions) => ({ telegram_id: telegramId, permissions }),
   getTeachers: async (subjectId) => isMock ? mockTeachers : mockTeachers,
-  getAllUsers: async () => isMock ? mockAllUsers : mockAllUsers,
-  getAllStats: async () => isMock ? mockStats : mockStats,
+  getAllUsers: async () => {
+    const { data } = await supabase.from('users').select('*').order('created_at', { ascending: false });
+    return data || [];
+  },
+  
+  updateUserBalance: async (telegramId, newBalance) => {
+    const { data } = await supabase.from('users').update({ balance: newBalance }).eq('telegram_id', telegramId).select().single();
+    return data;
+  },
+  getAllStats: async () => {
+    try {
+      // 1. Total students
+      const { count: studentsCount } = await supabase
+        .from('users')
+        .select('*', { count: 'exact', head: true })
+        .eq('role', 'student');
+        
+      // 2. Total lessons
+      const { count: lessonsCount } = await supabase
+        .from('lessons')
+        .select('*', { count: 'exact', head: true });
+
+      // 3. Tests taken (progress with stars > 0)
+      const { data: progressData } = await supabase
+        .from('progress')
+        .select('stars')
+        .gt('stars', 0);
+
+      const testsCount = progressData ? progressData.length : 0;
+      let avg_score = 0;
+      if (testsCount > 0) {
+        const sum = progressData.reduce((acc, curr) => acc + curr.stars, 0);
+        avg_score = (sum / testsCount).toFixed(1);
+      }
+
+      // 4. Active today
+      const today = new Date().toISOString().split('T')[0];
+      const { count: activeToday } = await supabase
+        .from('users')
+        .select('*', { count: 'exact', head: true })
+        .eq('last_active_date', today);
+
+      return {
+        total_students: studentsCount || 0,
+        total_lessons: lessonsCount || 0,
+        total_tests_taken: testsCount,
+        avg_score: avg_score,
+        active_today: activeToday || 0
+      };
+    } catch (e) {
+      console.error(e);
+      return mockStats;
+    }
+  },
 };

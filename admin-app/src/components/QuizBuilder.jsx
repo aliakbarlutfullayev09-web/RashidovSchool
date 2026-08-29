@@ -8,10 +8,18 @@ export default function QuizBuilder({ lessonId, lessonName, courseName, onBack }
   const [options, setOptions] = useState(['', '', '', '']);
   const [correctIndex, setCorrectIndex] = useState(0);
 
+  React.useEffect(() => {
+    async function loadQ() {
+      const qs = await api.getQuestions(lessonId);
+      setQuestions(qs);
+    }
+    loadQ();
+  }, [lessonId]);
+
   const handleAdd = async (e) => {
     e.preventDefault();
     if (!text || options.some(o => !o)) return;
-    const newQ = { id: Math.random(), text, options: [...options], correctIndex, timeLimit };
+    const newQ = await api.createQuestion(lessonId, text, options, correctIndex, timeLimit);
     setQuestions([...questions, newQ]);
     setText('');
     setOptions(['', '', '', '']);
