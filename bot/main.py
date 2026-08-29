@@ -15,8 +15,10 @@ async def main():
     bot = Bot(token=config.BOT_TOKEN)
     dp = Dispatcher()
     
-    # Inject pool globally if needed, or via middleware
-    dp.update.middleware(AuthMiddleware())
+    # Apply auth middleware to messages and callback queries
+    auth_middleware = AuthMiddleware()
+    dp.message.middleware(auth_middleware)
+    dp.callback_query.middleware(auth_middleware)
     
     # Quick middleware to inject pool
     @dp.update.outer_middleware()
