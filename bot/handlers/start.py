@@ -31,6 +31,22 @@ async def start_handler(message: Message, command: CommandObject, db_user: dict,
                 return
             except ValueError:
                 pass
+        elif args.startswith("video_"):
+            try:
+                lesson_id = int(args[6:])
+                async with pool.acquire() as conn:
+                    lesson = await conn.fetchrow("SELECT title, video_url FROM lessons WHERE id = $1", lesson_id)
+                    if lesson and lesson['video_url']:
+                        await message.answer("🔄 Загрузка видео...")
+                        try:
+                            await message.answer_video(lesson['video_url'], caption=lesson['title'])
+                        except Exception as e:
+                            await message.answer(f"📹 {lesson['title']}\nСмотреть: {lesson['video_url']}")
+                    else:
+                        await message.answer("Видео не найдено.")
+                return
+            except Exception as e:
+                pass
 
     if db_user:
         # Уже зарегистрирован — приветствие

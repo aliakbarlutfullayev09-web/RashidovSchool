@@ -156,11 +156,14 @@ export const api = {
   getTeachers: async (subjectId) => {
     const { data } = await supabase.from('users').select('*').in('role', ['teacher', 'superadmin']);
     return (data || []).map(u => ({
-      id: u.telegram_id,
-      name: u.full_name,
+      telegram_id: u.telegram_id,
+      full_name: u.full_name,
       subject: u.role === 'superadmin' ? 'Все предметы' : 'Преподаватель',
-      studentsCount: 0,
-      rating: 5.0
+      permissions: {
+        can_promo: u.role === 'superadmin',
+        can_gift: u.role === 'superadmin',
+        can_send: u.role === 'superadmin'
+      }
     }));
   },
   

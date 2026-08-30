@@ -54,6 +54,15 @@ export default function BottomSheet({ isOpen, onClose, lesson, progress, course,
             </button>
           )}
 
+          {isCompleted && (
+            <a 
+              href={`https://t.me/RashidovSchool_bot?start=video_${lesson.id}`}
+              className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-4 rounded-2xl shadow-lg transition-transform active:scale-95 text-lg flex items-center justify-center space-x-2 no-underline text-center"
+            >
+              <span>📥 Скачать (в боте)</span>
+            </a>
+          )}
+
           {!progress.is_unlocked && (
             <button 
               onClick={onBuy}
