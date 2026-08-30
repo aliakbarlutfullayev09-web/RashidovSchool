@@ -215,6 +215,20 @@ export const api = {
     
     return { telegram_id: telegramId, full_name: userExists.full_name, permissions, subject: subjectName };
   },
+
+  removeTeacher: async (telegramId) => {
+    const { error } = await supabase.from('users').update({ 
+      role: 'student',
+      permissions: { can_promo: false, can_gift: false, can_send: false },
+      assigned_subject_id: null
+    }).eq('telegram_id', telegramId);
+    
+    if (error) {
+      alert("Ошибка удаления учителя: " + error.message);
+      return false;
+    }
+    return true;
+  },
   
   getTeachers: async (subjectId) => {
     const { data } = await supabase.from('users').select(`

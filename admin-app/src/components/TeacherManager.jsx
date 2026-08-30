@@ -26,6 +26,15 @@ export default function TeacherManager() {
     }
   };
 
+  const handleDelete = async (id) => {
+    if (window.confirm('Вы уверены, что хотите лишить этого пользователя прав учителя?')) {
+      const success = await api.removeTeacher(id);
+      if (success) {
+        setTeachers(teachers.filter(t => t.telegram_id !== id));
+      }
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="card p-6">
@@ -93,7 +102,7 @@ export default function TeacherManager() {
                   </div>
                 </td>
                 <td className="px-6 py-4">
-                  <button className="text-red-400 hover:text-red-300">Удалить</button>
+                  <button onClick={() => handleDelete(t.telegram_id)} className="text-red-400 hover:text-red-300">Удалить</button>
                 </td>
               </tr>
             ))}

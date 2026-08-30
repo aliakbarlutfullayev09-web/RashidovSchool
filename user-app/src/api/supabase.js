@@ -24,16 +24,16 @@ export async function updateUserProfile(telegramId, data) {
 
 export async function applyPromoCode(telegramId, code) {
   try {
-    // 1. Ищем промокод
-    const { data: promo, error } = await supabase.from('promo_codes').select('*').ilike('code', code).single();
+    const { data: promos, error } = await supabase.from('promo_codes').select('*');
+    if (error) return { success: false, message: `Ошибка БД: ${error.message}` };
     
-    if (error || !promo) return { success: false, message: 'Промокод не найден' };
+    const promo = promos?.find(p => p.code.toLowerCase() === code.toLowerCase());
+    if (!promo) return { success: false, message: 'Промокод не найден в базе' };
     
     if (promo.current_uses >= promo.max_uses) {
       return { success: false, message: 'Лимит использований исчерпан' };
     }
 
-    // 2. Ищем пользователя
     const { data: user } = await supabase.from('users').select('balance').eq('telegram_id', telegramId).single();
     if (!user) return { success: false, message: 'Пользователь не найден' };
 
