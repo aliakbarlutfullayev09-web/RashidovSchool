@@ -1,26 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api/supabase';
 
-export default function CourseBuilder({ user, onSelectCourse }) {
+export default function CourseBuilder({ user, subjectId, subjectName, onSelectCourse }) {
   const [courses, setCourses] = useState([]);
   const [title, setTitle] = useState('');
   const [price, setPrice] = useState(0);
 
   useEffect(() => {
     loadCourses();
-  }, []);
+  }, [subjectId]);
 
   const loadCourses = async () => {
-    const data = await api.getCourses();
+    const data = await api.getCourses(subjectId);
     setCourses(data);
   };
 
   const handleAdd = async (e) => {
     e.preventDefault();
     if (!title) return;
-    const newCourse = await api.createCourse(user.subject?.id || 1, title, price);
+    const newCourse = await api.createCourse(subjectId, title, price);
     if (newCourse) {
-      setCourses([...courses, newCourse]);
+      setCourses([...courses, { ...newCourse, lessons_count: 0 }]);
       setTitle('');
       setPrice(0);
     }
@@ -36,6 +36,7 @@ export default function CourseBuilder({ user, onSelectCourse }) {
 
   return (
     <div className="space-y-6">
+      <h2 className="text-xl font-bold text-slate-300">Курсы предмета: <span className="text-white">{subjectName}</span></h2>
       <div className="card p-6">
         <h2 className="text-xl font-bold mb-4">Добавить курс</h2>
         <form onSubmit={handleAdd} className="flex gap-4 items-end">

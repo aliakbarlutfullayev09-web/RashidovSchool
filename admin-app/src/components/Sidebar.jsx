@@ -7,7 +7,7 @@ export default function Sidebar({ user, activeSection, onSectionChange }) {
   const navItems = [
     { id: 'dashboard', label: '📊 Статистика', roles: ['superadmin', 'teacher'] },
     { id: 'content', label: '📚 Контент', roles: ['superadmin', 'teacher'] },
-    { id: 'promo', label: '🎟 Промокоды', roles: ['teacher'], condition: user?.permissions?.can_promo },
+    { id: 'promo', label: '🎟 Промокоды', roles: ['superadmin', 'teacher'], condition: user?.permissions?.can_promo },
     { id: 'users', label: '👥 Пользователи', roles: ['superadmin'] },
     { id: 'staff', label: '👨‍🏫 Персонал', roles: ['superadmin'] },
   ];

@@ -1,12 +1,19 @@
 import React, { useState } from 'react';
+import SubjectBuilder from '../components/SubjectBuilder';
 import CourseBuilder from '../components/CourseBuilder';
 import LessonBuilder from '../components/LessonBuilder';
 import QuizBuilder from '../components/QuizBuilder';
 
 export default function ContentPage({ user }) {
-  const [view, setView] = useState('courses'); // courses, lessons, quiz
+  const [view, setView] = useState('subjects'); // subjects, courses, lessons, quiz
+  const [selectedSubject, setSelectedSubject] = useState(null);
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [selectedLesson, setSelectedLesson] = useState(null);
+
+  const handleSelectSubject = (subject) => {
+    setSelectedSubject(subject);
+    setView('courses');
+  };
 
   const handleSelectCourse = (course) => {
     setSelectedCourse(course);
@@ -24,12 +31,25 @@ export default function ContentPage({ user }) {
       setView('courses');
       setSelectedCourse(null);
     }
+    if (view === 'courses') {
+      setView('subjects');
+      setSelectedSubject(null);
+    }
   };
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-white mb-6">Управление контентом</h1>
-      {view === 'courses' && <CourseBuilder user={user} onSelectCourse={handleSelectCourse} />}
+      <div className="flex items-center space-x-4 mb-6">
+        {view !== 'subjects' && (
+          <button onClick={handleBack} className="text-slate-400 hover:text-white font-bold p-2 bg-white/5 rounded-lg">
+            ← Назад
+          </button>
+        )}
+        <h1 className="text-2xl font-bold text-white">Управление контентом</h1>
+      </div>
+      
+      {view === 'subjects' && <SubjectBuilder onSelectSubject={handleSelectSubject} />}
+      {view === 'courses' && <CourseBuilder user={user} subjectId={selectedSubject.id} subjectName={selectedSubject.name} onSelectCourse={handleSelectCourse} />}
       {view === 'lessons' && <LessonBuilder courseId={selectedCourse.id} courseName={selectedCourse.title} onSelectLesson={handleSelectLesson} onBack={handleBack} />}
       {view === 'quiz' && <QuizBuilder lessonId={selectedLesson.id} lessonName={selectedLesson.title} courseName={selectedCourse.title} onBack={handleBack} />}
     </div>

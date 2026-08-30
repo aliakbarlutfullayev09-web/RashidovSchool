@@ -19,20 +19,43 @@ export const api = {
     return data;
   },
 
-  getSubjectStats: async (subjectId) => isMock ? mockStats : mockStats, // Using mock for now
-  getRedZones: async (subjectId) => isMock ? mockRedZones : mockRedZones,
-  createCourse: async (subjectId, title, price) => {
-    let safeSubjectId = subjectId || 1;
-    
-    // Проверяем, есть ли предмет с таким ID
-    const { data: subj } = await supabase.from('subjects').select('id').eq('id', safeSubjectId).single();
-    if (!subj) {
-      // Если предмета нет, создаем его базовым
-      await supabase.from('subjects').insert([{ id: safeSubjectId, name: 'Биология' }]);
-    }
+  getSubjectStats: async (subjectId) => mockStats, // Using general stats instead
+  
+  getRedZones: async (subjectId) => {
+    // Получаем реальных пользователей, у которых баланс 0 или стрик 0, либо последних активных
+    const { data } = await supabase.from('users').select('*').order('streak_days', { ascending: true }).limit(5);
+    return (data || []).map(u => ({
+      id: u.telegram_id,
+      studentName: u.full_name,
+      classGroup: u.class_group,
+      issue: u.streak_days === 0 ? 'Потерял стрик' : 'Низкая активность',
+      lastActive: u.last_active_date || 'Неизвестно',
+      balance: u.balance
+    }));
+  },
+  getSubjects: async () => {
+    const { data } = await supabase.from('subjects').select('*').order('id');
+    return data || [];
+  },
 
+  createSubject: async (name) => {
+    const { data, error } = await supabase.from('subjects').insert([{ name }]).select().single();
+    if (error) {
+      alert("Ошибка создания предмета: " + error.message);
+      return null;
+    }
+    return data;
+  },
+
+  deleteSubject: async (subjectId) => {
+    const { error } = await supabase.from('subjects').delete().eq('id', subjectId);
+    if (error) alert("Ошибка удаления предмета: " + error.message);
+    return !error;
+  },
+
+  createCourse: async (subjectId, title, price) => {
     const { data: c, error } = await supabase.from('courses').insert([{
-      subject_id: safeSubjectId, 
+      subject_id: subjectId, 
       title, 
       price: parseInt(price) || 0
     }]).select().single();
@@ -98,7 +121,11 @@ export const api = {
   },
 
   getCourses: async (subjectId) => {
-    const { data } = await supabase.from('courses').select('*, lessons(count)').order('order_index');
+    let query = supabase.from('courses').select('*, lessons(count)').order('order_index');
+    if (subjectId) {
+      query = query.eq('subject_id', subjectId);
+    }
+    const { data } = await query;
     return (data || []).map(c => ({ ...c, lessons_count: c.lessons?.[0]?.count || 0 }));
   },
 
@@ -120,8 +147,23 @@ export const api = {
     }]).select().single();
     return data ? { code: data.code, bonus: data.bonus_amount, maxUses: data.max_uses } : null;
   },
-  addTeacher: async (telegramId, subjectId, permissions) => ({ telegram_id: telegramId, permissions }),
-  getTeachers: async (subjectId) => isMock ? mockTeachers : mockTeachers,
+  addTeacher: async (telegramId, subjectId, permissions) => {
+    // Для демо мы просто меняем роль юзера на teacher
+    await supabase.from('users').update({ role: 'teacher' }).eq('telegram_id', telegramId);
+    return { telegram_id: telegramId, permissions };
+  },
+  
+  getTeachers: async (subjectId) => {
+    const { data } = await supabase.from('users').select('*').in('role', ['teacher', 'superadmin']);
+    return (data || []).map(u => ({
+      id: u.telegram_id,
+      name: u.full_name,
+      subject: u.role === 'superadmin' ? 'Все предметы' : 'Преподаватель',
+      studentsCount: 0,
+      rating: 5.0
+    }));
+  },
+  
   getAllUsers: async () => {
     const { data } = await supabase.from('users').select('*').order('created_at', { ascending: false });
     return data || [];

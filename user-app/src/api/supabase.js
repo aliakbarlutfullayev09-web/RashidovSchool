@@ -17,8 +17,17 @@ export const updateUserProfile = async (telegramId, updates) => {
   return { data, error };
 };
 
-export const getCourses = async (subjectId = 1) => {
-  const { data } = await supabase.from('courses').select('*').eq('subject_id', subjectId).order('order_index');
+export const getSubjects = async () => {
+  const { data } = await supabase.from('subjects').select('*').order('id');
+  return data || [];
+};
+
+export const getCourses = async (subjectId) => {
+  let query = supabase.from('courses').select('*').order('order_index');
+  if (subjectId) {
+    query = query.eq('subject_id', subjectId);
+  }
+  const { data } = await query;
   return data || [];
 };
 
