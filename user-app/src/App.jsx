@@ -21,21 +21,28 @@ function App() {
     }
   }, [tg]);
 
+  const [debugInfo, setDebugInfo] = useState('');
+
   useEffect(() => {
     async function fetchUser() {
-      console.log("Force Vercel rebuild - v2");
-      // Берём ID напрямую из Telegram WebApp
       const telegramId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id || tgUser?.id;
       
       if (telegramId) {
-        const { data } = await getUserData(telegramId);
-        if (data) {
-          setDbUser(data);
-          return;
+        try {
+          const { data, error } = await getUserData(telegramId);
+          if (data) {
+            setDbUser(data);
+            return;
+          } else {
+            setDebugInfo(`DB Null. Err: ${JSON.stringify(error)} | ID: ${telegramId}`);
+          }
+        } catch (e) {
+          setDebugInfo(`Crash: ${e.message} | ID: ${telegramId}`);
         }
+      } else {
+        setDebugInfo('No Telegram ID found in WebApp.');
       }
       
-      // Если данных нет — показываем минимальный профиль, а не бесконечную загрузку
       const firstName = window.Telegram?.WebApp?.initDataUnsafe?.user?.first_name || tgUser?.first_name || 'Гость';
       setDbUser({
         telegram_id: telegramId || 0,
@@ -57,6 +64,7 @@ function App() {
           <span className="text-4xl mb-4 block">⏳</span>
           <h2 className="text-xl font-bold mb-2">Загрузка профиля...</h2>
           <p className="text-slate-400 text-sm">Если загрузка идет слишком долго, закройте приложение и отправьте боту команду /start</p>
+          {debugInfo && <p className="text-red-400 mt-4 text-xs break-all">{debugInfo}</p>}
         </div>
       </div>
     );
@@ -64,6 +72,11 @@ function App() {
 
   return (
     <div className="h-full w-full flex flex-col relative overflow-hidden">
+      {debugInfo && (
+        <div className="bg-red-600 text-white text-xs p-2 break-all z-50">
+          DEBUG: {debugInfo}
+        </div>
+      )}
       <div className="flex-1 overflow-hidden">
         {activeTab === 0 ? <LessonsPage user={dbUser} /> : <ProfilePage user={dbUser} />}
       </div>
