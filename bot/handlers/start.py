@@ -50,7 +50,7 @@ async def start_handler(message: Message, command: CommandObject, db_user: dict,
         elif args.startswith("msg_"):
             try:
                 target_id = int(args[4:])
-                if db_user and db_user.get('role') in ['teacher', 'superadmin']:
+                if db_user and db_user.get('role') in ['teacher', 'superadmin', 'admin']:
                     await state.update_data(target_user_id=target_id)
                     await message.answer("✍️ Отправьте сообщение, которое хотите переслать этому пользователю (можно с фото, видео, кружочком, текстом и т.д.):")
                     from bot.states.admin import AdminStates
@@ -120,6 +120,6 @@ async def class_entered(message: Message, state: FSMContext, pool):
 
     await message.answer(
         msg('registered', lang),
-        reply_markup=main_menu_reply_keyboard(config.USER_APP_URL, lang)
+        reply_markup=main_menu_reply_keyboard(config.USER_APP_URL, lang, message.from_user.id)
     )
     await state.clear()

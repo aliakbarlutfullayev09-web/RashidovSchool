@@ -46,13 +46,30 @@ async def send_message_cancel(callback: CallbackQuery, state: FSMContext):
     await callback.message.edit_text("❌ Отправка отменена.")
     await state.clear()
 
+# ─────────────────────────────────────────────
+# 1.5. КОМАНДА: /admin (Панель управления)
+# ─────────────────────────────────────────────
+@router.message(Command("admin"))
+async def cmd_admin(message: Message, db_user):
+    if not db_user or db_user.get('role') not in ['teacher', 'superadmin', 'admin']:
+        await message.answer(msg('no_permission'))
+        return
+        
+    from aiogram.types import WebAppInfo
+    from bot.config import config
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⚙️ Открыть Панель", web_app=WebAppInfo(url=config.ADMIN_APP_URL))]
+    ])
+    await message.answer("Вход в панель управления:", reply_markup=keyboard)
+
 
 # ─────────────────────────────────────────────
 # 2. КОМАНДА: /send (Рассылка всем)
 # ─────────────────────────────────────────────
 @router.message(Command("send"))
 async def cmd_send(message: Message, db_user, state: FSMContext):
-    if not db_user or db_user.get('role') not in ['teacher', 'superadmin']:
+    if not db_user or db_user.get('role') not in ['teacher', 'superadmin', 'admin']:
         await message.answer(msg('no_permission'))
         return
     
@@ -103,7 +120,7 @@ async def cancel_broadcast(callback: CallbackQuery, state: FSMContext):
 # ─────────────────────────────────────────────
 @router.message(Command("stats"))
 async def cmd_stats(message: Message, db_user, pool):
-    if not db_user or db_user.get('role') not in ['teacher', 'superadmin']:
+    if not db_user or db_user.get('role') not in ['teacher', 'superadmin', 'admin']:
         await message.answer(msg('no_permission'))
         return
 
@@ -145,7 +162,7 @@ async def cmd_stats(message: Message, db_user, pool):
 # ─────────────────────────────────────────────
 @router.message(Command("gift"))
 async def cmd_gift(message: Message, db_user, state: FSMContext):
-    if not db_user or db_user.get('role') not in ['teacher', 'superadmin']:
+    if not db_user or db_user.get('role') not in ['teacher', 'superadmin', 'admin']:
         await message.answer(msg('no_permission'))
         return
         
