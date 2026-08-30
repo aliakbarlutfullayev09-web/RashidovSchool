@@ -7,7 +7,8 @@ async def get_ai_explanation(
     options: list,
     correct_index: int,
     user_answer_index: int,
-    api_key: str
+    api_key: str,
+    lang: str = 'ru'
 ) -> str:
     """
     Вызывает Gemini API для объяснения ошибки ученика.
@@ -22,8 +23,11 @@ async def get_ai_explanation(
     correct_option = options[correct_index] if 0 <= correct_index < len(options) else ""
     user_option = options[user_answer_index] if 0 <= user_answer_index < len(options) else ""
 
+    lang_name = "Узбекском (O'zbek tilida)" if lang == 'uz' else "Русском"
+
     prompt = (
-        f"{GEMINI_SYSTEM_PROMPT}\n\n"
+        f"{GEMINI_SYSTEM_PROMPT}\n"
+        f"ОТВЕЧАЙ СТРОГО НА ЯЗЫКЕ: {lang_name}!\n\n"
         f"Вопрос: {question_text}\n"
         f"Правильный ответ: {correct_option}\n"
         f"Ответ ученика: {user_option}"

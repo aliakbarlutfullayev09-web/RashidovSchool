@@ -33,7 +33,8 @@ async def ai_helper_handler(message: Message, db_user):
             options=context['o'],
             correct_index=context['c'],
             user_answer_index=context['u'],
-            api_key=config.GEMINI_API_KEY
+            api_key=config.GEMINI_API_KEY,
+            lang=lang
         )
 
         await message.answer(msg('ai_explanation', lang, text=explanation))
