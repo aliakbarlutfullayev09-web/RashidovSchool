@@ -2,10 +2,8 @@ from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 from bot.states.admin import AdminStates
-from bot.database.supabase import SupabaseClient
 
 router = Router()
-db = SupabaseClient()
 
 @router.message(AdminStates.waiting_for_message)
 async def process_admin_message(message: Message, state: FSMContext):
