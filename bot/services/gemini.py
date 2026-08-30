@@ -14,7 +14,21 @@ async def get_ai_explanation(
     Системный промпт берётся из messages.py.
     """
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-pro')
+    
+    valid_model_name = None
+    try:
+        for m in genai.list_models():
+            if 'generateContent' in m.supported_generation_methods:
+                valid_model_name = m.name
+                if 'flash' in m.name.lower():
+                    break
+    except Exception as e:
+        return f"Ошибка AI (Поиск моделей): {str(e)}"
+        
+    if not valid_model_name:
+        valid_model_name = 'gemini-1.5-flash' # fallback
+
+    model = genai.GenerativeModel(valid_model_name)
 
     correct_option = options[correct_index] if 0 <= correct_index < len(options) else ""
     user_option = options[user_answer_index] if 0 <= user_answer_index < len(options) else ""
