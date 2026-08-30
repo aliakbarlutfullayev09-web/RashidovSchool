@@ -24,8 +24,16 @@ function App() {
   const [debugInfo, setDebugInfo] = useState('');
 
   useEffect(() => {
+    let mounted = true;
+
     async function fetchUser() {
-      const telegramId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id || tgUser?.id;
+      // Даем Telegram WebApp 100 мс на инициализацию
+      await new Promise(resolve => setTimeout(resolve, 100));
+      if (!mounted) return;
+
+      const tgApp = window.Telegram?.WebApp;
+      const tgUserObj = tgApp?.initDataUnsafe?.user;
+      const telegramId = tgUserObj?.id || tgUser?.id || tgUser?.telegram_id;
       
       if (telegramId) {
         try {
@@ -40,10 +48,11 @@ function App() {
           setDebugInfo(`Crash: ${e.message} | ID: ${telegramId}`);
         }
       } else {
-        setDebugInfo('No Telegram ID found in WebApp.');
+        const rawInitData = tgApp?.initData;
+        setDebugInfo(`No ID. initData exists: ${!!rawInitData}`);
       }
       
-      const firstName = window.Telegram?.WebApp?.initDataUnsafe?.user?.first_name || tgUser?.first_name || 'Гость';
+      const firstName = tgUserObj?.first_name || tgUser?.first_name || 'Гость';
       setDbUser({
         telegram_id: telegramId || 0,
         full_name: firstName,
@@ -55,6 +64,8 @@ function App() {
       });
     }
     fetchUser();
+
+    return () => { mounted = false; };
   }, [tgUser]);
 
   if (!dbUser) {
