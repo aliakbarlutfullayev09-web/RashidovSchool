@@ -5,8 +5,13 @@ import LessonBuilder from '../components/LessonBuilder';
 import QuizBuilder from '../components/QuizBuilder';
 
 export default function ContentPage({ user }) {
-  const [view, setView] = useState('subjects'); // subjects, courses, lessons, quiz
-  const [selectedSubject, setSelectedSubject] = useState(null);
+  const isSuperAdmin = user.role === 'superadmin';
+  const initialView = isSuperAdmin ? 'subjects' : 'courses';
+  
+  const [view, setView] = useState(initialView); // subjects, courses, lessons, quiz
+  const [selectedSubject, setSelectedSubject] = useState(
+    isSuperAdmin ? null : { id: user.assigned_subject_id || 1, name: 'Мой предмет' }
+  );
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [selectedLesson, setSelectedLesson] = useState(null);
 
@@ -31,7 +36,7 @@ export default function ContentPage({ user }) {
       setView('courses');
       setSelectedCourse(null);
     }
-    if (view === 'courses') {
+    if (view === 'courses' && isSuperAdmin) {
       setView('subjects');
       setSelectedSubject(null);
     }

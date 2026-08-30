@@ -19,10 +19,48 @@ export const api = {
     return data;
   },
 
-  getSubjectStats: async (subjectId) => mockStats, // Using general stats instead
-  
+  getSubjectStats: async (subjectId) => {
+    try {
+      // 1. Total students (assigned to this subject or all students if we consider all students can buy courses)
+      // Actually, students are not assigned to subjects, they can buy any course. We'll count all students.
+      const { count: studentsCount } = await supabase.from('users').select('*', { count: 'exact', head: true }).eq('role', 'student');
+      
+      // 2. Total lessons in this subject
+      const { data: coursesData } = await supabase.from('courses').select('id').eq('subject_id', subjectId || 1);
+      const courseIds = (coursesData || []).map(c => c.id);
+      
+      let lessonsCount = 0;
+      let testsCount = 0;
+      let avg_score = 0;
+
+      if (courseIds.length > 0) {
+        const { data: lessonsData } = await supabase.from('lessons').select('id').in('course_id', courseIds);
+        lessonsCount = lessonsData ? lessonsData.length : 0;
+        const lessonIds = (lessonsData || []).map(l => l.id);
+
+        if (lessonIds.length > 0) {
+          const { data: progressData } = await supabase.from('progress').select('stars').in('lesson_id', lessonIds).gt('stars', 0);
+          testsCount = progressData ? progressData.length : 0;
+          if (testsCount > 0) {
+            const sum = progressData.reduce((acc, curr) => acc + curr.stars, 0);
+            avg_score = (sum / testsCount).toFixed(1);
+          }
+        }
+      }
+
+      return {
+        total_students: studentsCount || 0,
+        total_lessons: lessonsCount,
+        total_tests_taken: testsCount,
+        avg_score: avg_score,
+        active_today: 0
+      };
+    } catch (e) {
+      console.error(e);
+      return mockStats;
+    }
+  },
   getRedZones: async (subjectId) => {
-    // Получаем реальных пользователей, у которых баланс 0 или стрик 0, либо последних активных
     const { data } = await supabase.from('users').select('*').order('streak_days', { ascending: true }).limit(5);
     return (data || []).map(u => ({
       id: u.telegram_id,
@@ -147,10 +185,18 @@ export const api = {
     }]).select().single();
     return data ? { code: data.code, bonus: data.bonus_amount, maxUses: data.max_uses } : null;
   },
-  addTeacher: async (telegramId, subjectId, permissions) => {
-    // Для демо мы просто меняем роль юзера на teacher
-    await supabase.from('users').update({ role: 'teacher' }).eq('telegram_id', telegramId);
-    return { telegram_id: telegramId, permissions };
+  addTeacher: async (telegramId, subjectName, permissions) => {
+    // Находим предмет
+    const { data: subjectData } = await supabase.from('subjects').select('id').ilike('name', `%${subjectName.substring(0, 4)}%`).single();
+    const assigned_subject_id = subjectData ? subjectData.id : null;
+    
+    await supabase.from('users').update({ 
+      role: 'teacher',
+      permissions: permissions,
+      assigned_subject_id: assigned_subject_id
+    }).eq('telegram_id', telegramId);
+    
+    return { telegram_id: telegramId, permissions, subject: subjectName };
   },
   
   getTeachers: async (subjectId) => {

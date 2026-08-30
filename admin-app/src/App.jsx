@@ -21,15 +21,14 @@ function App() {
   useEffect(() => {
     async function fetchAuth() {
       if (tgUser && tgUser.id) {
-        // Пытаемся получить реального пользователя из БД
         const realUser = await api.getUser(tgUser.id);
         if (realUser) {
-          // Если юзер супер админ, даем все права
-          const permissions = realUser.role === 'superadmin' 
-            ? { can_promo: true, can_gift: true, can_send: true } 
-            : { can_promo: false, can_gift: false, can_send: false }; // Учителям пока урезаем для безопасности
+          let perms = realUser.permissions || { can_promo: false, can_gift: false, can_send: false };
+          if (realUser.role === 'superadmin') {
+            perms = { can_promo: true, can_gift: true, can_send: true };
+          }
             
-          setDbUser({ ...realUser, permissions });
+          setDbUser({ ...realUser, permissions: perms, assigned_subject_id: realUser.assigned_subject_id });
           setLoading(false);
           return;
         }
@@ -52,9 +51,8 @@ function App() {
     return <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white">Загрузка панели...</div>;
   }
 
-  // Защита маршрутов
   const effectiveSection = (() => {
-    if (activeSection === 'users' && dbUser.role !== 'superadmin') return 'dashboard';
+    if (activeSection === 'users' && dbUser.role !== 'superadmin' && !dbUser.permissions?.can_gift) return 'dashboard';
     if (activeSection === 'staff' && dbUser.role !== 'superadmin') return 'dashboard';
     if (activeSection === 'promo' && !dbUser.permissions?.can_promo) return 'dashboard';
     return activeSection;

@@ -41,6 +41,7 @@ export default function UserList() {
               <th className="px-6 py-3">Баланс (Н)</th>
               <th className="px-6 py-3">Стрик</th>
               <th className="px-6 py-3">Роль</th>
+              <th className="px-6 py-3">Действия</th>
             </tr>
           </thead>
           <tbody>
@@ -60,6 +61,22 @@ export default function UserList() {
                   }`}>
                     {u.role}
                   </span>
+                </td>
+                <td className="px-6 py-4">
+                  <button 
+                    onClick={async () => {
+                      const amount = prompt(`Сколько Нейронов начислить пользователю ${u.full_name}? (можно с минусом)`);
+                      if (amount && !isNaN(amount)) {
+                        const newBalance = u.balance + parseInt(amount);
+                        await api.updateUserBalance(u.telegram_id, newBalance);
+                        setUsers(users.map(user => user.telegram_id === u.telegram_id ? { ...user, balance: newBalance } : user));
+                        alert('Успешно начислено!');
+                      }
+                    }}
+                    className="bg-green-600/30 text-green-400 hover:bg-green-600/50 px-3 py-1 rounded text-sm transition-colors"
+                  >
+                    🎁 Начислить
+                  </button>
                 </td>
               </tr>
             ))}
