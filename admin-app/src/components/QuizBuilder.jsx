@@ -4,6 +4,7 @@ import { api } from '../api/supabase';
 export default function QuizBuilder({ lessonId, lessonName, courseName, onBack }) {
   const [questions, setQuestions] = useState([]);
   const [text, setText] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
   const [timeLimit, setTimeLimit] = useState(30);
   const [options, setOptions] = useState(['', '', '', '']);
   const [correctIndex, setCorrectIndex] = useState(0);
@@ -19,10 +20,11 @@ export default function QuizBuilder({ lessonId, lessonName, courseName, onBack }
   const handleAdd = async (e) => {
     e.preventDefault();
     if (!text || options.some(o => !o)) return;
-    const newQ = await api.createQuestion(lessonId, text, options, correctIndex, timeLimit);
+    const newQ = await api.createQuestion(lessonId, text, options, correctIndex, timeLimit, imageUrl);
     if (newQ) {
       setQuestions([...questions, newQ]);
       setText('');
+      setImageUrl('');
       setOptions(['', '', '', '']);
       setCorrectIndex(0);
       setTimeLimit(30);
@@ -62,6 +64,10 @@ export default function QuizBuilder({ lessonId, lessonName, courseName, onBack }
               <textarea value={text} onChange={e => setText(e.target.value)} className="input-field h-24 resize-none" placeholder="Введите вопрос..."></textarea>
             </div>
             <div>
+              <label className="block text-sm text-slate-400 mb-1">Ссылка на картинку (необязательно)</label>
+              <input type="text" value={imageUrl} onChange={e => setImageUrl(e.target.value)} className="input-field" placeholder="https://..." />
+            </div>
+            <div>
               <label className="block text-sm text-slate-400 mb-1">Таймер (секунды)</label>
               <input type="number" value={timeLimit} onChange={e => setTimeLimit(parseInt(e.target.value))} className="input-field w-32" min="5" />
             </div>
@@ -96,6 +102,11 @@ export default function QuizBuilder({ lessonId, lessonName, courseName, onBack }
                 </button>
               </div>
               <div className="font-bold mb-2 pr-16">{i + 1}. {q.text}</div>
+              {q.image_url && (
+                <div className="mb-4">
+                  <img src={q.image_url} alt="Question" className="max-h-32 rounded border border-slate-700" />
+                </div>
+              )}
               <div className="space-y-1">
                 {q.options.map((opt, idx) => (
                   <div key={idx} className={`text-sm p-2 rounded ${idx === q.correct_option_index ? 'bg-green-900/30 text-green-400 border border-green-800' : 'bg-slate-800 text-slate-300'}`}>

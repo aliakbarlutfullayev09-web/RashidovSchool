@@ -63,20 +63,30 @@ export default function UserList() {
                   </span>
                 </td>
                 <td className="px-6 py-4">
-                  <button 
-                    onClick={async () => {
-                      const amount = prompt(`Сколько Нейронов начислить пользователю ${u.full_name}? (можно с минусом)`);
-                      if (amount && !isNaN(amount)) {
-                        const newBalance = u.balance + parseInt(amount);
-                        await api.updateUserBalance(u.telegram_id, newBalance);
-                        setUsers(users.map(user => user.telegram_id === u.telegram_id ? { ...user, balance: newBalance } : user));
-                        alert('Успешно начислено!');
-                      }
-                    }}
-                    className="bg-green-600/30 text-green-400 hover:bg-green-600/50 px-3 py-1 rounded text-sm transition-colors"
-                  >
-                    🎁 Начислить
-                  </button>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={async () => {
+                        const amount = prompt(`Сколько Нейронов начислить пользователю ${u.full_name}? (можно с минусом)`);
+                        if (amount && !isNaN(amount)) {
+                          const newBalance = u.balance + parseInt(amount);
+                          await api.updateUserBalance(u.telegram_id, newBalance);
+                          setUsers(users.map(user => user.telegram_id === u.telegram_id ? { ...user, balance: newBalance } : user));
+                          alert('Успешно начислено!');
+                        }
+                      }}
+                      className="bg-green-600/30 text-green-400 hover:bg-green-600/50 px-3 py-1 rounded text-sm transition-colors"
+                      title="Начислить нейроны"
+                    >
+                      🎁
+                    </button>
+                    <a 
+                      href={`https://t.me/RashidovSchool_bot?start=msg_${u.telegram_id}`}
+                      className="bg-blue-600/30 text-blue-400 hover:bg-blue-600/50 px-3 py-1 rounded text-sm transition-colors no-underline flex items-center"
+                      title="Написать сообщение"
+                    >
+                      💬 Написать
+                    </a>
+                  </div>
                 </td>
               </tr>
             ))}

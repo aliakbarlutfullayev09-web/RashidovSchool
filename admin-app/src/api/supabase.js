@@ -141,13 +141,14 @@ export const api = {
     return !error;
   },
 
-  createQuestion: async (lessonId, text, options, correctIndex, timeLimit) => {
-    const { data: q, error } = await supabase.from('questions').insert([{
+  createQuestion: async (lessonId, text, options, correctIndex, timeLimit = 30, imageUrl = null) => {
+    const { data, error } = await supabase.from('questions').insert([{
       lesson_id: lessonId,
       text,
       options,
       correct_option_index: correctIndex,
-      time_limit: timeLimit || 30
+      time_limit: timeLimit,
+      image_url: imageUrl
     }]).select().single();
     
     if (error) {
@@ -155,7 +156,7 @@ export const api = {
       alert("Ошибка при сохранении вопроса: " + error.message);
       return null;
     }
-    return q;
+    return data;
   },
 
   getCourses: async (subjectId) => {

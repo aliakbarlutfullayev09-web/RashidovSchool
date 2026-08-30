@@ -47,6 +47,19 @@ async def start_handler(message: Message, command: CommandObject, db_user: dict,
                 return
             except Exception as e:
                 pass
+        elif args.startswith("msg_"):
+            try:
+                target_id = int(args[4:])
+                if db_user and db_user.get('role') in ['teacher', 'superadmin']:
+                    await state.update_data(target_user_id=target_id)
+                    await message.answer("✍️ Отправьте сообщение, которое хотите переслать этому пользователю (можно с фото, видео, кружочком, текстом и т.д.):")
+                    from bot.states.admin import AdminStates
+                    await state.set_state(AdminStates.waiting_for_message)
+                else:
+                    await message.answer("У вас нет прав для отправки сообщений.")
+                return
+            except Exception as e:
+                pass
 
     if db_user:
         # Уже зарегистрирован — приветствие

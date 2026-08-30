@@ -7,9 +7,7 @@ import json
 import logging
 
 logger = logging.getLogger(__name__)
-
 router = Router()
-
 
 @router.message(F.text.startswith('/ai') & F.reply_to_message)
 async def ai_helper_handler(message: Message, db_user):
@@ -20,15 +18,14 @@ async def ai_helper_handler(message: Message, db_user):
     lang = db_user.get('language', 'ru') if db_user else 'ru'
     replied = message.reply_to_message
 
-    if not replied or not replied.text or '❌' not in replied.text:
-        return
+    text_to_search = replied.text or replied.caption or ""
 
-    if '<!--' not in replied.text:
+    if '❌' not in text_to_search or '<!--' not in text_to_search:
         return
 
     try:
         # Извлечь скрытый контекст из HTML-комментария
-        context_str = replied.text.split('<!--')[1].split('-->')[0].strip()
+        context_str = text_to_search.split('<!--')[1].split('-->')[0].strip()
         context = json.loads(context_str)
 
         explanation = await get_ai_explanation(

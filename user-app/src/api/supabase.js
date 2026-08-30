@@ -78,30 +78,35 @@ export const getProgress = async (userId) => {
 
 export const applyPromo = async (code, userId) => {
   try {
-    // 1. Ищем промокод
-    const { data: promo } = await supabase.from('promo_codes').select('*').eq('code', code.toUpperCase()).single();
+    // 1. Fetch all promos to match case-insensitively
+    const { data: promos } = await supabase.from('promo_codes').select('*');
+    if (!promos) return { success: false, message: 'Промокоды не найдены' };
+    
+    const promo = promos.find(p => p.code.toLowerCase() === code.toLowerCase());
     if (!promo) return { success: false, message: 'Промокод не найден' };
 
-    // 2. Проверяем лимиты
+    // 2. Check limits
     if (promo.current_uses >= promo.max_uses) return { success: false, message: 'Лимит использований исчерпан' };
 
-    // 3. Проверяем, не использовал ли этот юзер его уже
-    const { data: uses } = await supabase.from('promo_uses').select('*').eq('promo_id', promo.id).eq('user_id', userId);
-    if (uses && uses.length > 0) return { success: false, message: 'Вы уже использовали этот промокод' };
+    // 3. Optional: check uses if table exists, ignore if it fails
+    const { data: uses, error: usesError } = await supabase.from('promo_uses').select('*').eq('promo_id', promo.id).eq('user_id', userId);
+    if (!usesError && uses && uses.length > 0) return { success: false, message: 'Вы уже использовали этот промокод' };
 
-    // 4. Начисляем бонус юзеру
+    // 4. Update balance
     const { data: user } = await supabase.from('users').select('balance').eq('telegram_id', userId).single();
     if (!user) return { success: false, message: 'Ошибка профиля' };
     
     await supabase.from('users').update({ balance: user.balance + promo.bonus_amount }).eq('telegram_id', userId);
 
-    // 5. Обновляем статистику промокода
-    await supabase.from('promo_codes').update({ current_uses: promo.current_uses + 1 }).eq('id', promo.id);
-    await supabase.from('promo_uses').insert([{ promo_id: promo.id, user_id: userId }]);
+    // 5. Update uses count
+    await supabase.from('promo_codes').update({ current_uses: (promo.current_uses || 0) + 1 }).eq('id', promo.id);
+    
+    // Ignore error if promo_uses table doesn't exist
+    await supabase.from('promo_uses').insert([{ promo_id: promo.id, user_id: userId }]).catch(() => {});
 
     return { success: true, bonus: promo.bonus_amount };
   } catch (err) {
-    return { success: false, message: 'Ошибка сервера' };
+    return { success: false, message: 'Ошибка сервера: ' + err.message };
   }
 };
 

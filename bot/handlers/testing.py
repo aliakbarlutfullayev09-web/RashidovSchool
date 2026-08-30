@@ -69,7 +69,11 @@ async def send_question(message, state: FSMContext, data: dict):
     keyboard = quiz_options_keyboard(options, q_idx)
 
     text = msg('test_question', lang, current=q_idx + 1, total=total, text=question['text'])
-    await message.answer(text, reply_markup=keyboard)
+    
+    if question.get('image_url'):
+        await message.answer_photo(photo=question['image_url'], caption=text, reply_markup=keyboard)
+    else:
+        await message.answer(text, reply_markup=keyboard)
 
     data['timestamps'][str(q_idx)] = time.time()
     await state.update_data(timestamps=data['timestamps'])
@@ -98,9 +102,11 @@ async def answer_handler(call: CallbackQuery, state: FSMContext, pool, db_user, 
     options = json.loads(question['options']) if isinstance(question['options'], str) else question['options']
 
     if is_correct:
-        await call.message.edit_text(
-            f"{question['text']}\n\n{msg('test_correct', lang)}"
-        )
+        result_msg = f"{question['text']}\n\n{msg('test_correct', lang)}"
+        if call.message.photo:
+            await call.message.edit_caption(caption=result_msg)
+        else:
+            await call.message.edit_text(text=result_msg)
         data['correct_count'] += 1
     else:
         # Формируем сообщение об ошибке
@@ -118,9 +124,11 @@ async def answer_handler(call: CallbackQuery, state: FSMContext, pool, db_user, 
         }, ensure_ascii=False)
 
         ai_hint = msg('test_ai_hint', lang)
-        await call.message.edit_text(
-            f"{question['text']}\n\n{error_text}{ai_hint}\n<!-- {context} -->"
-        )
+        result_msg = f"{question['text']}\n\n{error_text}{ai_hint}\n<!-- {context} -->"
+        if call.message.photo:
+            await call.message.edit_caption(caption=result_msg)
+        else:
+            await call.message.edit_text(text=result_msg)
 
     data['current_index'] += 1
     await state.update_data(
