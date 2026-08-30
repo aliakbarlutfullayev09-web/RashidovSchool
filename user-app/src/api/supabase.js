@@ -111,8 +111,23 @@ export const applyPromo = async (code, userId) => {
 };
 
 export const freezeStreak = async (userId) => {
-  // Logic to freeze streak
-  return { success: true };
+  try {
+    const { data: user } = await supabase.from('users').select('balance, frozen_until').eq('telegram_id', userId).single();
+    if (!user || user.balance < 10000) return { success: false };
+    
+    // Set frozen_until to tomorrow
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    await supabase.from('users').update({ 
+      balance: user.balance - 10000,
+      frozen_until: tomorrow.toISOString().split('T')[0]
+    }).eq('telegram_id', userId);
+    
+    return { success: true, newBalance: user.balance - 10000 };
+  } catch {
+    return { success: false };
+  }
 };
 
 export const createInvoice = async (userId, amount) => {

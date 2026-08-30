@@ -40,10 +40,16 @@ export default function TopUp({ user }) {
   const handleFreeze = async () => {
     if (user.balance >= 10000) {
       if (window.confirm('Потратить 10000 🧠 на заморозку стрика?')) {
-        // Actual logic goes here... it will just do UI side update for now
-        // if user wants actual API we will implement freezeStreak
-        notificationSuccess();
-        alert('Стрик заморожен!');
+        const { freezeStreak } = await import('../api/supabase');
+        const res = await freezeStreak(user.telegram_id);
+        if (res.success) {
+          notificationSuccess();
+          alert('Стрик заморожен! Завтра он не сгорит, даже если вы не зайдете.');
+          window.location.reload();
+        } else {
+          notificationError();
+          alert('Ошибка при заморозке.');
+        }
       }
     } else {
       notificationError();

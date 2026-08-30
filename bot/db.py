@@ -36,7 +36,13 @@ async def update_last_active(pool: asyncpg.Pool, telegram_id: int):
     await pool.execute("UPDATE users SET last_active_date = CURRENT_DATE WHERE telegram_id = $1", telegram_id)
 
 async def reset_inactive_streaks(pool: asyncpg.Pool):
-    await pool.execute("UPDATE users SET streak_days = 0 WHERE last_active_date < CURRENT_DATE - INTERVAL '1 day'")
+    query = """
+        UPDATE users 
+        SET streak_days = 0 
+        WHERE last_active_date < CURRENT_DATE - INTERVAL '1 day'
+        AND (frozen_until IS NULL OR frozen_until < CURRENT_DATE)
+    """
+    await pool.execute(query)
 
 async def get_subject_admin(pool: asyncpg.Pool, user_id: int, subject_id: int):
     return await pool.fetchrow("SELECT * FROM subject_admins WHERE user_id = $1 AND subject_id = $2", user_id, subject_id)
