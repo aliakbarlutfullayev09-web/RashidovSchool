@@ -14,7 +14,7 @@ async def get_ai_explanation(
     Системный промпт берётся из messages.py.
     """
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-pro')
 
     correct_option = options[correct_index] if 0 <= correct_index < len(options) else ""
     user_option = options[user_answer_index] if 0 <= user_answer_index < len(options) else ""
