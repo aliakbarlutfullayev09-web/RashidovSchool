@@ -116,6 +116,8 @@ export default function Profile({ user }) {
         <div className="flex items-center space-x-1 text-orange-400 font-bold text-lg">
           <span>🔥</span>
           <span>{user.streak_days} дней подряд</span>
+        </div>
+      </div>
     </div>
   );
 }
