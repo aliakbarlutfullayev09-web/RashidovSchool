@@ -59,7 +59,10 @@ async def start_handler(message: Message, command: CommandObject, db_user: dict,
                     await message.answer("У вас нет прав для отправки сообщений.")
                 return
             except Exception as e:
-                pass
+                import logging
+                logging.error(f"Error in msg_ deep link: {e}")
+                await message.answer(f"Ошибка: {e}")
+                return
 
     if db_user:
         # Уже зарегистрирован — приветствие

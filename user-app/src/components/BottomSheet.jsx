@@ -55,12 +55,19 @@ export default function BottomSheet({ isOpen, onClose, lesson, progress, course,
           )}
 
           {isCompleted && (
-            <a 
-              href={`https://t.me/RashidovSchool_bot?start=video_${lesson.id}`}
-              className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-4 rounded-2xl shadow-lg transition-transform active:scale-95 text-lg flex items-center justify-center space-x-2 no-underline text-center"
+            <button 
+              onClick={() => {
+                const url = `https://t.me/RashidovSchool_bot?start=video_${lesson.id}`;
+                if (window.Telegram?.WebApp?.openTelegramLink) {
+                  window.Telegram.WebApp.openTelegramLink(url);
+                } else {
+                  window.open(url, '_blank');
+                }
+              }}
+              className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-4 rounded-2xl shadow-lg transition-transform active:scale-95 text-lg flex items-center justify-center space-x-2 text-center"
             >
               <span>📥 Скачать (в боте)</span>
-            </a>
+            </button>
           )}
 
           {!progress.is_unlocked && (

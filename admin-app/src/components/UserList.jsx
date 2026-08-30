@@ -79,13 +79,20 @@ export default function UserList() {
                     >
                       🎁
                     </button>
-                    <a 
-                      href={`https://t.me/RashidovSchool_bot?start=msg_${u.telegram_id}`}
-                      className="bg-blue-600/30 text-blue-400 hover:bg-blue-600/50 px-3 py-1 rounded text-sm transition-colors no-underline flex items-center"
+                    <button 
+                      onClick={() => {
+                        const url = `https://t.me/RashidovSchool_bot?start=msg_${u.telegram_id}`;
+                        if (window.Telegram?.WebApp?.openTelegramLink) {
+                          window.Telegram.WebApp.openTelegramLink(url);
+                        } else {
+                          window.open(url, '_blank');
+                        }
+                      }}
+                      className="bg-blue-600/30 text-blue-400 hover:bg-blue-600/50 px-3 py-1 rounded text-sm transition-colors flex items-center"
                       title="Написать сообщение"
                     >
                       💬 Написать
-                    </a>
+                    </button>
                   </div>
                 </td>
               </tr>
