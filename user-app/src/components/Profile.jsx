@@ -1,11 +1,86 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { updateUserProfile } from '../api/supabase';
 
 export default function Profile({ user }) {
-  const initials = user.full_name
+  const [isEditing, setIsEditing] = useState(false);
+  const [formData, setFormData] = useState({
+    full_name: user.full_name || '',
+    class_group: user.class_group || '',
+    language: user.language || 'ru',
+  });
+  const [loading, setLoading] = useState(false);
+
+  const initials = (user.full_name || 'Г')
     .split(' ')
     .map((n) => n[0])
     .join('')
     .toUpperCase();
+
+  const handleSave = async () => {
+    setLoading(true);
+    const { data, error } = await updateUserProfile(user.telegram_id, formData);
+    setLoading(false);
+    if (!error) {
+      window.location.reload(); // Перезагружаем приложение для обновления глобального состояния
+    } else {
+      alert('Ошибка при сохранении: ' + error.message);
+    }
+  };
+
+  if (isEditing) {
+    return (
+      <div className="flex flex-col items-center pt-8 pb-6 px-4">
+        <h2 className="text-xl font-bold mb-4">Редактирование профиля</h2>
+        <div className="w-full space-y-4">
+          <div>
+            <label className="text-xs text-slate-400 mb-1 block">Имя и фамилия</label>
+            <input 
+              type="text" 
+              className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white"
+              value={formData.full_name}
+              onChange={e => setFormData({...formData, full_name: e.target.value})}
+            />
+          </div>
+          <div>
+            <label className="text-xs text-slate-400 mb-1 block">Класс (например, 11-А)</label>
+            <input 
+              type="text" 
+              className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white"
+              value={formData.class_group}
+              onChange={e => setFormData({...formData, class_group: e.target.value})}
+            />
+          </div>
+          <div>
+            <label className="text-xs text-slate-400 mb-1 block">Язык</label>
+            <select 
+              className="w-full bg-gray-800 border border-white/10 rounded-xl p-3 text-white"
+              value={formData.language}
+              onChange={e => setFormData({...formData, language: e.target.value})}
+            >
+              <option value="ru">Русский</option>
+              <option value="uz">O'zbekcha</option>
+            </select>
+          </div>
+          
+          <div className="flex space-x-2 pt-4">
+            <button 
+              onClick={() => setIsEditing(false)}
+              className="flex-1 p-3 rounded-xl bg-white/10 text-white font-medium"
+            >
+              Отмена
+            </button>
+            <button 
+              onClick={handleSave}
+              disabled={loading}
+              className="flex-1 p-3 rounded-xl bg-blue-600 text-white font-bold disabled:opacity-50"
+            >
+              {loading ? '...' : 'Сохранить'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col items-center pt-8 pb-6 px-4">
@@ -15,7 +90,12 @@ export default function Profile({ user }) {
       </div>
 
       {/* Name & Class */}
-      <h1 className="text-2xl font-bold mb-1">{user.full_name}</h1>
+      <div className="flex items-center space-x-2 mb-1">
+        <h1 className="text-2xl font-bold">{user.full_name}</h1>
+        <button onClick={() => setIsEditing(true)} className="text-gray-400 hover:text-white p-1">
+          ✏️
+        </button>
+      </div>
       <span className="px-3 py-1 bg-white/10 rounded-full text-xs font-semibold mb-6">
         Класс: {user.class_group}
       </span>

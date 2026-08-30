@@ -12,6 +12,11 @@ export const getUserData = async (telegramId) => {
   return { data, error };
 };
 
+export const updateUserProfile = async (telegramId, updates) => {
+  const { data, error } = await supabase.from('users').update(updates).eq('telegram_id', telegramId).select().single();
+  return { data, error };
+};
+
 export const getCourses = async (subjectId = 1) => {
   const { data } = await supabase.from('courses').select('*').eq('subject_id', subjectId).order('order_index');
   return data || [];
