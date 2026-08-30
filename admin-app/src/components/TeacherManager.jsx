@@ -20,8 +20,10 @@ export default function TeacherManager() {
     e.preventDefault();
     if (!tgId) return;
     const newT = await api.addTeacher(parseInt(tgId), subject, permissions);
-    setTeachers([...teachers, { ...newT, full_name: 'Новый учитель', subject }]);
-    setTgId('');
+    if (newT) {
+      setTeachers([...teachers, { ...newT }]);
+      setTgId('');
+    }
   };
 
   return (

@@ -111,11 +111,51 @@ export default function Profile({ user }) {
       </div>
 
       {/* Streak */}
-      <div className="w-full glass rounded-2xl p-4 flex items-center justify-between">
+      <div className="w-full glass rounded-2xl p-4 flex items-center justify-between mb-4">
         <span className="font-semibold">Ударный режим:</span>
         <div className="flex items-center space-x-1 text-orange-400 font-bold text-lg">
           <span>🔥</span>
           <span>{user.streak_days} дней подряд</span>
+        </div>
+      </div>
+
+      {/* Promo Code */}
+      <div className="w-full glass rounded-2xl p-4">
+        <span className="font-semibold block mb-2 text-sm text-gray-300">Ввести промокод</span>
+        <div className="flex space-x-2">
+          <input 
+            type="text" 
+            id="promoInput"
+            className="flex-1 bg-white/5 border border-white/10 rounded-xl p-3 text-white uppercase"
+            placeholder="PROMO123"
+          />
+          <button 
+            onClick={async () => {
+              const input = document.getElementById('promoInput');
+              const code = input.value.trim();
+              if (!code) return;
+              
+              const btn = document.getElementById('promoBtn');
+              btn.disabled = true;
+              btn.innerText = '...';
+              
+              const { applyPromoCode } = await import('../api/supabase');
+              const res = await applyPromoCode(user.telegram_id, code);
+              
+              if (res.success) {
+                alert(res.message);
+                window.location.reload();
+              } else {
+                alert(res.message);
+                btn.disabled = false;
+                btn.innerText = 'OK';
+              }
+            }}
+            id="promoBtn"
+            className="bg-blue-600 hover:bg-blue-700 font-bold py-2 px-4 rounded-xl transition-colors"
+          >
+            OK
+          </button>
         </div>
       </div>
     </div>

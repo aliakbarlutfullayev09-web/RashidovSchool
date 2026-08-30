@@ -177,12 +177,17 @@ export const api = {
     return data || [];
   },
   generatePromo: async (code, bonus, maxUses, createdBy) => {
-    const { data } = await supabase.from('promo_codes').insert([{
+    const { data, error } = await supabase.from('promo_codes').insert([{
       code,
       bonus_amount: parseInt(bonus) || 0,
       max_uses: parseInt(maxUses) || 1,
       created_by: createdBy
     }]).select().single();
+    if (error) {
+      console.error("Promo error:", error);
+      alert("Ошибка создания промокода: " + error.message);
+      return null;
+    }
     return data ? { code: data.code, bonus: data.bonus_amount, maxUses: data.max_uses } : null;
   },
   addTeacher: async (telegramId, subjectName, permissions) => {
@@ -190,26 +195,42 @@ export const api = {
     const { data: subjectData } = await supabase.from('subjects').select('id').ilike('name', `%${subjectName.substring(0, 4)}%`).single();
     const assigned_subject_id = subjectData ? subjectData.id : null;
     
-    await supabase.from('users').update({ 
+    // Проверяем существует ли пользователь
+    const { data: userExists } = await supabase.from('users').select('telegram_id, full_name').eq('telegram_id', telegramId).single();
+    if (!userExists) {
+      alert(`Ошибка: Пользователь с ID ${telegramId} не найден в базе. Сначала он должен запустить бота.`);
+      return null;
+    }
+
+    const { error } = await supabase.from('users').update({ 
       role: 'teacher',
       permissions: permissions,
       assigned_subject_id: assigned_subject_id
     }).eq('telegram_id', telegramId);
     
-    return { telegram_id: telegramId, permissions, subject: subjectName };
+    if (error) {
+      alert("Ошибка обновления прав: " + error.message);
+      return null;
+    }
+    
+    return { telegram_id: telegramId, full_name: userExists.full_name, permissions, subject: subjectName };
   },
   
   getTeachers: async (subjectId) => {
-    const { data } = await supabase.from('users').select('*').in('role', ['teacher', 'superadmin']);
+    const { data } = await supabase.from('users').select(`
+      *,
+      subjects:assigned_subject_id(name)
+    `).in('role', ['teacher', 'superadmin']);
+    
     return (data || []).map(u => ({
       telegram_id: u.telegram_id,
       full_name: u.full_name,
-      subject: u.role === 'superadmin' ? 'Все предметы' : 'Преподаватель',
-      permissions: {
-        can_promo: u.role === 'superadmin',
-        can_gift: u.role === 'superadmin',
-        can_send: u.role === 'superadmin'
-      }
+      subject: u.role === 'superadmin' ? 'Все предметы' : (u.subjects?.name || 'Преподаватель'),
+      permissions: u.role === 'superadmin' ? {
+        can_promo: true,
+        can_gift: true,
+        can_send: true
+      } : (u.permissions || { can_promo: false, can_gift: false, can_send: false })
     }));
   },
   

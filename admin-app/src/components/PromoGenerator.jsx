@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { api } from '../api/supabase';
+import { api, supabase } from '../api/supabase';
 
 export default function PromoGenerator({ user }) {
   const [code, setCode] = useState('');
@@ -7,6 +7,16 @@ export default function PromoGenerator({ user }) {
   const [maxUses, setMaxUses] = useState(10);
   const [promos, setPromos] = useState([]);
   
+  React.useEffect(() => {
+    async function load() {
+      const { data } = await supabase.from('promo_codes').select('*').order('created_at', { ascending: false });
+      if (data) {
+        setPromos(data.map(p => ({ code: p.code, bonus: p.bonus_amount, maxUses: p.max_uses, currentUses: p.current_uses || 0 })));
+      }
+    }
+    load();
+  }, []);
+
   const generateRandomCode = () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let result = '';
@@ -20,8 +30,10 @@ export default function PromoGenerator({ user }) {
     e.preventDefault();
     if (!code) return;
     const newPromo = await api.generatePromo(code, bonus, maxUses, user.telegram_id);
-    setPromos([newPromo, ...promos]);
-    setCode('');
+    if (newPromo) {
+      setPromos([newPromo, ...promos]);
+      setCode('');
+    }
   };
 
   return (
@@ -60,7 +72,7 @@ export default function PromoGenerator({ user }) {
                   <div className="font-mono text-lg font-bold text-blue-400">{p.code}</div>
                   <div className="text-sm text-slate-400">+{p.bonus} Нейронов • Макс: {p.maxUses}</div>
                 </div>
-                <div className="text-sm text-slate-500">0/{p.maxUses} использовано</div>
+                <div className="text-sm text-slate-500">{p.currentUses}/{p.maxUses} использовано</div>
               </div>
             ))}
           </div>

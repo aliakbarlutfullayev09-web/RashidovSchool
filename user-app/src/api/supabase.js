@@ -12,9 +12,44 @@ export const getUserData = async (telegramId) => {
   return { data, error };
 };
 
-export const updateUserProfile = async (telegramId, updates) => {
-  const { data, error } = await supabase.from('users').update(updates).eq('telegram_id', telegramId).select().single();
-  return { data, error };
+export async function updateUserProfile(telegramId, data) {
+  const { data: user, error } = await supabase
+    .from('users')
+    .update(data)
+    .eq('telegram_id', telegramId)
+    .select()
+    .single();
+  return { data: user, error };
+}
+
+export async function applyPromoCode(telegramId, code) {
+  try {
+    // 1. Ищем промокод
+    const { data: promo, error } = await supabase.from('promo_codes').select('*').ilike('code', code).single();
+    
+    if (error || !promo) return { success: false, message: 'Промокод не найден' };
+    
+    if (promo.current_uses >= promo.max_uses) {
+      return { success: false, message: 'Лимит использований исчерпан' };
+    }
+
+    // 2. Ищем пользователя
+    const { data: user } = await supabase.from('users').select('balance').eq('telegram_id', telegramId).single();
+    if (!user) return { success: false, message: 'Пользователь не найден' };
+
+    // Проверяем, не использовал ли он уже этот промокод (нужна таблица, но пока просто обновим счетчик)
+    // В идеале должна быть таблица promo_code_usages, но пока просто даем баланс.
+
+    // 3. Обновляем баланс
+    await supabase.from('users').update({ balance: user.balance + promo.bonus_amount }).eq('telegram_id', telegramId);
+    
+    // 4. Увеличиваем счетчик использований
+    await supabase.from('promo_codes').update({ current_uses: promo.current_uses + 1 }).eq('id', promo.id);
+
+    return { success: true, message: `Начислено ${promo.bonus_amount} Нейронов!`, bonus: promo.bonus_amount };
+  } catch (err) {
+    return { success: false, message: 'Ошибка сервера' };
+  }
 };
 
 export const getSubjects = async () => {
