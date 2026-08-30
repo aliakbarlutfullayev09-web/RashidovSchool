@@ -27,7 +27,30 @@ function App() {
         const { data } = await getUserData(tgUser.id);
         if (data) {
           setDbUser(data);
+        } else {
+          // Пользователь есть в Telegram, но ещё не зарегистрирован в боте
+          // Показываем интерфейс с нулевым балансом
+          setDbUser({
+            telegram_id: tgUser.id,
+            full_name: tgUser.first_name || 'Гость',
+            balance: 0,
+            streak_days: 0,
+            class_group: '',
+            language: 'ru',
+            role: 'student'
+          });
         }
+      } else {
+        // Нет Telegram контекста (тестирование в браузере)
+        setDbUser({
+          telegram_id: 0,
+          full_name: 'Тест',
+          balance: 0,
+          streak_days: 0,
+          class_group: '',
+          language: 'ru',
+          role: 'student'
+        });
       }
     }
     fetchUser();
