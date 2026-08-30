@@ -23,6 +23,7 @@ function App() {
 
   useEffect(() => {
     async function fetchUser() {
+      console.log("Force Vercel rebuild - v2");
       // Берём ID напрямую из Telegram WebApp
       const telegramId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id || tgUser?.id;
       
