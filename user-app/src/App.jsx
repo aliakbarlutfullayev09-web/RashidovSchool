@@ -23,35 +23,28 @@ function App() {
 
   useEffect(() => {
     async function fetchUser() {
-      if (tgUser && tgUser.id) {
-        const { data } = await getUserData(tgUser.id);
+      // Берём ID напрямую из Telegram WebApp
+      const telegramId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id || tgUser?.id;
+      
+      if (telegramId) {
+        const { data } = await getUserData(telegramId);
         if (data) {
           setDbUser(data);
-        } else {
-          // Пользователь есть в Telegram, но ещё не зарегистрирован в боте
-          // Показываем интерфейс с нулевым балансом
-          setDbUser({
-            telegram_id: tgUser.id,
-            full_name: tgUser.first_name || 'Гость',
-            balance: 0,
-            streak_days: 0,
-            class_group: '',
-            language: 'ru',
-            role: 'student'
-          });
+          return;
         }
-      } else {
-        // Нет Telegram контекста (тестирование в браузере)
-        setDbUser({
-          telegram_id: 0,
-          full_name: 'Тест',
-          balance: 0,
-          streak_days: 0,
-          class_group: '',
-          language: 'ru',
-          role: 'student'
-        });
       }
+      
+      // Если данных нет — показываем минимальный профиль, а не бесконечную загрузку
+      const firstName = window.Telegram?.WebApp?.initDataUnsafe?.user?.first_name || tgUser?.first_name || 'Гость';
+      setDbUser({
+        telegram_id: telegramId || 0,
+        full_name: firstName,
+        balance: 0,
+        streak_days: 0,
+        class_group: '',
+        language: 'ru',
+        role: 'student'
+      });
     }
     fetchUser();
   }, [tgUser]);
