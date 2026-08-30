@@ -1,7 +1,6 @@
 import asyncio
 import logging
 from aiogram import Bot, Dispatcher
-from aiogram.client.default import DefaultBotProperties
 from bot.config import config
 from bot.db import create_pool
 from bot.middlewares.auth import AuthMiddleware
@@ -13,7 +12,7 @@ logging.basicConfig(level=logging.INFO)
 async def main():
     pool = await create_pool(config.DATABASE_URL)
     
-    bot = Bot(token=config.BOT_TOKEN, default=DefaultBotProperties(parse_mode='HTML'))
+    bot = Bot(token=config.BOT_TOKEN)
     dp = Dispatcher()
     
     # Apply auth middleware to messages and callback queries

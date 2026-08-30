@@ -16,10 +16,23 @@ export default function TopUp({ user }) {
     impactMedium();
     const tg = window.Telegram?.WebApp;
     if (tg?.openTelegramLink) {
-      // Это закроет приложение и отправит боту команду /start buy_100
       tg.openTelegramLink(`https://t.me/RashidovSchool_bot?start=buy_${stars}`);
     } else {
       alert(`В Telegram откроется счет на ${stars} ⭐️`);
+    }
+  };
+
+  const handleFiatPay = () => {
+    impactMedium();
+    const tg = window.Telegram?.WebApp;
+    const lang = user?.language || 'ru';
+    const link = lang === 'uz' 
+      ? 'https://t.me/m/LC4tlXF_NjRi' 
+      : 'https://t.me/m/nmt7omDSMjEy';
+    if (tg?.openTelegramLink) {
+      tg.openTelegramLink(link);
+    } else {
+      window.open(link, '_blank');
     }
   };
 
@@ -39,7 +52,7 @@ export default function TopUp({ user }) {
     <div className="px-4 mb-8">
       <h3 className="font-bold mb-4 opacity-80 text-lg">Пополнить баланс</h3>
       
-      <div className="grid grid-cols-2 gap-3 mb-6">
+      <div className="grid grid-cols-2 gap-3 mb-4">
         {packages.map((pkg, idx) => (
           <button 
             key={idx}
@@ -55,14 +68,24 @@ export default function TopUp({ user }) {
           </button>
         ))}
       </div>
-      
-      <button 
-        onClick={handleFreeze}
-        className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-bold py-3 px-4 rounded-2xl shadow-lg transition-transform active:scale-95 flex items-center justify-center space-x-2"
-      >
-        <span>❄️</span>
-        <span>Заморозка стрика (50 🧠)</span>
-      </button>
+
+      <div className="flex flex-col space-y-3">
+        <button 
+          onClick={handleFiatPay}
+          className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold py-3 px-4 rounded-2xl shadow-lg transition-transform active:scale-95 flex items-center justify-center space-x-2"
+        >
+          <span>💳</span>
+          <span>{user?.language === 'uz' ? "So'mda to'lash" : 'Оплатить Сумами'}</span>
+        </button>
+
+        <button 
+          onClick={handleFreeze}
+          className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-bold py-3 px-4 rounded-2xl shadow-lg transition-transform active:scale-95 flex items-center justify-center space-x-2"
+        >
+          <span>❄️</span>
+          <span>Заморозка стрика (50 🧠)</span>
+        </button>
+      </div>
 
       <p className="text-xs text-slate-400 text-center mt-6">
         Оплата происходит через официальную систему Telegram Stars. Нейроны начисляются моментально.
