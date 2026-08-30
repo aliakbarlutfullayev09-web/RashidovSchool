@@ -15,18 +15,7 @@ async def get_ai_explanation(
     """
     genai.configure(api_key=api_key)
     
-    valid_model_name = None
-    try:
-        for m in genai.list_models():
-            if 'generateContent' in m.supported_generation_methods:
-                valid_model_name = m.name
-                if 'flash' in m.name.lower():
-                    break
-    except Exception as e:
-        return f"Ошибка AI (Поиск моделей): {str(e)}"
-        
-    if not valid_model_name:
-        valid_model_name = 'gemini-1.5-flash' # fallback
+    valid_model_name = 'gemini-3.6-flash'
 
     model = genai.GenerativeModel(valid_model_name)
 
