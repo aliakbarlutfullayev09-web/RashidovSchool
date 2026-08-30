@@ -4,13 +4,20 @@ from bot.db import update_user_balance, add_transaction
 
 router = Router()
 
-VALID_STAR_AMOUNTS = [5, 100, 400, 600, 1000]
+STARS_PRICES = {
+    5: 1250,
+    100: 25000,
+    400: 100000,
+    600: 150000,
+    1000: 250000,
+    3500: 1000000
+}
 
 async def send_stars_invoice(message: Message, stars: int):
-    if stars not in VALID_STAR_AMOUNTS:
+    if stars not in STARS_PRICES:
         await message.answer('Invalid amount')
         return
-    neurons = stars * 250
+    neurons = STARS_PRICES[stars]
     prices = [LabeledPrice(label=f'{neurons} Neurons', amount=stars)]
     await message.answer_invoice(
         title=f'{neurons} Neurons',
@@ -30,7 +37,7 @@ async def successful_payment_handler(message: Message, pool):
     payload = message.successful_payment.invoice_payload
     if payload.startswith('buy_neurons_'):
         stars = int(payload.split('_')[2])
-        neurons = stars * 250
+        neurons = STARS_PRICES.get(stars, stars * 250)
         user_id = message.from_user.id
         await update_user_balance(pool, user_id, neurons)
         await add_transaction(pool, user_id, neurons, 'buy_stars', f'Purchase {stars} stars')

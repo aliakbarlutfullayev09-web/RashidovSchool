@@ -74,8 +74,8 @@ MESSAGES = {
         'uz': '📝 Test boshlanmoqda! Savollar soni: {count}\nHar bir savol uchun vaqt cheklangan. Omad!',
     },
     'test_question': {
-        'ru': '❓ Вопрос {current}/{total}:\n\n{text}',
-        'uz': '❓ Savol {current}/{total}:\n\n{text}',
+        'ru': '❓ Вопрос {current}/{total} (⏱ {time} сек):\n\n{text}',
+        'uz': '❓ Savol {current}/{total} (⏱ {time} soniya):\n\n{text}',
     },
     'test_correct': {
         'ru': '✅ Правильно!',
@@ -144,8 +144,8 @@ MESSAGES = {
         'uz': '❌ Balansda Neyronlar yetarli emas.\nBalansingiz: 🧠 {balance}',
     },
     'streak_frozen': {
-        'ru': '❄️ Стрик заморожен! Списано 50 🧠.\nВаш стрик в безопасности на сегодня.',
-        'uz': '❄️ Strik muzlatildi! 50 🧠 yechib olindi.\nStrikingiz bugun xavfsiz.',
+        'ru': '❄️ Стрик заморожен! Списано 10000 🧠.\nВаш стрик в безопасности на сегодня.',
+        'uz': '❄️ Strik muzlatildi! 10000 🧠 yechib olindi.\nStrikingiz bugun xavfsiz.',
     },
     'promo_applied': {
         'ru': '🎉 Промокод применён! Начислено: +{amount} 🧠',

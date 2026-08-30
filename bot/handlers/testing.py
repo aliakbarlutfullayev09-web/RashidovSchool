@@ -68,7 +68,7 @@ async def send_question(message, state: FSMContext, data: dict):
     options = json.loads(question['options']) if isinstance(question['options'], str) else question['options']
     keyboard = quiz_options_keyboard(options, q_idx)
 
-    text = msg('test_question', lang, current=q_idx + 1, total=total, text=question['text'])
+    text = msg('test_question', lang, current=q_idx + 1, total=total, text=question['text'], time=question['time_limit'])
     
     if question.get('image_url'):
         await message.answer_photo(photo=question['image_url'], caption=text, reply_markup=keyboard)
