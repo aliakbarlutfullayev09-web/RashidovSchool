@@ -31,9 +31,15 @@ function App() {
       await new Promise(resolve => setTimeout(resolve, 100));
       if (!mounted) return;
 
+      // Извлекаем ID из URL, если бот его передал (наш надежный запасной план)
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlUserId = urlParams.get('user_id');
+
       const tgApp = window.Telegram?.WebApp;
       const tgUserObj = tgApp?.initDataUnsafe?.user;
-      const telegramId = tgUserObj?.id || tgUser?.id || tgUser?.telegram_id;
+      
+      // Сначала пытаемся взять из URL, затем из Telegram
+      const telegramId = urlUserId ? parseInt(urlUserId, 10) : (tgUserObj?.id || tgUser?.id || tgUser?.telegram_id);
       
       if (telegramId) {
         try {

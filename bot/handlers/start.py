@@ -37,7 +37,7 @@ async def start_handler(message: Message, command: CommandObject, db_user: dict,
         lang = db_user.get('language', 'ru')
         await message.answer(
             msg('welcome_back', lang, name=db_user['full_name']),
-            reply_markup=main_menu_reply_keyboard(config.USER_APP_URL, lang)
+            reply_markup=main_menu_reply_keyboard(config.USER_APP_URL, lang, message.from_user.id)
         )
     else:
         # Новый юзер — первый шаг: выбор языка

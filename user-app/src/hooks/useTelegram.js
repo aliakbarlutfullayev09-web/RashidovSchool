@@ -1,10 +1,8 @@
 import { useEffect, useState } from 'react';
-import { mockUser } from '../mock/data';
 
 export function useTelegram() {
   const tg = window.Telegram?.WebApp;
-  // Fallback to mock user if not in Telegram (for localhost testing)
-  const initialUser = tg?.initDataUnsafe?.user || mockUser;
+  const initialUser = tg?.initDataUnsafe?.user || null;
   const [user, setUser] = useState(initialUser);
 
   useEffect(() => {
