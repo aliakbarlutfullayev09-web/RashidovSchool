@@ -32,9 +32,8 @@ export default function LessonBuilder({ courseId, courseName, onSelectLesson, on
     
     // We would need to update the API createLesson to accept the new fields if backend supports it.
     // For now we pass them in if createLesson accepts it, or just use existing ones.
-    const newLesson = await api.createLesson(courseId, title, videoUrl, qCount);
+    const newLesson = await api.createLesson(courseId, title, videoUrl, qCount, thumbnailUrl, duration, isFree);
     if (newLesson) {
-      // Add additional fields to supabase if api supports it, here we assume it's created.
       setLessons([...lessons, newLesson]);
       setTitle('');
       setVideoUrl('');

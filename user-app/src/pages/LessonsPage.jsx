@@ -50,8 +50,7 @@ export default function LessonsPage({ user }) {
   const loadLessonsForSubject = async (subjectId) => {
     setLoading(true);
     try {
-      const allCourses = await getCourses();
-      const subjectCourses = allCourses.filter(c => c.subject_id === subjectId);
+      const subjectCourses = await getCourses(subjectId);
       
       let allLessons = [];
       for (const course of subjectCourses) {

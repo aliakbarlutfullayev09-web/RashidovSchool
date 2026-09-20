@@ -151,12 +151,15 @@ export const api = {
     return c;
   },
   
-  createLesson: async (courseId, title, videoUrl, testQuestionCount) => {
+  createLesson: async (courseId, title, videoUrl, testQuestionCount, thumbnailUrl, duration, isFree) => {
     const { data: l, error } = await supabase.from('lessons').insert([{
       course_id: courseId,
       title,
       video_url: videoUrl,
-      test_question_count: testQuestionCount
+      test_question_count: testQuestionCount,
+      thumbnail_url: thumbnailUrl,
+      duration: duration,
+      is_free: isFree
     }]).select().single();
     
     if (error) {

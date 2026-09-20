@@ -58,8 +58,12 @@ export const getCourses = async (subjectId) => {
   return data || [];
 };
 
-export const getLessons = async () => {
-  const { data } = await supabase.from('lessons').select('*').order('order_index');
+export const getLessons = async (courseId) => {
+  let query = supabase.from('lessons').select('*').order('order_index');
+  if (courseId) {
+    query = query.eq('course_id', courseId);
+  }
+  const { data } = await query;
   return data || [];
 };
 
