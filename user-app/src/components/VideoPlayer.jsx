@@ -97,6 +97,23 @@ export default function VideoPlayer({ videoUrl, lessonId, checkpoints = [], onCo
     return `${m}:${s}`;
   };
 
+  const toggleFullscreen = () => {
+    const container = document.getElementById('video-container');
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      if (container.requestFullscreen) {
+        container.requestFullscreen();
+      } else if (container.webkitRequestFullscreen) {
+        container.webkitRequestFullscreen();
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+      }
+    }
+  };
+
   const togglePlay = () => {
     if (!videoRef.current) return;
     if (videoRef.current.paused) {
@@ -112,8 +129,8 @@ export default function VideoPlayer({ videoUrl, lessonId, checkpoints = [], onCo
   const needsTahlil = checkpoints.length > 0 && score < 0.85;
 
   return (
-    <div className="fixed inset-0 z-[100] bg-[#000000] text-white flex flex-col justify-center">
-      <button onClick={onBack} className="absolute top-4 left-4 z-50 bg-white/20 rounded-full p-2 backdrop-blur-md">
+    <div id="video-container" className="fixed inset-0 z-[100] bg-[#000000] text-white flex flex-col justify-center">
+      <button onClick={onBack} className="absolute top-4 left-4 z-50 bg-white/20 hover:bg-white/30 rounded-full p-2 backdrop-blur-md transition-colors">
         <ArrowLeft className="w-6 h-6 text-white" />
       </button>
       
@@ -154,14 +171,14 @@ export default function VideoPlayer({ videoUrl, lessonId, checkpoints = [], onCo
             
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <button onClick={togglePlay} className="p-1">
+                <button onClick={togglePlay} className="p-1 hover:scale-110 transition-transform">
                   {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6" />}
                 </button>
                 <span className="text-sm font-mono opacity-90">
                   {formatTime(currentTime)} / {formatTime(duration)}
                 </span>
               </div>
-              <button onClick={() => videoRef.current?.requestFullscreen()} className="p-1">
+              <button onClick={toggleFullscreen} className="p-1 hover:scale-110 transition-transform">
                 <Maximize className="w-5 h-5" />
               </button>
             </div>
