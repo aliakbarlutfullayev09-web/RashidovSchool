@@ -10,6 +10,12 @@ class Settings(BaseSettings):
     REFERRAL_BONUS: int = 500
     STREAK_FREEZE_COST: int = 50
     PERFECT_SCORE_GIFT_PROBABILITY: float = 0.3
+    
+    CLICK_MERCHANT_ID: int = 0
+    CLICK_SERVICE_ID: int = 0  
+    CLICK_SECRET_KEY: str = ''
+    WEBHOOK_HOST: str = ''
+    FASTAPI_PORT: int = 8000
 
     class Config:
         env_file = ".env"

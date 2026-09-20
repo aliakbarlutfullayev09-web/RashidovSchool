@@ -1,276 +1,203 @@
 import React, { useState, useEffect } from 'react';
-import Header from '../components/Header';
 import BottomSheet from '../components/BottomSheet';
-import VideoPlayer from '../components/VideoPlayer';
-import { getSubjects, getCourses, getLessons, getProgress, supabase } from '../api/supabase';
-import { useHaptic } from '../hooks/useHaptic';
+import { getSubjects, getCourses, getLessons, getProgress } from '../api/supabase';
 
 export default function LessonsPage({ user }) {
   const [subjects, setSubjects] = useState([]);
-  const [courses, setCourses] = useState([]);
-  const [lessons, setLessons] = useState([]);
-  const [progresses, setProgresses] = useState([]);
-  
   const [selectedSubject, setSelectedSubject] = useState(null);
-  const [selectedCourseFolder, setSelectedCourseFolder] = useState(null);
-  const [selectedNode, setSelectedNode] = useState(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const { impactLight } = useHaptic();
+  const [lessons, setLessons] = useState([]);
+  const [progressMap, setProgressMap] = useState({});
+  const [loading, setLoading] = useState(true);
+
+  const [bottomSheetOpen, setBottomSheetOpen] = useState(false);
+  const [selectedLesson, setSelectedLesson] = useState(null);
 
   useEffect(() => {
-    async function loadData() {
-      if (!user) return;
-      const [sData, cData, lData, pData] = await Promise.all([
-        getSubjects(),
-        getCourses(),
-        getLessons(),
-        getProgress(user.telegram_id)
-      ]);
-      setSubjects(sData);
-      setCourses(cData);
-      setLessons(lData);
-      setProgresses(pData);
-    }
-    loadData();
+    loadInitialData();
   }, [user]);
 
-  const handleSubjectClick = (subject) => {
-    impactLight();
-    setSelectedSubject(subject);
-    setSelectedCourseFolder(null);
+  useEffect(() => {
+    if (selectedSubject) {
+      loadLessonsForSubject(selectedSubject.id);
+    }
+  }, [selectedSubject]);
+
+  const loadInitialData = async () => {
+    setLoading(true);
+    try {
+      const subs = await getSubjects();
+      setSubjects(subs || []);
+      if (subs && subs.length > 0) {
+        setSelectedSubject(subs[0]);
+      }
+      
+      if (user?.id) {
+        const prog = await getProgress(user.id);
+        const pMap = {};
+        if (prog) {
+          prog.forEach(p => {
+            pMap[p.lesson_id] = p;
+          });
+        }
+        setProgressMap(pMap);
+      }
+    } catch (err) {
+      console.error("Error loading initial data", err);
+    }
+    setLoading(false);
   };
 
-  const handleCourseFolderClick = (course) => {
-    impactLight();
-    setSelectedCourseFolder(course);
+  const loadLessonsForSubject = async (subjectId) => {
+    try {
+      const allCourses = await getCourses();
+      const subjectCourses = allCourses.filter(c => c.subject_id === subjectId);
+      
+      let allLessons = [];
+      for (const course of subjectCourses) {
+        const courseLessons = await getLessons(course.id);
+        allLessons = [...allLessons, ...courseLessons];
+      }
+      
+      allLessons.sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
+      setLessons(allLessons);
+    } catch (err) {
+      console.error("Error loading lessons", err);
+    }
   };
 
   const handleCardClick = (lesson) => {
-    impactLight();
-    const progress = progresses.find(p => p.lesson_id === lesson.id) || { is_unlocked: false, stars: 0 };
-    const course = courses.find(c => c.id === lesson.course_id);
-    if (course && course.price === 0) {
-      progress.is_unlocked = true;
-    }
-    setSelectedNode({ lesson, progress, course });
+    setSelectedLesson(lesson);
+    setBottomSheetOpen(true);
   };
-
-  const handleCloseSheet = () => setSelectedNode(null);
-  const handleWatch = () => setIsPlaying(true);
-  
-  const handleBuy = async () => {
-    if (!selectedNode || !user) return;
-    const { course } = selectedNode;
-    
-    if (user.balance < course.price) {
-      alert('Недостаточно нейронов!');
-      return;
-    }
-    
-    const newBalance = user.balance - course.price;
-    await supabase.from('users').update({ balance: newBalance }).eq('telegram_id', user.telegram_id);
-    
-    const courseLessons = lessons.filter(l => l.course_id === course.id);
-    const inserts = courseLessons.map(l => ({
-      user_id: user.telegram_id,
-      lesson_id: l.id,
-      is_unlocked: true,
-      stars: 0
-    }));
-    await supabase.from('progress').upsert(inserts);
-    
-    alert(`Курс успешно куплен!`);
-    window.location.reload(); 
-  };
-
-  const handleVideoComplete = () => {
-     console.log('Video completed');
-  };
-  
-  const handleVideoBack = () => setIsPlaying(false);
-
-  if (isPlaying && selectedNode?.lesson) {
-    return (
-      <VideoPlayer 
-        videoUrl={selectedNode.lesson.video_url} 
-        lessonId={selectedNode.lesson.id}
-        onComplete={handleVideoComplete}
-        onBack={handleVideoBack}
-      />
-    );
-  }
-
-  const subjectCourses = selectedSubject ? courses.filter(c => c.subject_id === selectedSubject.id) : [];
-  const courseLessons = selectedCourseFolder ? lessons.filter(l => l.course_id === selectedCourseFolder.id) : [];
 
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-[#0f0c29]">
-      <Header user={user} />
-      
-      <div className="flex-1 overflow-y-auto no-scrollbar pb-24 px-4 space-y-6 mt-4">
-        
-        {!selectedSubject ? (
-          <div className="space-y-4">
-            <h2 className="text-xl font-bold text-white px-1">Предметы</h2>
-            {subjects.length === 0 && <div className="text-center text-slate-400 mt-10">Загрузка предметов...</div>}
-            
-            <div className="grid grid-cols-1 gap-4">
-              {subjects.map(subj => (
-                <div 
-                  key={subj.id}
-                  onClick={() => handleSubjectClick(subj)}
-                  className="bg-white/10 border border-white/20 p-6 rounded-2xl flex items-center space-x-4 cursor-pointer hover:bg-white/15 active:scale-95 transition-transform"
-                >
-                  <div className="text-4xl">{subj.name.includes('Биолог') ? '🧬' : subj.name.includes('Хими') ? '🧪' : '📐'}</div>
-                  <div className="flex-1">
-                    <h3 className="text-lg font-bold text-white">{subj.name}</h3>
-                    <p className="text-sm text-slate-400">Перейти к курсам</p>
-                  </div>
-                  <div className="text-slate-400">➔</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : !selectedCourseFolder ? (
-          <div className="space-y-6">
-            <button 
-              onClick={() => setSelectedSubject(null)}
-              className="flex items-center space-x-2 text-blue-400 font-bold active:opacity-50"
+    <div className="min-h-screen bg-[#000000] text-white pb-20">
+      {/* Subject Chips Row */}
+      <div className="w-full overflow-x-auto hide-scrollbar px-4 py-3 flex gap-2 border-b border-white/10">
+        {subjects.map(subject => {
+          const isActive = selectedSubject?.id === subject.id;
+          return (
+            <button
+              key={subject.id}
+              onClick={() => setSelectedSubject(subject)}
+              className={`whitespace-nowrap px-4 py-2 rounded-full text-[14px] font-medium transition-colors ${
+                isActive 
+                  ? 'chip-active bg-[#007AFF] text-white' 
+                  : 'chip-inactive bg-[#1C1C1E] text-[#8E8E93]'
+              }`}
             >
-              <span>←</span> <span>Назад к предметам</span>
+              {subject.emoji} {subject.name}
             </button>
-            
-            <h2 className="text-2xl font-bold text-white px-1">Курсы: {selectedSubject.name}</h2>
+          );
+        })}
+      </div>
 
-            {subjectCourses.length === 0 && (
-              <div className="text-center text-slate-400 mt-10">
-                В этом предмете пока нет курсов.
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 gap-4">
-              {subjectCourses.map(course => {
-                const cLessons = lessons.filter(l => l.course_id === course.id);
-                return (
-                  <div 
-                    key={course.id}
-                    onClick={() => handleCourseFolderClick(course)}
-                    className="bg-slate-800/80 border border-white/10 p-5 rounded-2xl flex items-center space-x-4 cursor-pointer hover:bg-slate-700/80 active:scale-95 transition-transform"
-                  >
-                    <div className="w-12 h-12 bg-blue-900/50 rounded-xl flex items-center justify-center text-2xl">
-                      📁
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="text-lg font-bold text-white leading-tight">{course.title}</h3>
-                      <p className="text-sm text-slate-400 mt-1">
-                        Уроков: {cLessons.length} • {course.price === 0 ? 'Бесплатно' : `${course.price} Н`}
-                      </p>
-                    </div>
-                    <div className="text-slate-400">➔</div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+      {/* YouTube-style Lesson Card Feed */}
+      <div className="flex flex-col p-4 gap-6">
+        {loading ? (
+          <div className="text-center text-[#8E8E93] py-10">Yuklanmoqda...</div>
+        ) : lessons.length === 0 ? (
+          <div className="text-center text-[#8E8E93] py-10">Bu fanda darslar topilmadi.</div>
         ) : (
-          <div className="space-y-6">
-            <button 
-              onClick={() => setSelectedCourseFolder(null)}
-              className="flex items-center space-x-2 text-blue-400 font-bold active:opacity-50"
-            >
-              <span>←</span> <span>Назад к курсам</span>
-            </button>
-            
-            <h2 className="text-xl font-bold text-white px-1">{selectedCourseFolder.title}</h2>
+          lessons.map(lesson => {
+            const progress = progressMap[lesson.id];
+            // If the user's progress indicates not unlocked, and it isn't explicitly a free lesson, lock it.
+            const isLocked = progress?.is_unlocked === false && !lesson.is_free;
+            const isCompleted = progress?.stars > 0;
+            const percentage = progress?.score || 0;
 
-            {courseLessons.length === 0 && (
-              <div className="text-center text-slate-400 mt-10">
-                В этом курсе пока нет уроков.
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 gap-5">
-              {courseLessons.map(lesson => {
-                let progress = progresses.find(p => p.lesson_id === lesson.id) || { is_unlocked: false, stars: 0 };
-                if (selectedCourseFolder.price === 0) progress.is_unlocked = true;
-                
-                const isLocked = !progress.is_unlocked;
-                const isCompleted = progress.is_unlocked && progress.stars > 0;
-
-                return (
-                  <div 
-                    key={lesson.id} 
-                    onClick={() => handleCardClick(lesson)}
-                    className="group cursor-pointer flex flex-col transition-transform active:scale-95"
-                  >
-                    <div className="relative w-full aspect-video rounded-2xl overflow-hidden bg-slate-800 shadow-lg border border-white/5 flex items-center justify-center">
-                      {lesson.video_url ? (
-                         <div className="absolute inset-0 bg-gradient-to-tr from-indigo-900 to-purple-900 opacity-50"></div>
-                      ) : (
-                         <div className="absolute inset-0 bg-slate-800"></div>
-                      )}
-                      <span className="relative z-10 text-4xl opacity-30">▶️</span>
-                      
-                      {isLocked && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm z-20">
-                          <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center text-2xl shadow-xl">
-                            🔒
-                          </div>
-                        </div>
-                      )}
-
-                      {!isLocked && (
-                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20 z-20">
-                          <div className="w-14 h-14 bg-blue-500/90 rounded-full flex items-center justify-center text-white text-2xl shadow-lg pl-1">
-                            ▶
-                          </div>
-                        </div>
-                      )}
-
-                      {isCompleted && (
-                        <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-700 z-30">
-                          <div className="h-full bg-blue-500 w-full"></div>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="mt-3 flex justify-between items-start px-1">
-                      <div>
-                        <h3 className="text-base font-bold text-slate-100 leading-tight line-clamp-2">
-                          {lesson.title}
-                        </h3>
-                        <p className="text-sm text-slate-400 mt-1">
-                          {isLocked ? `Требуется покупка: ${selectedCourseFolder.price} Н` : (isCompleted ? 'Просмотрено' : 'Готово к просмотру')}
-                        </p>
+            return (
+              <div 
+                key={lesson.id} 
+                onClick={() => handleCardClick(lesson)}
+                className="lesson-card flex flex-col cursor-pointer"
+              >
+                {/* Thumbnail Area */}
+                <div className="lesson-thumbnail relative w-full aspect-video rounded-2xl overflow-hidden mb-3 bg-[#1C1C1E] border border-white/5">
+                  {lesson.thumbnail_url ? (
+                    <img src={lesson.thumbnail_url} alt={lesson.title} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-indigo-900/60 to-purple-900/40 flex items-center justify-center">
+                      <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-md">
+                        <span className="text-white text-xl translate-x-0.5">▶</span>
                       </div>
-                      
-                      {isCompleted && (
-                        <div className="flex space-x-0.5 mt-1 bg-black/30 px-2 py-1 rounded-full">
-                          {[1, 2, 3].map(star => (
-                            <span key={star} className={`text-xs ${star <= progress.stars ? "text-yellow-400" : "text-gray-600"}`}>
-                              ★
-                            </span>
-                          ))}
-                        </div>
-                      )}
                     </div>
+                  )}
+                  
+                  {/* Badges Overlay */}
+                  <div className="absolute top-2 right-2 flex flex-col gap-2 items-end">
+                    {lesson.is_free ? (
+                      <span className="badge-free bg-green-500/90 text-white text-[11px] font-bold px-2 py-1 rounded-md backdrop-blur-md">
+                        Bepul
+                      </span>
+                    ) : isLocked ? (
+                      <span className="badge-locked bg-black/80 text-white text-[11px] font-medium px-2 py-1 rounded-md flex items-center gap-1 backdrop-blur-md">
+                        <span>🔒</span> Kanalga a'zo bo'ling
+                      </span>
+                    ) : null}
                   </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
+                  
+                  <div className="absolute bottom-2 right-2">
+                    <span className="badge-duration bg-black/80 text-white text-[11px] font-medium px-1.5 py-0.5 rounded backdrop-blur-md">
+                      {lesson.duration || '00:00'}
+                    </span>
+                  </div>
+                </div>
 
+                {/* Card Content */}
+                <div className="flex flex-col px-1">
+                  <h3 className="font-bold text-white text-[15px] mb-1 line-clamp-2 leading-tight">
+                    {lesson.order_index || 1}-Dars. {lesson.title}
+                  </h3>
+                  <p className="text-[13px] text-[#8E8E93] mb-3">
+                    Rashidov Biologiya • {lesson.view_count || 0} ko'rildi • {lesson.question_count || 0} ta test savoli
+                  </p>
+                  
+                  {/* CTA Button */}
+                  <div className="flex items-center">
+                    {isCompleted ? (
+                      <span className="pill pill-green bg-green-500/20 text-green-400 border border-green-500/30 text-[13px] font-medium px-3 py-1.5 rounded-full inline-flex items-center gap-1.5">
+                        <span className="text-xs">✓</span> Topshirildi ({percentage}%)
+                      </span>
+                    ) : isLocked ? (
+                      <span className="pill pill-dark bg-[#1C1C1E] text-[#8E8E93] text-[13px] font-medium px-3 py-1.5 rounded-full inline-flex items-center gap-1.5">
+                        <span>🔒</span> Qulflangan
+                      </span>
+                    ) : (
+                      <button className="pill pill-blue bg-[#007AFF] text-white text-[13px] font-medium px-3 py-1.5 rounded-full inline-flex items-center gap-1.5">
+                        <span>▶️</span> Boshlash
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
 
       <BottomSheet 
-        isOpen={!!selectedNode} 
-        onClose={handleCloseSheet}
-        lesson={selectedNode?.lesson}
-        progress={selectedNode?.progress}
-        course={selectedNode?.course}
-        onWatch={handleWatch}
-        onBuy={handleBuy}
+        isOpen={bottomSheetOpen}
+        onClose={() => setBottomSheetOpen(false)}
+        lesson={selectedLesson}
+        progress={selectedLesson ? progressMap[selectedLesson.id] : null}
+        onWatch={(lesson) => {
+          console.log("Watch lesson", lesson);
+          setBottomSheetOpen(false);
+          // Insert navigation or video playing logic here
+        }}
+        onRewatch={(lesson) => {
+          console.log("Rewatch lesson", lesson);
+          setBottomSheetOpen(false);
+        }}
+        onRetake={(lesson) => {
+          console.log("Retake tests", lesson);
+          setBottomSheetOpen(false);
+        }}
+        onAnalysis={(lesson) => {
+          console.log("Analysis", lesson);
+          setBottomSheetOpen(false);
+        }}
       />
     </div>
   );

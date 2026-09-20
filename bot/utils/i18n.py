@@ -24,6 +24,11 @@ TRANSLATIONS = {
         'broadcast_sent': 'Рассылка отправлена.',
         'broadcast_no_permission': 'Нет прав на рассылку.',
         'ai_explanation': 'Объяснение AI:',
+        'payment_success': 'Оплата успешна! Добавлено {amount} XP',
+        'duel_invite': 'Био-Дуэль! Ваш соперник ждёт',
+        'quest_completed': 'Задание выполнено! +{xp} XP',
+        'channel_not_member': 'Подпишитесь на канал!',
+        'streak_reward': 'Cтрик {days} дней! +{xp} XP',
     },
     'uz': {
         'welcome': 'Xush kelibsiz!',
@@ -50,8 +55,13 @@ TRANSLATIONS = {
         'broadcast_sent': 'Xabar yuborildi.',
         'broadcast_no_permission': 'Xabar yuborishga ruxsat yo\'q.',
         'ai_explanation': 'AI tushuntirishi:',
+        'payment_success': 'To\'lov muvaffaqiyatli! {amount} XP qo\'shildi',
+        'duel_invite': 'Bio-Duel! Raqibingiz kutmoqda',
+        'quest_completed': 'Vazifa bajarildi! +{xp} XP',
+        'channel_not_member': 'Kanalga a\'zo bo\'ling!',
+        'streak_reward': '{days}-kun streak! +{xp} XP',
     }
 }
 
-def t(key: str, lang: str = 'ru') -> str:
-    return TRANSLATIONS.get(lang, TRANSLATIONS['ru']).get(key, key)
+def t(key: str, lang: str = 'uz') -> str:
+    return TRANSLATIONS.get(lang, TRANSLATIONS['uz']).get(key, key)

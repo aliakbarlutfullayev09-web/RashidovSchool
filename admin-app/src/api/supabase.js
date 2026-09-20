@@ -1,14 +1,58 @@
 import { createClient } from '@supabase/supabase-js';
 import { mockStats, mockRedZones, mockCourses, mockLessons, mockTeachers, mockAllUsers } from '../mock/data';
 
-const supabaseUrl = 'https://rcpbepcdgbxjncpxeowx.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjcGJlcGNkZ2J4am5jcHhlb3d4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwMTQyNTAsImV4cCI6MjEwMzU5MDI1MH0.icLRyq0piPK_aITPZDu42nFOG9_jyfzVc7lwuckubbM';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://rcpbepcdgbxjncpxeowx.supabase.co';
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjcGJlcGNkZ2J4am5jcHhlb3d4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwMTQyNTAsImV4cCI6MjEwMzU5MDI1MH0.icLRyq0piPK_aITPZDu42nFOG9_jyfzVc7lwuckubbM';
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
 
 const isMock = false;
 
 export const api = {
+  // Video Checkpoints
+  getVideoCheckpoints: async (lessonId) => {
+    const { data, error } = await supabase
+      .from('video_checkpoints')
+      .select('*')
+      .eq('lesson_id', lessonId)
+      .order('trigger_time_sec', { ascending: true });
+    
+    if (error) {
+      console.error('Error fetching checkpoints:', error);
+      return [];
+    }
+    return data;
+  },
+
+  saveVideoCheckpoints: async (lessonId, checkpoints) => {
+    // Delete existing
+    await supabase.from('video_checkpoints').delete().eq('lesson_id', lessonId);
+    
+    // Insert new
+    if (checkpoints && checkpoints.length > 0) {
+      const { error } = await supabase.from('video_checkpoints').insert(
+        checkpoints.map(cp => {
+          const { id, ...rest } = cp;
+          return rest; // omit id to let db generate it
+        })
+      );
+      if (error) {
+        console.error('Error saving checkpoints:', error);
+        return false;
+      }
+    }
+    return true;
+  },
+
+  deleteVideoCheckpoint: async (id) => {
+    const { error } = await supabase.from('video_checkpoints').delete().eq('id', id);
+    if (error) {
+      console.error('Error deleting checkpoint:', error);
+      return false;
+    }
+    return true;
+  },
+
   // Реальный запрос пользователя
   getUser: async (telegramId) => {
     const { data, error } = await supabase.from('users').select('*').eq('telegram_id', telegramId).single();

@@ -1,123 +1,84 @@
 import React, { useState } from 'react';
-import { updateUserProfile } from '../api/supabase';
+import { motion, AnimatePresence } from 'framer-motion';
 
-export default function Profile({ user }) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState({
-    full_name: user.full_name || '',
-    class_group: user.class_group || '',
-    language: user.language || 'ru',
-  });
-  const [loading, setLoading] = useState(false);
+export default function Profile({ user, isOpen, onClose }) {
+  const [name, setName] = useState(user?.name || '');
+  const [className, setClassName] = useState(user?.class || '');
+  const [lang, setLang] = useState(user?.lang || 'uz');
 
-  const initials = (user.full_name || 'Г')
-    .split(' ')
-    .map((n) => n[0])
-    .join('')
-    .toUpperCase();
+  if (!isOpen) return null;
 
-  const handleSave = async () => {
-    setLoading(true);
-    const { data, error } = await updateUserProfile(user.telegram_id, formData);
-    setLoading(false);
-    if (!error) {
-      window.location.reload(); // Перезагружаем приложение для обновления глобального состояния
-    } else {
-      alert('Ошибка при сохранении: ' + error.message);
-    }
+  const handleSave = () => {
+    // API logic to save profile
+    onClose();
   };
 
-  if (isEditing) {
-    return (
-      <div className="flex flex-col items-center pt-8 pb-6 px-4">
-        <h2 className="text-xl font-bold mb-4">Редактирование профиля</h2>
-        <div className="w-full space-y-4">
-          <div>
-            <label className="text-xs text-slate-400 mb-1 block">Имя и фамилия</label>
-            <input 
-              type="text" 
-              className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white"
-              value={formData.full_name}
-              onChange={e => setFormData({...formData, full_name: e.target.value})}
-            />
-          </div>
-          <div>
-            <label className="text-xs text-slate-400 mb-1 block">Класс (например, 11-А)</label>
-            <input 
-              type="text" 
-              className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white"
-              value={formData.class_group}
-              onChange={e => setFormData({...formData, class_group: e.target.value})}
-            />
-          </div>
-          <div>
-            <label className="text-xs text-slate-400 mb-1 block">Язык</label>
-            <select 
-              className="w-full bg-gray-800 border border-white/10 rounded-xl p-3 text-white"
-              value={formData.language}
-              onChange={e => setFormData({...formData, language: e.target.value})}
-            >
-              <option value="ru">Русский</option>
-              <option value="uz">O'zbekcha</option>
-            </select>
-          </div>
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[200] bg-black/80 flex items-center justify-center p-4 backdrop-blur-md"
+      >
+        <motion.div
+          initial={{ scale: 0.95, y: 20 }}
+          animate={{ scale: 1, y: 0 }}
+          exit={{ scale: 0.95, y: 20 }}
+          className="bg-[#1C1C1E] rounded-3xl p-6 w-full max-w-sm border border-white/[0.08] shadow-2xl"
+        >
+          <h2 className="text-xl font-bold text-white mb-6 text-center">Profilni tahrirlash</h2>
           
-          <div className="flex space-x-2 pt-4">
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm text-[#8E8E93] mb-1.5 ml-1">Ism va Familiya</label>
+              <input 
+                type="text" 
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full bg-[#2C2C2E] border-none rounded-xl p-3.5 text-white outline-none focus:ring-1 focus:ring-[#007AFF] text-[15px]"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm text-[#8E8E93] mb-1.5 ml-1">Sinf</label>
+              <input 
+                type="text" 
+                value={className}
+                onChange={(e) => setClassName(e.target.value)}
+                className="w-full bg-[#2C2C2E] border-none rounded-xl p-3.5 text-white outline-none focus:ring-1 focus:ring-[#007AFF] text-[15px]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm text-[#8E8E93] mb-1.5 ml-1">Til (Язык)</label>
+              <select 
+                value={lang}
+                onChange={(e) => setLang(e.target.value)}
+                className="w-full bg-[#2C2C2E] border-none rounded-xl p-3.5 text-white outline-none focus:ring-1 focus:ring-[#007AFF] appearance-none text-[15px]"
+              >
+                <option value="uz">O'zbekcha</option>
+                <option value="ru">Русский</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex gap-3 mt-8">
             <button 
-              onClick={() => setIsEditing(false)}
-              className="flex-1 p-3 rounded-xl bg-white/10 text-white font-medium"
+              onClick={onClose}
+              className="flex-1 bg-[#2C2C2E] text-white py-3.5 rounded-xl font-medium"
             >
-              Отмена
+              Bekor qilish
             </button>
             <button 
               onClick={handleSave}
-              disabled={loading}
-              className="flex-1 p-3 rounded-xl bg-blue-600 text-white font-bold disabled:opacity-50"
+              className="flex-1 bg-[#007AFF] text-white py-3.5 rounded-xl font-medium"
             >
-              {loading ? '...' : 'Сохранить'}
+              Saqlash
             </button>
           </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-col items-center pt-8 pb-6 px-4">
-      {/* Avatar */}
-      <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 flex items-center justify-center text-3xl font-bold shadow-xl border-4 border-white/10 mb-4">
-        {initials}
-      </div>
-
-      {/* Name & Class */}
-      <div className="flex items-center space-x-2 mb-1">
-        <h1 className="text-2xl font-bold">{user.full_name}</h1>
-        <button onClick={() => setIsEditing(true)} className="text-gray-400 hover:text-white p-1">
-          ✏️
-        </button>
-      </div>
-      <span className="px-3 py-1 bg-white/10 rounded-full text-xs font-semibold mb-6">
-        Класс: {user.class_group}
-      </span>
-
-      {/* Balance Card */}
-      <div className="w-full glass-strong rounded-3xl p-6 mb-4 flex flex-col items-center">
-        <span className="text-gray-300 text-sm mb-2">Ваш баланс</span>
-        <div className="flex items-center space-x-2 text-4xl font-bold text-blue-400">
-          <span>🧠</span>
-          <span>{user.balance}</span>
-        </div>
-        <span className="text-xs text-blue-200/50 mt-1">Нейронов</span>
-      </div>
-
-      {/* Streak */}
-      <div className="w-full glass rounded-2xl p-4 flex items-center justify-between mb-4">
-        <span className="font-semibold">Ударный режим:</span>
-        <div className="flex items-center space-x-1 text-orange-400 font-bold text-lg">
-          <span>🔥</span>
-          <span>{user.streak_days} дней подряд</span>
-        </div>
-      </div>
-    </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
   );
 }

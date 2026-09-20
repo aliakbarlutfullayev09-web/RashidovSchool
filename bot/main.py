@@ -7,6 +7,11 @@ from bot.middlewares.auth import AuthMiddleware
 from bot.handlers import start, testing, admin, ai_helper, payments
 from bot.services.streak import setup_streak_scheduler
 
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
+from bot.handlers.click_webhook import router as click_router
+
 logging.basicConfig(level=logging.INFO)
 
 async def main():
@@ -34,8 +39,29 @@ async def main():
     
     setup_streak_scheduler(pool)
     
+    # Setup FastAPI
+    app = FastAPI(title="Rashidov Biologiya API")
+    app.state.pool = pool
+    app.state.bot = bot
+    
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    
+    app.include_router(click_router)
+    
+    uvicorn_config = uvicorn.Config(app, host="0.0.0.0", port=config.FASTAPI_PORT, log_level="info")
+    server = uvicorn.Server(uvicorn_config)
+    
     try:
-        await dp.start_polling(bot)
+        await asyncio.gather(
+            dp.start_polling(bot),
+            server.serve()
+        )
     finally:
         await pool.close()
 
