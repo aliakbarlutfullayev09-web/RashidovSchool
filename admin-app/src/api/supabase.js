@@ -152,14 +152,13 @@ export const api = {
   },
   
   createLesson: async (courseId, title, videoUrl, testQuestionCount, thumbnailUrl, duration, isFree) => {
+    // Only insert columns that actually exist in the database!
+    // thumbnail_url, duration, and is_free are currently missing from the DB schema.
     const { data: l, error } = await supabase.from('lessons').insert([{
       course_id: courseId,
       title,
       video_url: videoUrl,
-      test_question_count: testQuestionCount,
-      thumbnail_url: thumbnailUrl,
-      duration: duration,
-      is_free: isFree
+      test_question_count: testQuestionCount
     }]).select().single();
     
     if (error) {
