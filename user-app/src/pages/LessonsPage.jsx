@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import BottomSheet from '../components/BottomSheet';
-import { getSubjects, getCourses, getLessons, getProgress } from '../api/supabase';
+import VideoPlayer from '../components/VideoPlayer';
+import { getSubjects, getCourses, getLessons, getProgress, getVideoCheckpoints } from '../api/supabase';
 import { Folder, ArrowLeft } from 'lucide-react';
 
 export default function LessonsPage({ user }) {
@@ -12,6 +13,9 @@ export default function LessonsPage({ user }) {
 
   const [bottomSheetOpen, setBottomSheetOpen] = useState(false);
   const [selectedLesson, setSelectedLesson] = useState(null);
+  
+  const [playingLesson, setPlayingLesson] = useState(null);
+  const [checkpoints, setCheckpoints] = useState([]);
 
   useEffect(() => {
     loadInitialData();
@@ -28,8 +32,6 @@ export default function LessonsPage({ user }) {
     try {
       const subs = await getSubjects();
       setSubjects(subs || []);
-      
-      // Do NOT auto-select the first subject, show the folders list first.
       
       if (user?.id) {
         const prog = await getProgress(user.id);
@@ -70,6 +72,27 @@ export default function LessonsPage({ user }) {
     setSelectedLesson(lesson);
     setBottomSheetOpen(true);
   };
+
+  const startVideo = async (lesson) => {
+    setBottomSheetOpen(false);
+    const cps = await getVideoCheckpoints(lesson.id);
+    setCheckpoints(cps || []);
+    setPlayingLesson(lesson);
+  };
+
+  if (playingLesson) {
+    return (
+      <VideoPlayer 
+        videoUrl={playingLesson.video_url} 
+        lessonId={playingLesson.id}
+        checkpoints={checkpoints}
+        onComplete={() => {
+          // You could update local progress state here
+        }}
+        onBack={() => setPlayingLesson(null)} 
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#000000] text-white pb-20">
@@ -201,17 +224,15 @@ export default function LessonsPage({ user }) {
         onClose={() => setBottomSheetOpen(false)}
         lesson={selectedLesson}
         progress={selectedLesson ? progressMap[selectedLesson.id] : null}
-        onWatch={(lesson) => {
-          setBottomSheetOpen(false);
-        }}
-        onRewatch={(lesson) => {
-          setBottomSheetOpen(false);
-        }}
+        onWatch={(lesson) => startVideo(lesson)}
+        onRewatch={(lesson) => startVideo(lesson)}
         onRetake={(lesson) => {
           setBottomSheetOpen(false);
+          alert('Testni qayta topshirish funksiyasi tez kunda!');
         }}
         onAnalysis={(lesson) => {
           setBottomSheetOpen(false);
+          alert('Tahlil funksiyasi tez kunda!');
         }}
       />
     </div>
