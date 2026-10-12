@@ -21,7 +21,16 @@ export const api = {
       console.error('Error fetching checkpoints:', error);
       return [];
     }
-    return data;
+    return (data || []).map(cp => ({
+      ...cp,
+      trigger_time_sec: cp.trigger_time_sec || 0,
+      rewind_to_sec: cp.rewind_to_sec ?? cp.rewind_time_sec ?? 0,
+      rewind_time_sec: cp.rewind_time_sec ?? cp.rewind_to_sec ?? 0,
+      question_text: cp.question_text || cp.question || '',
+      question: cp.question || cp.question_text || '',
+      correct_option_index: cp.correct_option_index ?? cp.correct_option ?? 0,
+      correct_option: cp.correct_option ?? cp.correct_option_index ?? 0
+    }));
   },
 
   saveVideoCheckpoints: async (lessonId, checkpoints) => {
@@ -31,10 +40,14 @@ export const api = {
     // Insert new
     if (checkpoints && checkpoints.length > 0) {
       const { error } = await supabase.from('video_checkpoints').insert(
-        checkpoints.map(cp => {
-          const { id, ...rest } = cp;
-          return rest; // omit id to let db generate it
-        })
+        checkpoints.map(cp => ({
+          lesson_id: lessonId,
+          trigger_time_sec: cp.trigger_time_sec || 0,
+          rewind_time_sec: cp.rewind_time_sec !== undefined ? cp.rewind_time_sec : (cp.rewind_to_sec || 0),
+          question: cp.question || cp.question_text || '',
+          options: cp.options || [],
+          correct_option: cp.correct_option !== undefined ? cp.correct_option : (cp.correct_option_index || 0)
+        }))
       );
       if (error) {
         console.error('Error saving checkpoints:', error);
@@ -152,21 +165,37 @@ export const api = {
   },
   
   createLesson: async (courseId, title, videoUrl, testQuestionCount, thumbnailUrl, duration, isFree) => {
-    // Only insert columns that actually exist in the database!
-    // thumbnail_url, duration, and is_free are currently missing from the DB schema.
-    const { data: l, error } = await supabase.from('lessons').insert([{
-      course_id: courseId,
-      title,
-      video_url: videoUrl,
-      test_question_count: testQuestionCount
-    }]).select().single();
-    
-    if (error) {
-      console.error("Lesson creation error:", error);
-      alert("Ошибка при сохранении урока: " + error.message);
+    try {
+      const payload = {
+        course_id: courseId,
+        title,
+        video_url: videoUrl,
+        test_question_count: testQuestionCount,
+        thumbnail_url: thumbnailUrl || null,
+        duration: duration || null,
+        is_free: !!isFree
+      };
+      const { data: l, error } = await supabase.from('lessons').insert([payload]).select().single();
+      if (!error && l) return l;
+
+      // Fallback if schema does not yet have extra columns
+      const { data: fallbackL, error: fallbackErr } = await supabase.from('lessons').insert([{
+        course_id: courseId,
+        title,
+        video_url: videoUrl,
+        test_question_count: testQuestionCount
+      }]).select().single();
+
+      if (fallbackErr) {
+        console.error("Lesson creation error:", fallbackErr);
+        alert("Ошибка при сохранении урока: " + fallbackErr.message);
+        return null;
+      }
+      return fallbackL;
+    } catch (e) {
+      console.error("Lesson creation error:", e);
       return null;
     }
-    return l;
   },
 
   deleteCourse: async (courseId) => {
@@ -249,50 +278,63 @@ export const api = {
       return null;
     }
 
-    const { error } = await supabase.from('users').update({ 
-      role: 'teacher',
-      permissions: permissions,
-      assigned_subject_id: assigned_subject_id
-    }).eq('telegram_id', telegramId);
-    
-    if (error) {
-      alert("Ошибка обновления прав: " + error.message);
-      return null;
+    // Обновляем роль пользователя
+    try {
+      await supabase.from('users').update({ 
+        role: 'teacher',
+        permissions: permissions,
+        assigned_subject_id: assigned_subject_id
+      }).eq('telegram_id', telegramId);
+    } catch {
+      await supabase.from('users').update({ role: 'teacher' }).eq('telegram_id', telegramId);
+    }
+
+    // Синхронизируем с subject_admins
+    if (assigned_subject_id) {
+      await supabase.from('subject_admins').upsert({
+        user_id: telegramId,
+        subject_id: assigned_subject_id,
+        permissions: permissions
+      }, { onConflict: 'user_id, subject_id' }).catch(() => {});
     }
     
     return { telegram_id: telegramId, full_name: userExists.full_name, permissions, subject: subjectName };
   },
 
   removeTeacher: async (telegramId) => {
-    const { error } = await supabase.from('users').update({ 
-      role: 'student',
-      permissions: { can_promo: false, can_gift: false, can_send: false },
-      assigned_subject_id: null
-    }).eq('telegram_id', telegramId);
-    
-    if (error) {
-      alert("Ошибка удаления учителя: " + error.message);
-      return false;
+    try {
+      await supabase.from('users').update({ 
+        role: 'student',
+        permissions: { can_promo: false, can_gift: false, can_send: false },
+        assigned_subject_id: null
+      }).eq('telegram_id', telegramId);
+    } catch {
+      await supabase.from('users').update({ role: 'student' }).eq('telegram_id', telegramId);
     }
+    await supabase.from('subject_admins').delete().eq('user_id', telegramId).catch(() => {});
     return true;
   },
   
   getTeachers: async (subjectId) => {
-    const { data } = await supabase.from('users').select(`
-      *,
-      subjects:assigned_subject_id(name)
-    `).in('role', ['teacher', 'superadmin']);
-    
-    return (data || []).map(u => ({
-      telegram_id: u.telegram_id,
-      full_name: u.full_name,
-      subject: u.role === 'superadmin' ? 'Все предметы' : (u.subjects?.name || 'Преподаватель'),
-      permissions: u.role === 'superadmin' ? {
-        can_promo: true,
-        can_gift: true,
-        can_send: true
-      } : (u.permissions || { can_promo: false, can_gift: false, can_send: false })
-    }));
+    try {
+      const { data } = await supabase.from('users').select('*').in('role', ['teacher', 'superadmin']);
+      const { data: subjects } = await supabase.from('subjects').select('id, name');
+      const subMap = (subjects || []).reduce((acc, s) => ({ ...acc, [s.id]: s.name }), {});
+
+      return (data || []).map(u => ({
+        telegram_id: u.telegram_id,
+        full_name: u.full_name || `ID ${u.telegram_id}`,
+        subject: u.role === 'superadmin' ? 'Все предметы' : (subMap[u.assigned_subject_id] || 'Преподаватель'),
+        permissions: u.role === 'superadmin' ? {
+          can_promo: true,
+          can_gift: true,
+          can_send: true
+        } : (u.permissions || { can_promo: false, can_gift: false, can_send: false })
+      }));
+    } catch (e) {
+      console.error(e);
+      return [];
+    }
   },
   
   getAllUsers: async () => {

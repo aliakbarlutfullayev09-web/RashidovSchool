@@ -1,0 +1,8 @@
+{
+  "name": "Rashidov Biologiya LMS",
+  "description": "Biologiya fanidan interaktiv video darslar, testlar, kundalik topshiriqlar va o'quvchilar reytingi platformasi.",
+  "requestFrame": false,
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -7,11 +7,14 @@ export default function CheckpointModal({ checkpoint, onAnswer }) {
   const [status, setStatus] = useState(null); // 'correct' | 'wrong'
   const haptic = useHaptic();
 
-  const handleSelect = (option) => {
+  const handleSelect = (option, idx) => {
     if (selected) return; // Prevent multiple interactions
     setSelected(option);
     
-    const isCorrect = option === checkpoint.correct_option;
+    const correctIdx = checkpoint.correct_option !== undefined ? checkpoint.correct_option : checkpoint.correct_option_index;
+    const isCorrect = (idx === correctIdx) || 
+                      (option === correctIdx) || 
+                      (checkpoint.options && checkpoint.options[correctIdx] === option);
     setStatus(isCorrect ? 'correct' : 'wrong');
     
     if (isCorrect) {
@@ -35,7 +38,7 @@ export default function CheckpointModal({ checkpoint, onAnswer }) {
         className="absolute inset-0 z-[150] bg-black/80 flex flex-col items-center justify-center p-6 checkpoint-overlay backdrop-blur-xl"
       >
         <h2 className="text-xl font-bold text-white text-center mb-8 max-w-md">
-          {checkpoint.question}
+          {checkpoint.question || checkpoint.question_text}
         </h2>
         
         <div className="w-full max-w-md space-y-3">
@@ -54,7 +57,7 @@ export default function CheckpointModal({ checkpoint, onAnswer }) {
                 whileTap={{ scale: 0.97 }}
                 animate={isSelected && status === 'wrong' ? { x: [-10, 10, -10, 10, 0] } : {}}
                 transition={{ duration: 0.4 }}
-                onClick={() => handleSelect(option)}
+                onClick={() => handleSelect(option, idx)}
                 className={`w-full py-4 px-5 rounded-2xl text-left text-white font-medium transition-colors ${bgClass}`}
               >
                 {option}

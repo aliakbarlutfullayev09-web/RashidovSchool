@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-// import { applyPromo } from '../api/supabase';
+import { applyPromo } from '../api/supabase';
 
 export default function PromoCode({ user }) {
   const [code, setCode] = useState('');
@@ -12,20 +12,18 @@ export default function PromoCode({ user }) {
     setStatus('loading');
     
     try {
-      // Mock integration for applyPromo
-      // const res = await applyPromo(user?.id, code);
-      setTimeout(() => {
-        if (code.length >= 5) {
-          setStatus('success');
-          setBonus(150); // MOCK amount
-        } else {
-          setStatus('error');
-          setTimeout(() => setStatus('idle'), 1000);
-        }
-      }, 800);
+      const userId = user?.telegram_id || user?.id || 0;
+      const res = await applyPromo(code, userId);
+      if (res && res.success) {
+        setStatus('success');
+        setBonus(res.bonus || 100);
+      } else {
+        setStatus('error');
+        setTimeout(() => setStatus('idle'), 1200);
+      }
     } catch (err) {
       setStatus('error');
-      setTimeout(() => setStatus('idle'), 1000);
+      setTimeout(() => setStatus('idle'), 1200);
     }
   };
 

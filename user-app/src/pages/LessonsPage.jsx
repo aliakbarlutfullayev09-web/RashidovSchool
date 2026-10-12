@@ -33,8 +33,9 @@ export default function LessonsPage({ user }) {
       const subs = await getSubjects();
       setSubjects(subs || []);
       
-      if (user?.id) {
-        const prog = await getProgress(user.id);
+      const userId = user?.telegram_id || user?.id;
+      if (userId) {
+        const prog = await getProgress(userId);
         const pMap = {};
         if (prog) {
           prog.forEach(p => {

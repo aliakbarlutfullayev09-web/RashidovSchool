@@ -64,7 +64,8 @@ export default function VideoPlayer({ videoUrl, lessonId, checkpoints = [], onCo
       setIsPlaying(true);
     } else {
       // Rewind if wrong
-      videoRef.current.currentTime = activeCheckpoint.rewind_time_sec;
+      const rewindTime = activeCheckpoint.rewind_time_sec ?? activeCheckpoint.rewind_to_sec ?? 0;
+      videoRef.current.currentTime = rewindTime;
       setActiveCheckpoint(null);
       videoRef.current.play();
       setIsPlaying(true);

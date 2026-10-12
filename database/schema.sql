@@ -14,6 +14,9 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- Add to existing users table:
 ALTER TABLE users ADD COLUMN IF NOT EXISTS xp INTEGER DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS frozen_until DATE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions JSONB DEFAULT '{"can_promo": false, "can_gift": false, "can_send": false}';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS assigned_subject_id INTEGER;
 
 CREATE TABLE IF NOT EXISTS subjects (
     id SERIAL PRIMARY KEY,

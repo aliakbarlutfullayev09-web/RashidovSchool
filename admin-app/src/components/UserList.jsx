@@ -15,8 +15,8 @@ export default function UserList() {
   };
 
   const filteredUsers = users.filter(u => 
-    u.full_name.toLowerCase().includes(search.toLowerCase()) || 
-    u.telegram_id.toString().includes(search)
+    (u.full_name || '').toLowerCase().includes((search || '').toLowerCase()) || 
+    (u.telegram_id || '').toString().includes(search || '')
   );
 
   return (

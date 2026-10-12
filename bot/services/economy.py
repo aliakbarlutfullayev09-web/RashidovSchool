@@ -18,4 +18,8 @@ async def freeze_streak(pool: Pool, user_id: int) -> bool:
     success = await spend_neurons(pool, user_id, 50, 'spend', 'Streak freeze')
     if success:
         await update_last_active(pool, user_id)
+        try:
+            await pool.execute("UPDATE users SET frozen_until = CURRENT_DATE + INTERVAL '1 day' WHERE telegram_id = $1", user_id)
+        except Exception:
+            pass
     return success

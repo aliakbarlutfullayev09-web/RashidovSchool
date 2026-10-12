@@ -16,7 +16,7 @@ async def get_ai_explanation(
     """
     genai.configure(api_key=api_key)
     
-    valid_model_name = 'gemini-3.6-flash'
+    valid_model_name = 'gemini-2.5-flash'
 
     model = genai.GenerativeModel(valid_model_name)
 

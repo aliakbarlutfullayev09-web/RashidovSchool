@@ -23,7 +23,11 @@ export default function TopUp({ user, onBack }) {
 
   const handlePurchase = (pkg) => {
     if (gateway === 'click') {
-      const url = `https://my.click.uz/services/pay?service_id=YOUR_SERVICE_ID&merchant_id=YOUR_MERCHANT_ID&amount=${pkg.priceUzs}&transaction_param=${user?.id || 'uzb'}`;
+      const tgId = user?.telegram_id || user?.id || '';
+      const orderId = tgId ? `order_${tgId}_${Date.now()}` : '';
+      const serviceId = import.meta.env.VITE_CLICK_SERVICE_ID || 'YOUR_SERVICE_ID';
+      const merchantId = import.meta.env.VITE_CLICK_MERCHANT_ID || 'YOUR_MERCHANT_ID';
+      const url = `https://my.click.uz/services/pay?service_id=${serviceId}&merchant_id=${merchantId}&amount=${pkg.priceUzs}&transaction_param=${orderId || tgId || 'topup'}`;
       if (window.Telegram?.WebApp?.openLink) {
         window.Telegram.WebApp.openLink(url);
       } else {

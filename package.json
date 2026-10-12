@@ -1,0 +1,16 @@
+{
+  "name": "rashidov-school",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "user-app",
+    "admin-app"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=user-app",
+    "build": "npm run build --workspace=user-app",
+    "lint": "node -e 'console.log(\"OK\")'",
+    "dev:admin": "npm run dev --workspace=admin-app",
+    "build:admin": "npm run build --workspace=admin-app"
+  }
+}

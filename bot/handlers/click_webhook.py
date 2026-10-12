@@ -35,8 +35,15 @@ async def click_webhook(req_data: ClickRequest, request: Request):
         if sign_hash != req_data.sign_string:
             return {"error": -1, "error_note": "SIGN_CHECK_FAILED"}
             
+        raw_id = str(req_data.merchant_trans_id)
+        if '_' in raw_id:
+            parts = raw_id.split('_')
+            tg_str = parts[1] if len(parts) > 1 else parts[0]
+        else:
+            tg_str = raw_id
+
         try:
-            telegram_id = int(req_data.merchant_trans_id)
+            telegram_id = int(tg_str)
         except ValueError:
             return {"error": -5, "error_note": "USER_NOT_FOUND"}
             
@@ -62,15 +69,12 @@ async def click_webhook(req_data: ClickRequest, request: Request):
                 """,
                 telegram_id, req_data.merchant_trans_id, req_data.click_trans_id, req_data.amount
             )
-            # return string ID as int or keep as string since we use UUID. Wait, click requires int
-            # merchant_prepare_id must be integer. So let's use a hashed int for id or a separate serial column for click
-            # Since click requires integer, we'll hash the UUID or we should have used SERIAL for payments.
-            # Assuming click accepts string for merchant_prepare_id if returned as string, but their spec says BIGINT.
-            # Let's return a simple hash of uuid.
+            # Deterministic positive integer for Click merchant_prepare_id
+            prepare_id_val = int(hashlib.md5(str(row['id']).encode()).hexdigest()[:7], 16)
             return {
                 "click_trans_id": req_data.click_trans_id,
                 "merchant_trans_id": req_data.merchant_trans_id,
-                "merchant_prepare_id": hash(str(row['id'])) % 1000000000, 
+                "merchant_prepare_id": prepare_id_val, 
                 "error": 0,
                 "error_note": "Success"
             }
