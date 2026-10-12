@@ -61,8 +61,15 @@ export default function LessonsPage({ user }) {
         allLessons = [...allLessons, ...courseLessons];
       }
       
-      allLessons.sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
-      setLessons(allLessons);
+      const seen = new Set();
+      const uniqueLessons = allLessons.filter(l => {
+        if (!l || seen.has(l.id)) return false;
+        seen.add(l.id);
+        return true;
+      });
+      
+      uniqueLessons.sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
+      setLessons(uniqueLessons);
     } catch (err) {
       console.error("Error loading lessons", err);
     }
@@ -151,7 +158,7 @@ export default function LessonsPage({ user }) {
 
               return (
                 <div 
-                  key={lesson.id} 
+                  key={`lesson-${lesson.course_id || 0}-${lesson.id}`} 
                   onClick={() => handleCardClick(lesson)}
                   className="lesson-card flex flex-col cursor-pointer"
                 >

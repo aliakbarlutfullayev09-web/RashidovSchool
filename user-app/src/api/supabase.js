@@ -87,11 +87,18 @@ export const getLessons = async (courseId) => {
   } catch (e) {
     console.warn('Supabase getLessons fallback to mock:', e);
   }
-  return [
-    { id: 1, course_id: courseId || 1, title: 'Введение в клетку', video_url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', thumbnail_url: 'https://images.unsplash.com/photo-1530026405186-ed1f139313f8?auto=format&fit=crop&w=800&q=80', order_index: 1, duration: '12:45', is_free: true, view_count: 142, test_question_count: 5 },
-    { id: 2, course_id: courseId || 1, title: 'Органоиды', video_url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', thumbnail_url: 'https://images.unsplash.com/photo-1576086213369-97a306d36557?auto=format&fit=crop&w=800&q=80', order_index: 2, duration: '15:20', is_free: false, view_count: 98, test_question_count: 5 },
-    { id: 3, course_id: courseId || 1, title: 'Деление клетки (Митоз)', video_url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', thumbnail_url: 'https://images.unsplash.com/photo-1582719478250-c8940cebf8e5?auto=format&fit=crop&w=800&q=80', order_index: 3, duration: '09:10', is_free: false, view_count: 67, test_question_count: 4 }
+  const allMockLessons = [
+    { id: 1, course_id: 1, title: 'Введение в клетку', video_url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', thumbnail_url: 'https://images.unsplash.com/photo-1530026405186-ed1f139313f8?auto=format&fit=crop&w=800&q=80', order_index: 1, duration: '12:45', is_free: true, view_count: 142, test_question_count: 5 },
+    { id: 2, course_id: 1, title: 'Органоиды', video_url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', thumbnail_url: 'https://images.unsplash.com/photo-1576086213369-97a306d36557?auto=format&fit=crop&w=800&q=80', order_index: 2, duration: '15:20', is_free: false, view_count: 98, test_question_count: 5 },
+    { id: 3, course_id: 1, title: 'Деление клетки (Митоз)', video_url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', thumbnail_url: 'https://images.unsplash.com/photo-1582719478250-c8940cebf8e5?auto=format&fit=crop&w=800&q=80', order_index: 3, duration: '09:10', is_free: false, view_count: 67, test_question_count: 4 },
+    { id: 4, course_id: 2, title: 'Законы Менделя', video_url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', thumbnail_url: 'https://images.unsplash.com/photo-1628595351029-c2bf17511435?auto=format&fit=crop&w=800&q=80', order_index: 1, duration: '14:15', is_free: false, view_count: 110, test_question_count: 5 },
+    { id: 5, course_id: 2, title: 'ДНК и РНК', video_url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', thumbnail_url: 'https://images.unsplash.com/photo-1530026405186-ed1f139313f8?auto=format&fit=crop&w=800&q=80', order_index: 2, duration: '18:00', is_free: false, view_count: 85, test_question_count: 5 },
+    { id: 6, course_id: 3, title: 'Теория Дарвина', video_url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', thumbnail_url: 'https://images.unsplash.com/photo-1576086213369-97a306d36557?auto=format&fit=crop&w=800&q=80', order_index: 1, duration: '11:30', is_free: false, view_count: 92, test_question_count: 4 }
   ];
+  if (courseId) {
+    return allMockLessons.filter(l => l.course_id === Number(courseId));
+  }
+  return allMockLessons;
 };
 
 export const getProgress = async (userId) => {
