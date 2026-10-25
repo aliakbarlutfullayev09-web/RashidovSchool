@@ -6,6 +6,7 @@ import {
 import { isUzbekMatch } from '../utils/uzbekFuzzy';
 import { useHaptic } from '../hooks/useHaptic';
 import { useLanguage } from '../context/LanguageContext';
+import { supabase } from '../api/supabase';
 
 const DTM_SAMPLE_QUESTIONS = [
   {
@@ -40,6 +41,30 @@ export default function TestlarPage({ user }) {
 
   // Mode: 'dtm' | 'sertifikat' | 'trenajyor'
   const [activeMode, setActiveMode] = useState('dtm');
+  const [questionsList, setQuestionsList] = useState(DTM_SAMPLE_QUESTIONS);
+
+  useEffect(() => {
+    async function fetchDBQuestions() {
+      try {
+        const { data, error } = await supabase.from('questions').select('*').limit(30);
+        if (!error && data && data.length > 0) {
+          const mapped = data.map((q, idx) => ({
+            id: q.id || idx,
+            type: q.image_url ? 'image' : 'choice',
+            text: q.text,
+            imageUrl: q.image_url,
+            options: Array.isArray(q.options) ? q.options : (typeof q.options === 'string' ? JSON.parse(q.options) : []),
+            correctIndex: q.correct_option_index ?? 0,
+            textbookRef: q.textbook_ref || "Rashidov Biologiya darsligi"
+          }));
+          setQuestionsList(mapped);
+        }
+      } catch (e) {
+        console.warn("Failed to fetch questions:", e);
+      }
+    }
+    fetchDBQuestions();
+  }, []);
 
   // Exam Runner State
   const [examActive, setExamActive] = useState(false);
@@ -117,7 +142,7 @@ export default function TestlarPage({ user }) {
   };
 
   // Evaluation
-  const questions = DTM_SAMPLE_QUESTIONS;
+  const questions = questionsList;
   let correctCount = 0;
   questions.forEach((q, idx) => {
     const userAns = userAnswers[idx];

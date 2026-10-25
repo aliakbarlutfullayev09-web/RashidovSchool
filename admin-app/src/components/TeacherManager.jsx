@@ -3,6 +3,7 @@ import { api } from '../api/supabase';
 
 export default function TeacherManager() {
   const [teachers, setTeachers] = useState([]);
+  const [subjectsList, setSubjectsList] = useState([]);
   const [tgId, setTgId] = useState('');
   const [subject, setSubject] = useState('Биология');
   const [permissions, setPermissions] = useState({ can_promo: false, can_gift: false, can_send: false });
@@ -14,6 +15,11 @@ export default function TeacherManager() {
   const loadTeachers = async () => {
     const data = await api.getTeachers();
     setTeachers(data);
+    const subs = await api.getSubjects();
+    if (subs && subs.length > 0) {
+      setSubjectsList(subs);
+      setSubject(subs[0].name);
+    }
   };
 
   const handleAdd = async (e) => {
@@ -48,9 +54,15 @@ export default function TeacherManager() {
             <div className="flex-1">
               <label className="block text-sm text-slate-400 mb-1">Предмет</label>
               <select value={subject} onChange={e => setSubject(e.target.value)} className="input-field">
-                <option value="Биология">Биология</option>
-                <option value="Химия">Химия</option>
-                <option value="Математика">Математика</option>
+                {subjectsList.length > 0 ? (
+                  subjectsList.map(s => <option key={s.id} value={s.name}>{s.name}</option>)
+                ) : (
+                  <>
+                    <option value="Биология">Биология</option>
+                    <option value="Химия">Химия</option>
+                    <option value="Математика">Математика</option>
+                  </>
+                )}
               </select>
             </div>
           </div>

@@ -3,6 +3,8 @@ import { Trophy, Medal, Crown, Sparkles, Flame, User } from 'lucide-react';
 import { formatCompactNeyron } from '../utils/formatters';
 import { useHaptic } from '../hooks/useHaptic';
 
+import { supabase } from '../api/supabase';
+
 const SAMPLE_LEADERBOARD = [
   { id: 1, rank: 1, name: "Madina Karimova", school: "Prezident Maktabi", class: "11-A", neyrons: 14200, treeStage: "🌳 Bilim daraxti", prize: "🎁 Telegram Sovg'a" },
   { id: 2, rank: 2, name: "Jasur Rahimov", school: "1-IDUM", class: "10-B", neyrons: 11850, treeStage: "🌸 Gullagan" },
@@ -20,6 +22,41 @@ export default function LeaderboardPage({ user }) {
   // Toggles
   const [timeframe, setTimeframe] = useState('monthly'); // 'monthly' | 'all'
   const [scope, setScope] = useState('republic'); // 'republic' | 'class'
+  const [leaderboard, setLeaderboard] = useState(SAMPLE_LEADERBOARD);
+
+  useEffect(() => {
+    async function fetchLeaderboard() {
+      try {
+        let query = supabase
+          .from('users')
+          .select('telegram_id, full_name, class_group, balance, streak_days')
+          .order('balance', { ascending: false })
+          .limit(30);
+
+        if (scope === 'class' && user?.class_group) {
+          query = query.eq('class_group', user.class_group);
+        }
+
+        const { data, error } = await query;
+        if (!error && data && data.length >= 3) {
+          const mapped = data.map((u, i) => ({
+            id: u.telegram_id,
+            rank: i + 1,
+            name: u.full_name || `Foydalanuvchi #${i + 1}`,
+            school: "Rashidov School",
+            class: u.class_group || 'Abituriyent',
+            neyrons: u.balance || 0,
+            treeStage: (u.balance > 10000 ? "🌳 Bilim daraxti" : u.balance > 5000 ? "🌸 Gullagan" : u.balance > 2000 ? "🌿 Ko'chat" : "🪴 Nihol"),
+            prize: i === 0 ? "🎁 Telegram Sovg'a" : undefined
+          }));
+          setLeaderboard(mapped);
+        }
+      } catch (e) {
+        console.warn("Failed to load real leaderboard:", e);
+      }
+    }
+    fetchLeaderboard();
+  }, [timeframe, scope, user]);
 
   const handleTimeframeChange = (val) => {
     if (timeframe !== val) {
@@ -35,12 +72,13 @@ export default function LeaderboardPage({ user }) {
     }
   };
 
-  const top1 = SAMPLE_LEADERBOARD[0];
-  const top2 = SAMPLE_LEADERBOARD[1];
-  const top3 = SAMPLE_LEADERBOARD[2];
-  const otherRanks = SAMPLE_LEADERBOARD.slice(3);
+  const top1 = leaderboard[0] || SAMPLE_LEADERBOARD[0];
+  const top2 = leaderboard[1] || SAMPLE_LEADERBOARD[1];
+  const top3 = leaderboard[2] || SAMPLE_LEADERBOARD[2];
+  const otherRanks = leaderboard.slice(3);
 
-  const userRank = 42;
+  const myIndex = leaderboard.findIndex(item => item.id === user?.telegram_id);
+  const userRank = myIndex !== -1 ? myIndex + 1 : 42;
   const userNeyron = user?.balance || 1850;
   const userName = user?.full_name || 'Siz (Aliakbar L.)';
 

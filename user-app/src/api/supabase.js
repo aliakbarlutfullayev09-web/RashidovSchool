@@ -32,11 +32,21 @@ export async function applyPromoCode(telegramId, code) {
       return { success: false, message: 'Лимит использований исчерпан' };
     }
 
+    const { data: uses, error: usesError } = await supabase
+      .from('promo_uses')
+      .select('*')
+      .eq('promo_id', promo.id)
+      .eq('user_id', telegramId);
+    if (!usesError && uses && uses.length > 0) {
+      return { success: false, message: 'Siz bu promo-koddan allaqachon foydalangansiz' };
+    }
+
     const { data: user } = await supabase.from('users').select('balance').eq('telegram_id', telegramId).single();
     if (!user) return { success: false, message: 'Пользователь не найден' };
 
     await supabase.from('users').update({ balance: user.balance + promo.bonus_amount }).eq('telegram_id', telegramId);
-    await supabase.from('promo_codes').update({ current_uses: promo.current_uses + 1 }).eq('id', promo.id);
+    await supabase.from('promo_codes').update({ current_uses: (promo.current_uses || 0) + 1 }).eq('id', promo.id);
+    await supabase.from('promo_uses').insert([{ promo_id: promo.id, user_id: telegramId }]).catch(() => {});
 
     return { success: true, message: `Начислено ${promo.bonus_amount} Нейронов!`, bonus: promo.bonus_amount };
   } catch (err) {

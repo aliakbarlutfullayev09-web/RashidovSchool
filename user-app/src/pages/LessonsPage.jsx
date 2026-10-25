@@ -8,7 +8,7 @@ import { Play, CheckCircle2, Lock, Trophy, Clock, HelpCircle, Sparkles } from 'l
 import { useLanguage } from '../context/LanguageContext';
 import { useHaptic } from '../hooks/useHaptic';
 
-const SUBJECT_CHIPS = [
+const DEFAULT_SUBJECT_CHIPS = [
   { id: 1, name: 'Biologiya', emoji: '🧬' },
   { id: 2, name: 'Kimyo', emoji: '🧪' },
   { id: 3, name: 'Matematika', emoji: '📐' }
@@ -18,6 +18,7 @@ export default function LessonsPage({ user }) {
   const { t } = useLanguage();
   const { selectionChanged, impactLight } = useHaptic();
 
+  const [subjects, setSubjects] = useState(DEFAULT_SUBJECT_CHIPS);
   const [activeSubjectId, setActiveSubjectId] = useState(1);
   const [courses, setCourses] = useState([]);
   const [lessons, setLessons] = useState([]);
@@ -31,6 +32,22 @@ export default function LessonsPage({ user }) {
   // Video playback state
   const [playingLesson, setPlayingLesson] = useState(null);
   const [checkpoints, setCheckpoints] = useState([]);
+
+  useEffect(() => {
+    loadSubjects();
+  }, []);
+
+  const loadSubjects = async () => {
+    try {
+      const dbSubjects = await getSubjects();
+      if (dbSubjects && dbSubjects.length > 0) {
+        setSubjects(dbSubjects);
+        setActiveSubjectId(prev => (dbSubjects.some(s => s.id === prev) ? prev : dbSubjects[0].id));
+      }
+    } catch (e) {
+      console.warn("Failed to load dynamic subjects:", e);
+    }
+  };
 
   useEffect(() => {
     loadData();
@@ -57,7 +74,7 @@ export default function LessonsPage({ user }) {
 
       // 3. Fetch user progress
       if (user?.telegram_id || user?.id) {
-        const userUid = user.id || user.telegram_id;
+        const userUid = user.telegram_id || user.id;
         const prog = await getProgress(userUid);
         const pMap = {};
         if (prog && prog.length > 0) {
@@ -142,8 +159,9 @@ export default function LessonsPage({ user }) {
       {/* Sticky Subject Chips Row */}
       <div className="sticky top-[72px] z-20 bg-[#000000]/90 backdrop-blur-md py-2.5 -mx-4 px-4 mb-4 border-b border-white/[0.04]">
         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
-          {SUBJECT_CHIPS.map((chip) => {
+          {subjects.map((chip) => {
             const isActive = activeSubjectId === chip.id;
+            const emoji = chip.emoji || chip.icon || (chip.name?.toLowerCase().includes('kimyo') ? '🧪' : chip.name?.toLowerCase().includes('matem') ? '📐' : '🧬');
             return (
               <button
                 key={chip.id}
@@ -154,7 +172,7 @@ export default function LessonsPage({ user }) {
                     : 'bg-[#1C1C1E] border border-white/5 text-[#8E8E93] hover:text-white'
                 }`}
               >
-                <span>{chip.emoji}</span>
+                <span>{emoji}</span>
                 <span>{chip.name}</span>
               </button>
             );

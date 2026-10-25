@@ -15,7 +15,10 @@ export default function CheckpointModal({ checkpoint, onAnswer }) {
     setSelected(option);
     impactMedium();
 
-    const isCorrect = option === checkpoint.correct_option;
+    const isCorrect = 
+      option === checkpoint.correct_option ||
+      (checkpoint.correct_option !== undefined && checkpoint.options?.[checkpoint.correct_option] === option) ||
+      (checkpoint.correct_option_index !== undefined && checkpoint.options?.[checkpoint.correct_option_index] === option);
     setStatus(isCorrect ? 'correct' : 'wrong');
 
     if (isCorrect) {
@@ -50,7 +53,7 @@ export default function CheckpointModal({ checkpoint, onAnswer }) {
           </div>
 
           <h3 className="text-white font-bold text-lg leading-snug mb-6">
-            {checkpoint.question}
+            {checkpoint.question || checkpoint.question_text}
           </h3>
 
           {/* Option Pills */}
