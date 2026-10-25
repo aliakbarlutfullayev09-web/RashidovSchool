@@ -462,3 +462,11 @@ body {
   background: rgba(52, 199, 89, 0.15);
   border-color: rgba(52, 199, 89, 0.3);
 }
+
+/* Landscape orientation optimization for phones & tablets */
+@media (orientation: landscape) and (max-height: 540px) {
+  video {
+    max-height: 70vh !important;
+  }
+}
+

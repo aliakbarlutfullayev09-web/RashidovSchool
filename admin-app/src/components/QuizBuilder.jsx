@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { api } from '../api/supabase';
+import { Plus, Trash2, HelpCircle, Check, ArrowLeft, Clock, Image as ImageIcon } from 'lucide-react';
 
 export default function QuizBuilder({ lessonId, lessonName, courseName, onBack }) {
   const [questions, setQuestions] = useState([]);
@@ -8,8 +9,9 @@ export default function QuizBuilder({ lessonId, lessonName, courseName, onBack }
   const [timeLimit, setTimeLimit] = useState(30);
   const [options, setOptions] = useState(['', '', '', '']);
   const [correctIndex, setCorrectIndex] = useState(0);
+  const [loading, setLoading] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     async function loadQ() {
       const qs = await api.getQuestions(lessonId);
       setQuestions(qs);
@@ -19,10 +21,13 @@ export default function QuizBuilder({ lessonId, lessonName, courseName, onBack }
 
   const handleAdd = async (e) => {
     e.preventDefault();
-    if (!text || options.some(o => !o)) return;
-    const newQ = await api.createQuestion(lessonId, text, options, correctIndex, timeLimit, imageUrl);
+    if (!text.trim() || options.some(o => !o.trim())) return;
+    setLoading(true);
+
+    const newQ = await api.createQuestion(lessonId, text.trim(), options, correctIndex, timeLimit, imageUrl.trim() || null);
+    setLoading(false);
     if (newQ) {
-      setQuestions([...questions, newQ]);
+      setQuestions(prev => [...prev, newQ]);
       setText('');
       setImageUrl('');
       setOptions(['', '', '', '']);
@@ -39,84 +44,195 @@ export default function QuizBuilder({ lessonId, lessonName, courseName, onBack }
 
   const handleDelete = async (e, id) => {
     e.stopPropagation();
-    if (window.confirm('Удалить этот вопрос?')) {
+    if (window.confirm("Ushbu test savolini o'chirishni xohlaysizmi?")) {
       const success = await api.deleteQuestion(id);
-      if (success) setQuestions(questions.filter(q => q.id !== id));
+      if (success) {
+        setQuestions(prev => prev.filter(q => q.id !== id));
+      }
     }
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-2 text-slate-400 text-sm">
-        <span className="text-slate-500">{courseName}</span>
-        <span>&gt;</span>
-        <button onClick={onBack} className="hover:text-blue-400 transition-colors">{lessonName}</button>
-        <span>&gt;</span>
-        <span className="text-white">Тест</span>
+    <div className="space-y-6 text-white pb-24">
+      {/* Breadcrumb */}
+      <div className="flex items-center gap-2 text-xs font-semibold text-[#8E8E93] bg-[#1C1C1E] p-3 px-4 rounded-2xl border border-white/5 w-fit">
+        <span className="text-[#8E8E93]">{courseName}</span>
+        <span>/</span>
+        <button onClick={onBack} className="hover:text-white transition-colors flex items-center gap-1 font-bold text-white">
+          <ArrowLeft className="w-3.5 h-3.5" /> {lessonName}
+        </button>
+        <span>/</span>
+        <span className="text-blue-400 font-bold">Test savollari</span>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="card p-6">
-          <h2 className="text-xl font-bold mb-4">Добавить вопрос</h2>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Form: Add Question */}
+        <div className="lg:col-span-7 card p-6 bg-[#1C1C1E] border border-white/5 shadow-2xl space-y-5">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
+              <HelpCircle className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-white">Yangi test savoli</h2>
+              <p className="text-xs text-[#8E8E93]">Dars yakunidagi test uchun savol qo'shish</p>
+            </div>
+          </div>
+
           <form onSubmit={handleAdd} className="space-y-4">
             <div>
-              <label className="block text-sm text-slate-400 mb-1">Текст вопроса</label>
-              <textarea value={text} onChange={e => setText(e.target.value)} className="input-field h-24 resize-none" placeholder="Введите вопрос..."></textarea>
+              <label className="block text-xs font-semibold text-[#8E8E93] mb-1.5 uppercase tracking-wider">
+                Savol matni *
+              </label>
+              <textarea 
+                value={text} 
+                onChange={e => setText(e.target.value)} 
+                className="input-field min-h-[90px] resize-y" 
+                placeholder="Savolni kiriting..." 
+                required 
+              />
             </div>
-            <div>
-              <label className="block text-sm text-slate-400 mb-1">Ссылка на картинку (необязательно)</label>
-              <input type="text" value={imageUrl} onChange={e => setImageUrl(e.target.value)} className="input-field" placeholder="https://..." />
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-[#8E8E93] mb-1.5 uppercase tracking-wider">
+                  Rasm havolasi (Ixtiyoriy)
+                </label>
+                <input 
+                  type="url" 
+                  value={imageUrl} 
+                  onChange={e => setImageUrl(e.target.value)} 
+                  className="input-field" 
+                  placeholder="https://..." 
+                />
+              </div>
+
+              <div>
+                <label className="flex items-center gap-1.5 text-xs font-semibold text-[#8E8E93] mb-1.5 uppercase tracking-wider">
+                  <Clock className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Vaqt chegarasi (sekund)</span>
+                </label>
+                <input 
+                  type="number" 
+                  value={timeLimit} 
+                  onChange={e => setTimeLimit(parseInt(e.target.value, 10) || 30)} 
+                  className="input-field font-mono" 
+                  min="5" 
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-sm text-slate-400 mb-1">Таймер (секунды)</label>
-              <input type="number" value={timeLimit} onChange={e => setTimeLimit(parseInt(e.target.value))} className="input-field w-32" min="5" />
-            </div>
-            
-            <div className="space-y-2 mt-4">
-              <label className="block text-sm text-slate-400 mb-1">Варианты ответов</label>
+
+            {/* Optional Image Preview */}
+            {imageUrl && (
+              <div className="relative w-full aspect-video max-h-48 rounded-2xl overflow-hidden bg-black border border-white/10">
+                <img src={imageUrl} alt="Savol rasmi" className="w-full h-full object-contain" />
+              </div>
+            )}
+
+            {/* 4 Options */}
+            <div className="space-y-3 pt-2">
+              <label className="block text-xs font-semibold text-[#8E8E93] uppercase tracking-wider">
+                Variantlar (To'g'ri javobni tanlang)
+              </label>
               {['A', 'B', 'C', 'D'].map((lbl, idx) => (
                 <div key={idx} className="flex items-center gap-3">
-                  <input type="radio" name="correct" checked={correctIndex === idx} onChange={() => setCorrectIndex(idx)} className="w-4 h-4 text-blue-600 bg-slate-700 border-slate-600 focus:ring-blue-500" />
-                  <span className="font-bold text-slate-400 w-4">{lbl}</span>
-                  <input type="text" value={options[idx]} onChange={e => updateOption(idx, e.target.value)} className={`input-field flex-1 ${correctIndex === idx ? 'border-green-500' : ''}`} placeholder={`Вариант ${lbl}`} required />
+                  <input 
+                    type="radio" 
+                    name="correct" 
+                    checked={correctIndex === idx} 
+                    onChange={() => setCorrectIndex(idx)} 
+                    className="w-5 h-5 accent-[#007AFF] cursor-pointer flex-shrink-0" 
+                  />
+                  <span className="font-bold text-xs text-white/70 w-5">{lbl}</span>
+                  <input 
+                    type="text" 
+                    value={options[idx]} 
+                    onChange={e => updateOption(idx, e.target.value)} 
+                    className="input-field py-2.5 text-xs flex-1" 
+                    placeholder={`${lbl} varianti javobi...`} 
+                    required 
+                  />
                 </div>
               ))}
             </div>
 
-            <button type="submit" className="btn-primary w-full mt-4">Добавить вопрос</button>
+            <button 
+              type="submit" 
+              disabled={loading || !text.trim() || options.some(o => !o.trim())} 
+              className="btn-primary py-3 px-6 text-sm w-full sm:w-auto"
+            >
+              <Plus className="w-4 h-4" />
+              <span>{loading ? "Qo'shilmoqda..." : "Savolni qo'shish"}</span>
+            </button>
           </form>
         </div>
 
-        <div className="space-y-4">
-          <h2 className="text-xl font-bold">Существующие вопросы ({questions.length})</h2>
-          {questions.map((q, i) => (
-            <div key={q.id} className="card p-4 relative group">
-              <div className="absolute top-4 right-4 flex items-center space-x-3">
-                <span className="text-xs text-slate-400">⏱ {q.timeLimit}с</span>
-                <button 
-                  onClick={(e) => handleDelete(e, q.id)} 
-                  className="text-red-500 hover:text-red-400 p-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/5 rounded"
-                  title="Удалить вопрос"
-                >
-                  🗑️
-                </button>
-              </div>
-              <div className="font-bold mb-2 pr-16">{i + 1}. {q.text}</div>
-              {q.image_url && (
-                <div className="mb-4">
-                  <img src={q.image_url} alt="Question" className="max-h-32 rounded border border-slate-700" />
-                </div>
-              )}
-              <div className="space-y-1">
-                {q.options.map((opt, idx) => (
-                  <div key={idx} className={`text-sm p-2 rounded ${idx === q.correct_option_index ? 'bg-green-900/30 text-green-400 border border-green-800' : 'bg-slate-800 text-slate-300'}`}>
-                    {['A', 'B', 'C', 'D'][idx]}. {opt}
+        {/* List of Existing Questions */}
+        <div className="lg:col-span-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <span>Mavjud savollar</span>
+              <span className="bg-[#2C2C2E] text-xs font-semibold px-2.5 py-0.5 rounded-full text-[#8E8E93]">
+                {questions.length} ta
+              </span>
+            </h3>
+          </div>
+
+          <div className="space-y-3">
+            {questions.map((q, idx) => (
+              <div 
+                key={q.id || idx} 
+                className="card p-4 bg-[#1C1C1E] border border-white/5 rounded-3xl shadow-xl space-y-3 relative"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-blue-400 bg-blue-500/10 px-2.5 py-0.5 rounded-full">
+                      #{idx + 1}
+                    </span>
+                    <span className="text-[10px] text-[#8E8E93] font-mono">
+                      ⏱ {q.time_limit || 30}s
+                    </span>
                   </div>
-                ))}
+
+                  <button 
+                    onClick={(e) => handleDelete(e, q.id)} 
+                    className="w-7 h-7 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500 hover:text-white flex items-center justify-center transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <p className="text-xs font-bold text-white leading-snug">{q.text}</p>
+
+                {q.image_url && (
+                  <div className="w-full aspect-video max-h-32 rounded-xl overflow-hidden bg-black border border-white/5">
+                    <img src={q.image_url} alt="Question" className="w-full h-full object-contain" />
+                  </div>
+                )}
+
+                <div className="space-y-1.5 pt-1">
+                  {(Array.isArray(q.options) ? q.options : []).map((opt, oIdx) => (
+                    <div 
+                      key={oIdx} 
+                      className={`text-[11px] p-2 rounded-xl border flex items-center justify-between ${
+                        q.correct_option_index === oIdx 
+                          ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300 font-bold' 
+                          : 'bg-[#2C2C2E] border-white/5 text-[#8E8E93]'
+                      }`}
+                    >
+                      <span>{['A', 'B', 'C', 'D'][oIdx]}: {opt}</span>
+                      {q.correct_option_index === oIdx && <Check className="w-3.5 h-3.5 text-emerald-400" />}
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
-          {questions.length === 0 && <div className="text-slate-500 italic">Пока нет вопросов в этом тесте.</div>}
+            ))}
+
+            {questions.length === 0 && (
+              <div className="card p-8 text-center text-[#8E8E93] text-xs">
+                Ushbu darsda hali savollar yo'q. Chap tomondagi forma orqali test savollarini qo'shing.
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

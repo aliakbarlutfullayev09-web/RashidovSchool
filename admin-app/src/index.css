@@ -2,58 +2,206 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  background: #0f172a;
-  color: #e2e8f0;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+/* ═══════════════════════════════════════════
+   RASHIDOV BIOLOGIYA — ADMIN OLED DARK MODE
+   Apple iOS & macOS Graphite Design System
+   ═══════════════════════════════════════════ */
+
+/* Prevent unnecessary scroll bounce */
+html, body, #root {
+  min-height: 100%;
+  background: #000000;
+  color: #FFFFFF;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #000000;
+}
+::-webkit-scrollbar-thumb {
+  background: #2C2C2E;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3A3A3C;
+}
+
+/* ══════════════════════════
+   APPLE GRAPHITE CARD SYSTEM
+   ══════════════════════════ */
 .card {
-  background: #1e293b;
-  border: 1px solid #334155;
-  border-radius: 12px;
+  background: #1C1C1E;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 24px;
 }
 
+.card-sm {
+  background: #1C1C1E;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+}
+
+.card-hover {
+  transition: all 0.2s ease;
+}
 .card-hover:hover {
-  border-color: #3b82f6;
-  box-shadow: 0 0 20px rgba(59, 130, 246, 0.1);
+  border-color: rgba(0, 122, 255, 0.4);
+  box-shadow: 0 0 25px rgba(0, 122, 255, 0.15);
 }
 
+/* ══════════════════════════
+   INPUT FIELDS & CONTROLS
+   ══════════════════════════ */
 .input-field {
-  background: #1e293b;
-  border: 1px solid #334155;
-  border-radius: 8px;
-  padding: 8px 12px;
-  color: #e2e8f0;
+  background: #2C2C2E;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 12px 16px;
+  color: #FFFFFF;
   width: 100%;
   outline: none;
-  transition: border-color 0.2s;
+  font-size: 14px;
+  transition: all 0.2s ease;
 }
 .input-field:focus {
-  border-color: #3b82f6;
+  border-color: #007AFF;
+  box-shadow: 0 0 0 1px #007AFF;
+}
+.input-field::placeholder {
+  color: #8E8E93;
 }
 
+/* ══════════════════════════
+   BUTTONS
+   ══════════════════════════ */
 .btn-primary {
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
-  color: white;
-  padding: 10px 20px;
-  border-radius: 10px;
+  background: #007AFF;
+  color: #FFFFFF;
+  padding: 12px 20px;
+  border-radius: 14px;
   font-weight: 600;
-  transition: all 0.2s;
+  font-size: 14px;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  border: none;
 }
 .btn-primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
+  background: #0066D6;
+  box-shadow: 0 4px 16px rgba(0, 122, 255, 0.35);
+}
+.btn-primary:active {
+  transform: scale(0.98);
 }
 .btn-primary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.btn-secondary {
+  background: #2C2C2E;
+  color: #FFFFFF;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 12px 20px;
+  border-radius: 14px;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.btn-secondary:hover {
+  background: #3A3A3C;
+}
+.btn-secondary:active {
+  transform: scale(0.98);
 }
 
 .btn-danger {
-  background: linear-gradient(135deg, #ef4444, #dc2626);
-  color: white;
-  padding: 10px 20px;
-  border-radius: 10px;
+  background: rgba(255, 59, 48, 0.15);
+  color: #FF3B30;
+  border: 1px solid rgba(255, 59, 48, 0.3);
+  padding: 12px 20px;
+  border-radius: 14px;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.btn-danger:hover {
+  background: #FF3B30;
+  color: #FFFFFF;
+}
+.btn-danger:active {
+  transform: scale(0.98);
+}
+
+/* ══════════════════════════
+   BADGES & PILLS
+   ══════════════════════════ */
+.badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 100px;
+  font-size: 12px;
   font-weight: 600;
 }
+
+/* ══════════════════════════
+   RESPONSIVE VIDEO CONTAINER
+   ══════════════════════════ */
+.video-responsive-box {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000000;
+  border-radius: 20px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.video-responsive-box video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Safe areas */
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 16px);
+}
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 16px);
+}
+
+/* Landscape orientation optimization for phones & tablets */
+@media (orientation: landscape) and (max-height: 540px) {
+  .video-responsive-box {
+    max-height: 62vh;
+    width: auto;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+

@@ -21,6 +21,7 @@ export default function VideoPlayer({
   onBack 
 }) {
   const videoRef = useRef(null);
+  const containerRef = useRef(null);
   const { impactLight, impactMedium, notificationSuccess } = useHaptic();
 
   // Playback state
@@ -203,6 +204,36 @@ export default function VideoPlayer({
     setPlaybackRate(rates[nextIdx]);
   };
 
+  const toggleFullscreen = () => {
+    impactLight();
+    const video = videoRef.current;
+    const container = containerRef.current;
+    if (!video) return;
+
+    // iOS Safari / WebKit enter fullscreen
+    if (video.webkitEnterFullscreen) {
+      video.webkitEnterFullscreen();
+      return;
+    }
+
+    // Standard Fullscreen API for Android, Tablet, Desktop
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      if (container?.requestFullscreen) {
+        container.requestFullscreen();
+      } else if (container?.webkitRequestFullscreen) {
+        container.webkitRequestFullscreen();
+      } else if (video.requestFullscreen) {
+        video.requestFullscreen();
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+      }
+    }
+  };
+
   const handleEnded = () => {
     setIsPlaying(false);
     setIsEnded(true);
@@ -262,8 +293,11 @@ export default function VideoPlayer({
         </button>
       </div>
 
-      {/* Main Video Viewport */}
-      <div className="relative w-full aspect-video bg-[#0A0A0C] flex items-center justify-center overflow-hidden my-auto border-y border-white/5">
+      {/* Main Video Viewport (Responsive on PC, Tablet, Mobile & Orientations) */}
+      <div 
+        ref={containerRef}
+        className="relative w-full aspect-video max-h-[calc(100dvh-130px)] bg-[#0A0A0C] flex items-center justify-center overflow-hidden my-auto border-y border-white/5"
+      >
         
         {/* Audio Only Placeholder */}
         {isAudioOnly ? (
@@ -279,9 +313,11 @@ export default function VideoPlayer({
         <video
           ref={videoRef}
           src={videoUrl || "https://www.w3schools.com/html/mov_bbb.mp4"}
-          className={`w-full h-full object-contain ${isAudioOnly ? 'hidden' : 'block'}`}
+          className={`w-full h-full object-contain max-h-[calc(100dvh-130px)] ${isAudioOnly ? 'hidden' : 'block'}`}
           controls={false}
           playsInline
+          webkit-playsinline="true"
+          x-webkit-airplay="allow"
           onTimeUpdate={handleTimeUpdate}
           onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}
           onEnded={handleEnded}
@@ -374,12 +410,22 @@ export default function VideoPlayer({
             </span>
           </div>
 
-          <button
-            onClick={cyclePlaybackRate}
-            className="px-3 py-1.5 rounded-xl bg-[#1C1C1E] border border-white/10 text-xs font-bold text-white active:scale-95 transition-transform"
-          >
-            {playbackRate}x
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={cyclePlaybackRate}
+              className="px-3 py-1.5 rounded-xl bg-[#1C1C1E] border border-white/10 text-xs font-bold text-white active:scale-95 transition-transform"
+            >
+              {playbackRate}x
+            </button>
+
+            <button
+              onClick={toggleFullscreen}
+              className="w-9 h-9 rounded-xl bg-[#1C1C1E] border border-white/10 flex items-center justify-center text-white/80 hover:text-white active:scale-95 transition-transform"
+              title="To'liq ekran"
+            >
+              <Maximize className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* End of Video Screen & Rewards */}
