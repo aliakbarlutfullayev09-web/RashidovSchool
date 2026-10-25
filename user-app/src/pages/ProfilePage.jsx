@@ -1,112 +1,255 @@
 import React, { useState } from 'react';
+import { 
+  ChevronRight, CreditCard, Ticket, Microscope, Send, Settings, 
+  Sparkles, Flame, User, Edit3, ShieldCheck 
+} from 'lucide-react';
 import Profile from '../components/Profile';
-import PromoCode from '../components/PromoCode';
-import TopUp from '../components/TopUp';
-import { ChevronRight, Settings, User, Microscope, CreditCard, Send } from 'lucide-react';
+import TopUpModal from '../components/TopUpModal';
+import PromoModal from '../components/PromoModal';
+import MistakesModal from '../components/MistakesModal';
+import SettingsModal from '../components/SettingsModal';
+import { formatCompactNeyron } from '../utils/formatters';
+import { useHaptic } from '../hooks/useHaptic';
+import { useLanguage } from '../context/LanguageContext';
 
-export default function ProfilePage({ user }) {
+export default function ProfilePage({ user, onUpdateUser }) {
+  const { t } = useLanguage();
+  const { impactLight, impactMedium } = useHaptic();
+
+  // Modal triggers
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
-  const [isPromoOpen, setIsPromoOpen] = useState(false);
   const [isTopUpOpen, setIsTopUpOpen] = useState(false);
+  const [isPromoOpen, setIsPromoOpen] = useState(false);
+  const [isMistakesOpen, setIsMistakesOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  const fullName = user?.full_name || 'Aliakbar Lutfullayev';
+  const classGroup = user?.class_group || '11-A';
+  const balance = user?.balance || 0;
+  const streak = user?.streak_days || 0;
+
+  const handleOpenChannel = () => {
+    impactMedium();
+    const url = 'https://t.me/rashidov_biologiya';
+    if (window.Telegram?.WebApp?.openTelegramLink) {
+      window.Telegram.WebApp.openTelegramLink(url);
+    } else {
+      window.open(url, '_blank');
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-[#000000] text-white p-4 md:p-8 pb-24 md:pb-8">
-      <div className="w-full max-w-3xl mx-auto">
-        
-        {/* Avatar Section */}
-        <div className="flex flex-col items-center mt-8 mb-12">
-          {/* Custom Avatar matching photo: dark circle with glowing crescent */}
-          <div className="relative w-[120px] h-[120px] rounded-full bg-[#050505] flex items-center justify-center shadow-[inset_0_0_20px_rgba(0,0,0,1)] mb-6">
-            <div className="absolute top-0 right-0 w-full h-full rounded-full" 
-                 style={{
-                   background: 'radial-gradient(circle at 75% 25%, rgba(0,255,255,0.4), transparent 40%), radial-gradient(circle at 85% 50%, rgba(255,0,255,0.4), transparent 40%)',
-                   maskImage: 'radial-gradient(circle, transparent 64%, black 65%)',
-                   WebkitMaskImage: 'radial-gradient(circle, transparent 64%, black 65%)',
-                   opacity: 0.8
-                 }}
-            />
+    <div className="w-full pb-32 pt-2 px-4 max-w-5xl mx-auto space-y-5">
+      
+      {/* Profile Header Card */}
+      <div className="bg-[#1C1C1E] border border-white/5 rounded-3xl p-6 shadow-2xl relative overflow-hidden flex flex-col items-center text-center">
+        {/* Ambient Top Glow */}
+        <div className="absolute top-0 w-64 h-32 bg-blue-500/10 blur-3xl pointer-events-none" />
+
+        {/* Edit Button Top-Right */}
+        <button
+          onClick={() => {
+            impactLight();
+            setIsEditProfileOpen(true);
+          }}
+          className="absolute top-4 right-4 w-9 h-9 rounded-full bg-[#2C2C2E] border border-white/5 hover:bg-[#343438] flex items-center justify-center text-white/80 active:scale-95 transition-all"
+        >
+          <Edit3 className="w-4 h-4" />
+        </button>
+
+        {/* Avatar with Neon Gradient Ring */}
+        <div className="relative mb-3">
+          <div className="avatar-ring w-24 h-24 p-[3px] rounded-full shadow-[0_0_25px_rgba(0,122,255,0.3)]">
+            <div className="avatar-ring-inner w-full h-full bg-[#161618] rounded-full flex items-center justify-center text-2xl font-black text-white">
+              {fullName.substring(0, 2).toUpperCase()}
+            </div>
           </div>
-          
-          <h1 className="text-2xl font-bold tracking-[0.25em] uppercase text-white">
-            {user?.name || 'A L I'}
-          </h1>
+          {/* Online / Verified check badge */}
+          <div className="absolute bottom-1 right-1 bg-[#007AFF] text-white p-1 rounded-full border-2 border-black">
+            <ShieldCheck className="w-3.5 h-3.5" />
+          </div>
         </div>
 
-        {/* Standalone "Мой профиль" Card */}
-        <div 
-          className="card bg-[#1C1C1E] rounded-[24px] p-4 flex items-center justify-between mb-4 cursor-pointer hover:bg-white/[0.04] transition-colors"
-          onClick={() => setIsEditProfileOpen(true)}
+        {/* Name & Class Badge */}
+        <h2 className="text-xl font-bold text-white mb-1">{fullName}</h2>
+        <div className="flex items-center gap-2 mb-4">
+          <span className="bg-[#2C2C2E] text-white/90 text-xs font-bold px-3 py-1 rounded-full border border-white/5">
+            {classGroup}
+          </span>
+          <span className="text-xs text-[#8E8E93]">Rashidov School</span>
+        </div>
+
+        {/* Badges Grid (Tree of Knowledge Stage, Streak, Neyron) */}
+        <div className="grid grid-cols-3 gap-2 w-full pt-2">
+          
+          <div className="bg-[#2C2C2E] border border-white/5 p-3 rounded-2xl flex flex-col items-center">
+            <span className="text-lg mb-0.5">🌳</span>
+            <span className="text-[10px] text-[#8E8E93] leading-none mb-1">Daraxt</span>
+            <span className="text-xs font-bold text-emerald-400">Nihol</span>
+          </div>
+
+          <div className="bg-[#2C2C2E] border border-white/5 p-3 rounded-2xl flex flex-col items-center">
+            <span className="text-lg mb-0.5">🔥</span>
+            <span className="text-[10px] text-[#8E8E93] leading-none mb-1">Streak</span>
+            <span className="text-xs font-bold text-amber-400">{streak} kun</span>
+          </div>
+
+          <button
+            onClick={() => {
+              impactLight();
+              setIsTopUpOpen(true);
+            }}
+            className="bg-[#2C2C2E] border border-blue-500/20 hover:border-blue-500/40 p-3 rounded-2xl flex flex-col items-center active:scale-95 transition-all"
+          >
+            <span className="text-lg mb-0.5">🧠</span>
+            <span className="text-[10px] text-[#8E8E93] leading-none mb-1">Balans</span>
+            <span className="text-xs font-bold text-blue-400 truncate max-w-[80px]">
+              {formatCompactNeyron(balance)}
+            </span>
+          </button>
+
+        </div>
+      </div>
+
+      {/* iOS-Style Grouped Squircle Menu (Every Row is Clickable) */}
+      <div className="card-grouped bg-[#1C1C1E] border border-white/5 rounded-3xl overflow-hidden shadow-2xl">
+        
+        {/* Row 1: Balansni to'ldirish (Green Squircle) */}
+        <div
+          onClick={() => {
+            impactLight();
+            setIsTopUpOpen(true);
+          }}
+          className="card-row flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.03] transition-colors border-b border-white/[0.04]"
         >
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-[12px] bg-[#FF2D55] flex items-center justify-center text-white">
-              <User className="w-5 h-5" fill="currentColor" strokeWidth={1.5} />
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+              <CreditCard className="w-5 h-5" />
             </div>
-            <span className="font-semibold text-[16px]">Profil</span>
+            <div>
+              <span className="font-bold text-white text-sm block">Balansni to'ldirish</span>
+              <span className="text-[11px] text-[#8E8E93]">Click, Stars yoki bepul vazifalar</span>
+            </div>
           </div>
           <ChevronRight className="w-5 h-5 text-[#8E8E93]" />
         </div>
 
-        {/* Grouped Links Card */}
-        <div className="card-grouped bg-[#1C1C1E] rounded-[24px] overflow-hidden flex flex-col mb-8">
-          
-          <div className="card-row flex items-center justify-between p-4 border-b border-white/[0.04] cursor-pointer hover:bg-white/[0.04] transition-colors">
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 rounded-[12px] bg-[#8B5CF6] flex items-center justify-center text-white">
-                <Microscope className="w-5 h-5" strokeWidth={2.5} />
-              </div>
-              <span className="font-medium text-[16px]">Таҳлил</span>
+        {/* Row 2: Promo-kod faollashtirish (Amber Squircle) */}
+        <div
+          onClick={() => {
+            impactLight();
+            setIsPromoOpen(true);
+          }}
+          className="card-row flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.03] transition-colors border-b border-white/[0.04]"
+        >
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400">
+              <Ticket className="w-5 h-5" />
             </div>
-            <ChevronRight className="w-5 h-5 text-[#8E8E93]" />
-          </div>
-
-          <div className="card-row flex items-center justify-between p-4 border-b border-white/[0.04] cursor-pointer hover:bg-white/[0.04] transition-colors" onClick={() => setIsTopUpOpen(true)}>
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 rounded-[12px] bg-[#10B981] flex items-center justify-center text-white">
-                <CreditCard className="w-5 h-5" strokeWidth={2.5} />
-              </div>
-              <span className="font-medium text-[16px]">Balansni to'ldirish</span>
+            <div>
+              <span className="font-bold text-white text-sm block">Promo-kod faollashtirish</span>
+              <span className="text-[11px] text-[#8E8E93]">Maxsus kod orqali bonus Neyronlar</span>
             </div>
-            <ChevronRight className="w-5 h-5 text-[#8E8E93]" />
           </div>
-
-          <div 
-            className="card-row flex items-center justify-between p-4 border-b border-white/[0.04] cursor-pointer hover:bg-white/[0.04] transition-colors"
-            onClick={() => window.Telegram?.WebApp?.openTelegramLink?.('https://t.me/rashidov_biologiya')}
-          >
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 rounded-[12px] bg-[#0EA5E9] flex items-center justify-center text-white">
-                <Send className="w-5 h-5 ml-[-2px]" fill="currentColor" strokeWidth={1} />
-              </div>
-              <span className="font-medium text-[16px]">Telegram kanal</span>
-            </div>
-            <ChevronRight className="w-5 h-5 text-[#8E8E93]" />
-          </div>
-
-          <div className="card-row flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.04] transition-colors">
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 rounded-[12px] bg-[#3B82F6] flex items-center justify-center text-white">
-                <Settings className="w-5 h-5" fill="currentColor" strokeWidth={1} />
-              </div>
-              <span className="font-medium text-[16px]">Sozlamalar</span>
-            </div>
-            <ChevronRight className="w-5 h-5 text-[#8E8E93]" />
-          </div>
-
+          <ChevronRight className="w-5 h-5 text-[#8E8E93]" />
         </div>
 
-        {isTopUpOpen ? (
-          <div className="mb-8">
-            <TopUp user={user} onBack={() => setIsTopUpOpen(false)} />
+        {/* Row 3: Mening xatolarim — Tahlil (Purple Squircle) */}
+        <div
+          onClick={() => {
+            impactLight();
+            setIsMistakesOpen(true);
+          }}
+          className="card-row flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.03] transition-colors border-b border-white/[0.04]"
+        >
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-2xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400">
+              <Microscope className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="font-bold text-white text-sm block">Mening xatolarim — Tahlil</span>
+              <span className="text-[11px] text-[#8E8E93]">Darslik manbalari bo'yicha tavsiyalar</span>
+            </div>
           </div>
-        ) : isPromoOpen ? (
-          <div className="mb-8">
-            <PromoCode user={user} />
+          <ChevronRight className="w-5 h-5 text-[#8E8E93]" />
+        </div>
+
+        {/* Row 4: Telegram Kanal (Blue Squircle) */}
+        <div
+          onClick={handleOpenChannel}
+          className="card-row flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.03] transition-colors border-b border-white/[0.04]"
+        >
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-2xl bg-sky-500/20 border border-sky-500/30 flex items-center justify-center text-sky-400">
+              <Send className="w-5 h-5 ml-[-2px]" />
+            </div>
+            <div>
+              <span className="font-bold text-white text-sm block">Rashidov Biologiya Rasmiy Kanali</span>
+              <span className="text-[11px] text-[#8E8E93]">@rashidov_biologiya</span>
+            </div>
           </div>
-        ) : null}
+          <ChevronRight className="w-5 h-5 text-[#8E8E93]" />
+        </div>
+
+        {/* Row 5: Sozlamalar (Slate Squircle) */}
+        <div
+          onClick={() => {
+            impactLight();
+            setIsSettingsOpen(true);
+          }}
+          className="card-row flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.03] transition-colors"
+        >
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-2xl bg-slate-500/20 border border-slate-500/30 flex items-center justify-center text-slate-300">
+              <Settings className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="font-bold text-white text-sm block">Sozlamalar</span>
+              <span className="text-[11px] text-[#8E8E93]">Til (Tilni o'zgartirish), tovush, haptic</span>
+            </div>
+          </div>
+          <ChevronRight className="w-5 h-5 text-[#8E8E93]" />
+        </div>
 
       </div>
-      
-      <Profile user={user} isOpen={isEditProfileOpen} onClose={() => setIsEditProfileOpen(false)} />
+
+      {/* Footer Branding */}
+      <p className="text-center text-[11px] text-[#8E8E93]/50 pt-2 pb-6">
+        Rashidov Biologiya EdTech • v2.0 OLED
+      </p>
+
+      {/* Modals */}
+      <Profile
+        user={user}
+        isOpen={isEditProfileOpen}
+        onClose={() => setIsEditProfileOpen(false)}
+        onUpdateUser={onUpdateUser}
+      />
+
+      <TopUpModal
+        isOpen={isTopUpOpen}
+        onClose={() => setIsTopUpOpen(false)}
+        user={user}
+        onUpdateUser={onUpdateUser}
+      />
+
+      <PromoModal
+        isOpen={isPromoOpen}
+        onClose={() => setIsPromoOpen(false)}
+        user={user}
+        onUpdateUser={onUpdateUser}
+      />
+
+      <MistakesModal
+        isOpen={isMistakesOpen}
+        onClose={() => setIsMistakesOpen(false)}
+      />
+
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+      />
+
     </div>
   );
 }

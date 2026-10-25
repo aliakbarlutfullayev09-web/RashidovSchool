@@ -1,246 +1,339 @@
 import React, { useState, useEffect } from 'react';
+import TreeOfKnowledge from '../components/TreeOfKnowledge';
 import BottomSheet from '../components/BottomSheet';
 import VideoPlayer from '../components/VideoPlayer';
 import { getSubjects, getCourses, getLessons, getProgress, getVideoCheckpoints } from '../api/supabase';
-import { Folder, ArrowLeft } from 'lucide-react';
+import { mockCourses, mockLessons, mockProgress } from '../mock/data';
+import { Play, CheckCircle2, Lock, Trophy, Clock, HelpCircle, Sparkles } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
+import { useHaptic } from '../hooks/useHaptic';
+
+const SUBJECT_CHIPS = [
+  { id: 1, name: 'Biologiya', emoji: '🧬' },
+  { id: 2, name: 'Kimyo', emoji: '🧪' },
+  { id: 3, name: 'Matematika', emoji: '📐' }
+];
 
 export default function LessonsPage({ user }) {
-  const [subjects, setSubjects] = useState([]);
-  const [selectedSubject, setSelectedSubject] = useState(null);
+  const { t } = useLanguage();
+  const { selectionChanged, impactLight } = useHaptic();
+
+  const [activeSubjectId, setActiveSubjectId] = useState(1);
+  const [courses, setCourses] = useState([]);
   const [lessons, setLessons] = useState([]);
   const [progressMap, setProgressMap] = useState({});
   const [loading, setLoading] = useState(true);
 
+  // Lesson Preview Bottom Sheet state
   const [bottomSheetOpen, setBottomSheetOpen] = useState(false);
   const [selectedLesson, setSelectedLesson] = useState(null);
-  
+
+  // Video playback state
   const [playingLesson, setPlayingLesson] = useState(null);
   const [checkpoints, setCheckpoints] = useState([]);
 
   useEffect(() => {
-    loadInitialData();
-  }, [user]);
+    loadData();
+  }, [user, activeSubjectId]);
 
-  useEffect(() => {
-    if (selectedSubject) {
-      loadLessonsForSubject(selectedSubject.id);
-    }
-  }, [selectedSubject]);
-
-  const loadInitialData = async () => {
+  const loadData = async () => {
     setLoading(true);
     try {
-      const subs = await getSubjects();
-      setSubjects(subs || []);
-      
-      const userId = user?.telegram_id || user?.id;
-      if (userId) {
-        const prog = await getProgress(userId);
+      // 1. Fetch courses for subject
+      const dbCourses = await getCourses(activeSubjectId);
+      const activeCourses = (dbCourses && dbCourses.length > 0) ? dbCourses : mockCourses;
+      setCourses(activeCourses);
+
+      // 2. Fetch lessons
+      let allLessons = [];
+      for (const course of activeCourses) {
+        const cLessons = await getLessons(course.id);
+        allLessons = [...allLessons, ...(cLessons || [])];
+      }
+      if (allLessons.length === 0) {
+        allLessons = mockLessons;
+      }
+      setLessons(allLessons);
+
+      // 3. Fetch user progress
+      if (user?.telegram_id || user?.id) {
+        const userUid = user.id || user.telegram_id;
+        const prog = await getProgress(userUid);
         const pMap = {};
-        if (prog) {
-          prog.forEach(p => {
-            pMap[p.lesson_id] = p;
-          });
+        if (prog && prog.length > 0) {
+          prog.forEach(p => { pMap[p.lesson_id] = p; });
+        } else {
+          mockProgress.forEach(p => { pMap[p.lesson_id] = p; });
         }
+        setProgressMap(pMap);
+      } else {
+        const pMap = {};
+        mockProgress.forEach(p => { pMap[p.lesson_id] = p; });
         setProgressMap(pMap);
       }
     } catch (err) {
-      console.error("Error loading initial data", err);
+      console.error("Error loading lessons data:", err);
+      setCourses(mockCourses);
+      setLessons(mockLessons);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
-  const loadLessonsForSubject = async (subjectId) => {
-    setLoading(true);
-    try {
-      const subjectCourses = await getCourses(subjectId);
-      
-      let allLessons = [];
-      for (const course of subjectCourses) {
-        const courseLessons = await getLessons(course.id);
-        allLessons = [...allLessons, ...courseLessons];
-      }
-      
-      const seen = new Set();
-      const uniqueLessons = allLessons.filter(l => {
-        if (!l || seen.has(l.id)) return false;
-        seen.add(l.id);
-        return true;
-      });
-      
-      uniqueLessons.sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
-      setLessons(uniqueLessons);
-    } catch (err) {
-      console.error("Error loading lessons", err);
+  const handleSubjectChange = (subjectId) => {
+    if (activeSubjectId !== subjectId) {
+      selectionChanged();
+      setActiveSubjectId(subjectId);
     }
-    setLoading(false);
   };
 
-  const handleCardClick = (lesson) => {
+  const handleLessonClick = (lesson) => {
+    impactLight();
     setSelectedLesson(lesson);
     setBottomSheetOpen(true);
   };
 
-  const startVideo = async (lesson) => {
+  const handleStartVideo = async (lesson) => {
     setBottomSheetOpen(false);
-    const cps = await getVideoCheckpoints(lesson.id);
-    setCheckpoints(cps || []);
+    try {
+      const cps = await getVideoCheckpoints(lesson.id);
+      setCheckpoints(cps && cps.length > 0 ? cps : [
+        { id: 1, trigger_time_sec: 5, question: "Hujayraning energetik stansiyasi nima?", options: ["Ribosoma", "Mitoxondriya", "Xloroplast", "Golji"], correct_option: "Mitoxondriya", rewind_time_sec: 0 }
+      ]);
+    } catch {
+      setCheckpoints([]);
+    }
     setPlayingLesson(lesson);
   };
 
+  // Calculate overall stats for Tree of Knowledge
+  const totalLessons = lessons.length || 1;
+  const completedLessons = Object.values(progressMap).filter(p => p?.stars > 0).length;
+
   if (playingLesson) {
     return (
-      <VideoPlayer 
-        videoUrl={playingLesson.video_url} 
+      <VideoPlayer
+        videoUrl={playingLesson.video_url}
         lessonId={playingLesson.id}
+        lessonTitle={playingLesson.title}
         checkpoints={checkpoints}
-        onComplete={() => {
-          // You could update local progress state here
+        onStartQuiz={() => {
+          setPlayingLesson(null);
+          alert("Dars testi botda yoki Testlar bo'limida boshlanadi!");
         }}
-        onBack={() => setPlayingLesson(null)} 
+        onBack={() => setPlayingLesson(null)}
       />
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#000000] text-white pb-20">
+    <div className="w-full pb-28 pt-2 px-4 max-w-5xl mx-auto">
       
-      {!selectedSubject ? (
-        // Folders View
-        <div className="p-4">
-          <h2 className="text-xl font-bold mb-4 text-white">Fanlar (Papkalari)</h2>
-          {loading ? (
-            <div className="text-center text-[#8E8E93] py-10">Yuklanmoqda...</div>
-          ) : subjects.length === 0 ? (
-            <div className="text-center text-[#8E8E93] py-10">Papkalar topilmadi</div>
-          ) : (
-            <div className="grid grid-cols-2 gap-4">
-              {subjects.map(subject => (
-                <div 
-                  key={subject.id} 
-                  onClick={() => setSelectedSubject(subject)}
-                  className="bg-[#1C1C1E] p-5 rounded-[24px] flex flex-col items-center justify-center border border-white/5 cursor-pointer hover:bg-white/5 transition-all"
-                >
-                  <div className="w-14 h-14 bg-[#007AFF]/10 rounded-[16px] flex items-center justify-center mb-3">
-                    <span className="text-2xl">{subject.emoji || '📁'}</span>
-                  </div>
-                  <h3 className="font-bold text-center text-sm text-white">{subject.name}</h3>
-                </div>
-              ))}
-            </div>
-          )}
+      {/* Hero Banner: Interactive Tree of Knowledge */}
+      <TreeOfKnowledge
+        completedCount={completedLessons}
+        totalCount={totalLessons}
+        onContinue={() => {
+          const nextLesson = lessons.find(l => !progressMap[l.id]?.stars) || lessons[0];
+          if (nextLesson) handleLessonClick(nextLesson);
+        }}
+      />
+
+      {/* Sticky Subject Chips Row */}
+      <div className="sticky top-[72px] z-20 bg-[#000000]/90 backdrop-blur-md py-2.5 -mx-4 px-4 mb-4 border-b border-white/[0.04]">
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+          {SUBJECT_CHIPS.map((chip) => {
+            const isActive = activeSubjectId === chip.id;
+            return (
+              <button
+                key={chip.id}
+                onClick={() => handleSubjectChange(chip.id)}
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold transition-all select-none whitespace-nowrap active:scale-95 ${
+                  isActive
+                    ? 'bg-[#007AFF] text-white shadow-lg shadow-blue-500/20'
+                    : 'bg-[#1C1C1E] border border-white/5 text-[#8E8E93] hover:text-white'
+                }`}
+              >
+                <span>{chip.emoji}</span>
+                <span>{chip.name}</span>
+              </button>
+            );
+          })}
         </div>
-      ) : (
-        // Lessons Feed
-        <div className="flex flex-col p-4 gap-6">
-          <div className="flex items-center gap-3 mb-2">
-            <button 
-              onClick={() => setSelectedSubject(null)} 
-              className="w-10 h-10 bg-[#1C1C1E] rounded-full flex items-center justify-center border border-white/5"
-            >
-              <ArrowLeft className="w-5 h-5 text-white" />
-            </button>
-            <h2 className="text-xl font-bold text-white">
-              {selectedSubject.emoji} {selectedSubject.name}
-            </h2>
-          </div>
+      </div>
 
-          {loading ? (
-            <div className="text-center text-[#8E8E93] py-10">Yuklanmoqda...</div>
-          ) : lessons.length === 0 ? (
-            <div className="text-center text-[#8E8E93] py-10">Bu fanda darslar topilmadi.</div>
-          ) : (
-            lessons.map(lesson => {
-              const progress = progressMap[lesson.id];
-              const isLocked = progress?.is_unlocked === false && !lesson.is_free;
-              const isCompleted = progress?.stars > 0;
-              const percentage = progress?.score || 0;
+      {/* Modular YouTube-Style Lesson Feed */}
+      <div className="space-y-8">
+        {courses.map((course, cIdx) => {
+          const courseLessons = lessons.filter(l => l.course_id === course.id);
+          const courseCompletedCount = courseLessons.filter(l => progressMap[l.id]?.stars > 0).length;
+          const courseProgressPct = Math.round((courseCompletedCount / (courseLessons.length || 1)) * 100);
 
-              return (
-                <div 
-                  key={`lesson-${lesson.course_id || 0}-${lesson.id}`} 
-                  onClick={() => handleCardClick(lesson)}
-                  className="lesson-card flex flex-col cursor-pointer"
-                >
-                  {/* Thumbnail Area */}
-                  <div className="lesson-thumbnail relative w-full aspect-video rounded-2xl overflow-hidden mb-3 bg-[#1C1C1E] border border-white/5">
-                    {lesson.thumbnail_url ? (
-                      <img src={lesson.thumbnail_url} alt={lesson.title} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full bg-gradient-to-br from-indigo-900/60 to-purple-900/40 flex items-center justify-center">
-                        <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-md">
-                          <span className="text-white text-xl translate-x-0.5">▶</span>
+          return (
+            <div key={course.id || cIdx} className="space-y-4">
+              
+              {/* Module Header with Progress */}
+              <div className="bg-[#1C1C1E] border border-white/5 p-4 rounded-2xl flex items-center justify-between">
+                <div>
+                  <h3 className="text-white font-bold text-sm leading-tight">
+                    {cIdx + 1}-Modul: {course.title}
+                  </h3>
+                  <span className="text-[11px] text-[#8E8E93]">
+                    {courseCompletedCount}/{courseLessons.length} dars topshirildi
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full">
+                    {courseProgressPct}%
+                  </span>
+                </div>
+              </div>
+
+              {/* Lesson Cards in Module */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {courseLessons.map((lesson, lIdx) => {
+                  const prog = progressMap[lesson.id];
+                  const isLocked = prog?.is_unlocked === false && !lesson.is_free;
+                  const isCompleted = prog?.stars > 0;
+                  const score = prog?.score || 95;
+
+                  return (
+                    <div
+                      key={lesson.id || lIdx}
+                      onClick={() => handleLessonClick(lesson)}
+                      className="bg-[#1C1C1E] border border-white/5 hover:border-white/10 rounded-3xl overflow-hidden p-3 transition-all cursor-pointer active:scale-[0.98] group flex flex-col justify-between"
+                    >
+                      {/* 16:9 Thumbnail Area */}
+                      <div className="relative w-full aspect-video rounded-2xl overflow-hidden bg-[#2C2C2E] mb-3">
+                        {lesson.thumbnail_url ? (
+                          <img 
+                            src={lesson.thumbnail_url} 
+                            alt={lesson.title} 
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-gradient-to-tr from-blue-900/40 to-indigo-900/30 flex items-center justify-center">
+                            <span className="text-3xl">🧬</span>
+                          </div>
+                        )}
+
+                        {/* Top-Left: Lesson Number Badge */}
+                        <div className="absolute top-2 left-2 bg-black/75 backdrop-blur-md text-white text-[10px] font-bold px-2 py-0.5 rounded-md">
+                          {lesson.order_index || lIdx + 1}-Dars
+                        </div>
+
+                        {/* Bottom-Right: Duration Badge */}
+                        <div className="absolute bottom-2 right-2 bg-black/85 backdrop-blur-md text-white text-[10px] font-mono px-1.5 py-0.5 rounded flex items-center gap-1">
+                          <Clock className="w-2.5 h-2.5 text-[#8E8E93]" />
+                          <span>{lesson.duration || '14:20'}</span>
+                        </div>
+
+                        {/* Bottom-Left Status Badges */}
+                        <div className="absolute bottom-2 left-2">
+                          {isCompleted ? (
+                            <span className="bg-emerald-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded backdrop-blur-md flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3" /> {score}%
+                            </span>
+                          ) : lesson.is_free ? (
+                            <span className="bg-emerald-600/90 text-white text-[10px] font-bold px-2 py-0.5 rounded backdrop-blur-md">
+                              Bepul
+                            </span>
+                          ) : isLocked ? (
+                            <span className="bg-black/80 text-white text-[10px] font-bold px-2 py-0.5 rounded backdrop-blur-md flex items-center gap-1">
+                              <Lock className="w-2.5 h-2.5" /> A'zolik
+                            </span>
+                          ) : null}
                         </div>
                       </div>
-                    )}
-                    
-                    {/* Badges Overlay */}
-                    <div className="absolute top-2 right-2 flex flex-col gap-2 items-end">
-                      {lesson.is_free ? (
-                        <span className="badge-free bg-green-500/90 text-white text-[11px] font-bold px-2 py-1 rounded-md backdrop-blur-md">
-                          Bepul
-                        </span>
-                      ) : isLocked ? (
-                        <span className="badge-locked bg-black/80 text-white text-[11px] font-medium px-2 py-1 rounded-md flex items-center gap-1 backdrop-blur-md">
-                          <span>🔒</span> Kanalga a'zo bo'ling
-                        </span>
-                      ) : null}
-                    </div>
-                    
-                    <div className="absolute bottom-2 right-2">
-                      <span className="badge-duration bg-black/80 text-white text-[11px] font-medium px-1.5 py-0.5 rounded backdrop-blur-md">
-                        {lesson.duration || '00:00'}
-                      </span>
-                    </div>
-                  </div>
 
-                  {/* Card Content */}
-                  <div className="flex flex-col px-1">
-                    <h3 className="font-bold text-white text-[15px] mb-1 line-clamp-2 leading-tight">
-                      {lesson.order_index || 1}-Dars. {lesson.title}
-                    </h3>
-                    <p className="text-[13px] text-[#8E8E93] mb-3">
-                      Rashidov Biologiya • {lesson.view_count || 0} ko'rildi • {lesson.test_question_count || 0} ta test savoli
-                    </p>
-                    
-                    {/* CTA Button */}
-                    <div className="flex items-center">
-                      {isCompleted ? (
-                        <span className="pill pill-green bg-green-500/20 text-green-400 border border-green-500/30 text-[13px] font-medium px-3 py-1.5 rounded-full inline-flex items-center gap-1.5">
-                          <span className="text-xs">✓</span> Topshirildi ({percentage}%)
-                        </span>
-                      ) : isLocked ? (
-                        <span className="pill pill-dark bg-[#1C1C1E] text-[#8E8E93] text-[13px] font-medium px-3 py-1.5 rounded-full inline-flex items-center gap-1.5">
-                          <span>🔒</span> Qulflangan
-                        </span>
-                      ) : (
-                        <button className="pill pill-blue bg-[#007AFF] text-white text-[13px] font-medium px-3 py-1.5 rounded-full inline-flex items-center gap-1.5">
-                          <span>▶️</span> Boshlash
-                        </button>
-                      )}
+                      {/* Card Body */}
+                      <div className="flex flex-col flex-1 justify-between px-1">
+                        <div>
+                          <h4 className="text-white font-bold text-sm leading-snug line-clamp-2 mb-1">
+                            {lesson.title}
+                          </h4>
+                          <p className="text-[11px] text-[#8E8E93] mb-3">
+                            Rashidov Biologiya • {lesson.test_question_count || 10} ta test savoli
+                          </p>
+                        </div>
+
+                        {/* Action Pill */}
+                        <div className="pt-2 border-t border-white/[0.04] flex items-center justify-between">
+                          {isCompleted ? (
+                            <span className="text-[11px] font-semibold text-emerald-400 flex items-center gap-1">
+                              ✓ Topshirildi
+                            </span>
+                          ) : isLocked ? (
+                            <span className="text-[11px] font-semibold text-[#8E8E93] flex items-center gap-1">
+                              🔒 Qulflangan
+                            </span>
+                          ) : (
+                            <span className="text-[11px] font-bold text-[#007AFF] flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
+                              <span>▶️ Boshlash</span>
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
+                  );
+                })}
+              </div>
+
+              {/* Module Boss Card — Module Mock Test */}
+              <div className="mt-4 bg-gradient-to-r from-amber-500/10 via-[#1C1C1E] to-emerald-500/10 border border-amber-500/30 rounded-3xl p-4 flex items-center justify-between shadow-lg">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-xl flex-shrink-0">
+                    🏆
+                  </div>
+                  <div>
+                    <h4 className="text-white font-bold text-xs leading-tight">
+                      {cIdx + 1}-Modul Yakuniy Mock Testi
+                    </h4>
+                    <span className="text-[11px] text-[#8E8E93]">
+                      20 ta savol • 25 daqiqa • Sertifikat
+                    </span>
                   </div>
                 </div>
-              );
-            })
-          )}
-        </div>
-      )}
 
-      <BottomSheet 
+                <button
+                  onClick={() => {
+                    impactLight();
+                    if (courseCompletedCount < courseLessons.length) {
+                      alert("Ushbu mock testni ochish uchun avval barcha modul darslarini topshiring!");
+                    } else {
+                      alert("Modul Yakuniy Mock Testi boshlanmoqda...");
+                    }
+                  }}
+                  className={`px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+                    courseCompletedCount >= courseLessons.length
+                      ? 'bg-amber-500 hover:bg-amber-400 text-black shadow-lg shadow-amber-500/20'
+                      : 'bg-[#2C2C2E] text-[#8E8E93] cursor-not-allowed'
+                  }`}
+                >
+                  {courseCompletedCount >= courseLessons.length ? 'Boshlash' : '🔒 Qulflangan'}
+                </button>
+              </div>
+
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Lesson Preview Bottom Sheet */}
+      <BottomSheet
         isOpen={bottomSheetOpen}
         onClose={() => setBottomSheetOpen(false)}
         lesson={selectedLesson}
         progress={selectedLesson ? progressMap[selectedLesson.id] : null}
-        onWatch={(lesson) => startVideo(lesson)}
-        onRewatch={(lesson) => startVideo(lesson)}
-        onRetake={(lesson) => {
+        onWatch={handleStartVideo}
+        onRewatch={handleStartVideo}
+        onRetake={() => {
           setBottomSheetOpen(false);
-          alert('Testni qayta topshirish funksiyasi tez kunda!');
+          alert("Testni qayta topshirish botda boshlanadi!");
         }}
-        onAnalysis={(lesson) => {
+        onAnalysis={() => {
           setBottomSheetOpen(false);
-          alert('Tahlil funksiyasi tez kunda!');
+          alert("Ushbu dars bo'yicha xatolar tahlili Profil bo'limida mavjud.");
         }}
       />
     </div>

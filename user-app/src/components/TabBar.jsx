@@ -1,51 +1,64 @@
 import React from 'react';
+import { motion } from 'framer-motion';
+import { BookOpen, FileCheck2, Trophy, User } from 'lucide-react';
 import { useHaptic } from '../hooks/useHaptic';
-import { Dna, Trophy, Swords, User } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
 
 export default function TabBar({ activeTab, onTabChange }) {
   const { selectionChanged } = useHaptic();
+  const { t } = useLanguage();
 
   const handleTabClick = (tabIndex) => {
-    if (tabIndex !== undefined && activeTab !== tabIndex) {
+    if (activeTab !== tabIndex) {
       if (selectionChanged) selectionChanged();
       onTabChange(tabIndex);
     }
   };
 
-  const navItems = [
-    { label: 'Darslar', icon: Dna, tabIndex: 0 },
-    { label: 'Reyting', icon: Trophy, tabIndex: 1 },
-    { label: 'Arena', icon: Swords, tabIndex: 2 },
-    { label: 'Profil', icon: User, tabIndex: 3 }
+  const tabs = [
+    { id: 0, label: t('darslar'), icon: BookOpen },
+    { id: 1, label: t('testlar'), icon: FileCheck2 },
+    { id: 2, label: t('reyting'), icon: Trophy },
+    { id: 3, label: t('profil'), icon: User },
   ];
 
   return (
-    <div className="fixed z-50 bottom-4 left-4 right-4 md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:left-4 md:right-auto md:w-[72px]">
-      <div className="bg-[#111113]/90 backdrop-blur-xl border border-white/5 rounded-[24px] md:rounded-[32px] px-2 py-3 md:py-6 flex flex-row md:flex-col justify-around md:justify-start md:gap-8 items-center shadow-2xl w-full">
-        
-        {navItems.map((item, idx) => {
-          const isActive = activeTab === item.tabIndex;
-          const Icon = item.icon;
-          
+    <nav className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[92%] max-w-[420px] z-40">
+      <div className="bg-[#121214]/90 backdrop-blur-xl border border-[#333336] rounded-full px-2 py-1.5 flex items-center justify-around shadow-2xl relative">
+        {tabs.map((tab) => {
+          const isActive = activeTab === tab.id;
+          const Icon = tab.icon;
+
           return (
             <button
-              key={idx}
-              onClick={() => handleTabClick(item.tabIndex)}
-              className="flex flex-col items-center justify-center min-w-[56px] relative transition-all duration-200 cursor-pointer active:scale-95"
+              key={tab.id}
+              onClick={() => handleTabClick(tab.id)}
+              className="relative flex flex-col items-center justify-center flex-1 py-1.5 px-2 rounded-full cursor-pointer select-none transition-transform active:scale-95"
             >
-              <div className={`mb-1 p-1.5 rounded-full transition-colors ${isActive ? 'bg-white/10 text-white' : 'text-[#8E8E93]'}`}>
-                <Icon className="w-[22px] h-[22px]" strokeWidth={isActive ? 2.5 : 2} />
+              {/* Active Tab Sliding Pill Indicator */}
+              {isActive && (
+                <motion.div
+                  layoutId="activeTabIndicator"
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                  className="absolute inset-0 bg-white/10 rounded-full"
+                />
+              )}
+
+              <div className={`relative z-10 transition-colors duration-200 ${isActive ? 'text-[#007AFF]' : 'text-[#8E8E93]'}`}>
+                <Icon className="w-5 h-5" strokeWidth={isActive ? 2.5 : 2} />
               </div>
-              <span 
-                className={`text-[10px] font-medium leading-none ${isActive ? 'text-white' : 'text-[#8E8E93]'}`}
+
+              <span
+                className={`relative z-10 text-[10px] font-semibold mt-0.5 leading-tight transition-colors duration-200 ${
+                  isActive ? 'text-white' : 'text-[#8E8E93]'
+                }`}
               >
-                {item.label}
+                {tab.label}
               </span>
             </button>
           );
         })}
-        
       </div>
-    </div>
+    </nav>
   );
 }

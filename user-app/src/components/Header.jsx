@@ -1,50 +1,120 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Plus, Flame, Sparkles } from 'lucide-react';
+import { formatCompactNeyron } from '../utils/formatters';
+import { useLanguage } from '../context/LanguageContext';
+import { useHaptic } from '../hooks/useHaptic';
 
-export default function Header({ user }) {
+export default function Header({ user, onOpenTopUp }) {
+  const { t } = useLanguage();
+  const { impactLight } = useHaptic();
+  const [showStreakTooltip, setShowStreakTooltip] = useState(false);
+
   const getInitials = (name) => {
-    if (!name) return '?';
+    if (!name) return 'U';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length > 1) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
     return name.substring(0, 2).toUpperCase();
   };
 
-  const firstName = user?.full_name?.split(' ')[0] || 'MEHMON';
+  const fullName = user?.full_name || 'Foydalanuvchi';
+  const classGroup = user?.class_group || 'Abituriyent';
   const balance = user?.balance || 0;
-  const formattedBalance = balance.toLocaleString('ru-RU');
+  const streak = user?.streak_days || 0;
+
+  const handleStreakClick = () => {
+    impactLight();
+    setShowStreakTooltip(prev => !prev);
+    setTimeout(() => {
+      setShowStreakTooltip(false);
+    }, 3500);
+  };
 
   return (
-    <div className="flex items-center justify-between px-4 py-3 bg-[#000000]">
-      {/* Left section */}
-      <div className="flex items-center gap-2">
-        <div className="avatar-ring flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-tr from-pink-500 via-purple-500 to-cyan-500 p-[2px]">
-          <div className="avatar-ring-inner w-full h-full bg-[#000000] rounded-full flex items-center justify-center">
-            <span className="text-white text-xs font-semibold">{getInitials(firstName)}</span>
-          </div>
-        </div>
+    <header className="w-full bg-[#000000] sticky top-0 z-30 pt-[calc(env(safe-area-inset-top,16px)+12px)] pb-3 px-4 border-b border-white/[0.04]">
+      <div className="flex items-center justify-between gap-2 max-w-5xl mx-auto">
         
-        <div className="flex flex-col justify-center">
-          <div className="flex items-center gap-1.5">
-            <span className="text-white text-[10px] font-bold uppercase tracking-[0.15em] leading-none">
-              {firstName}
-            </span>
-            {user?.class_group && (
-              <span className="bg-[#2C2C2E] text-white text-[9px] font-medium px-1.5 py-0.5 rounded-full leading-none">
-                {user.class_group}
+        {/* Left: Avatar + Name + Class */}
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="avatar-ring flex-shrink-0 w-10 h-10 p-[2px] rounded-full">
+            <div className="avatar-ring-inner w-full h-full bg-[#1C1C1E] rounded-full flex items-center justify-center">
+              <span className="text-white text-xs font-bold tracking-tight">
+                {getInitials(fullName)}
               </span>
-            )}
+            </div>
+          </div>
+
+          <div className="flex flex-col min-w-0 justify-center">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-white text-[13px] font-bold truncate leading-tight">
+                {fullName}
+              </span>
+              <span className="flex-shrink-0 bg-[#2C2C2E] border border-white/5 text-white/90 text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none">
+                {classGroup}
+              </span>
+            </div>
+            <span className="text-[10px] text-[#8E8E93] leading-tight">
+              {t('rashidov_school')}
+            </span>
           </div>
         </div>
-      </div>
 
-      {/* Center: Daily streak */}
-      <div className="flex items-center gap-1 bg-[#2C2C2E] px-2.5 py-1 rounded-full">
-        <span className="text-xs">🔥</span>
-        <span className="text-white text-xs font-medium">{user?.streak_days || 0} kun</span>
-      </div>
+        {/* Center & Right Actions */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          
+          {/* Center: Daily Streak */}
+          <div className="relative">
+            <button
+              onClick={handleStreakClick}
+              className="flex items-center gap-1.5 bg-[#1C1C1E] border border-amber-500/30 px-2.5 py-1.5 rounded-full active:scale-95 transition-transform"
+            >
+              <Flame className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+              <span className="text-white text-xs font-bold whitespace-nowrap">
+                {streak} {t('kun')}
+              </span>
+            </button>
 
-      {/* Right: XP balance */}
-      <div className="flex items-center gap-1 bg-[#2C2C2E] px-2.5 py-1 rounded-full">
-        <span className="text-xs drop-shadow-md">🧠</span>
-        <span className="text-white text-xs font-medium">{formattedBalance} Neyron</span>
+            {/* Streak Tooltip Toast */}
+            <AnimatePresence>
+              {showStreakTooltip && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 5, scale: 0.95 }}
+                  className="absolute left-1/2 -translate-x-1/2 top-full mt-2 w-56 p-3 rounded-2xl bg-[#1C1C1E] border border-amber-500/30 text-white shadow-2xl z-50 text-[11px] leading-relaxed text-center"
+                >
+                  <div className="flex items-center justify-center gap-1 text-amber-400 font-bold mb-1">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Streak Bonusi</span>
+                  </div>
+                  <p className="text-[#8E8E93]">{t('streak_tooltip')}</p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Right: Interactive Neyron Balance Pill */}
+          <button
+            onClick={() => {
+              impactLight();
+              if (onOpenTopUp) onOpenTopUp();
+            }}
+            className="flex items-center gap-1.5 bg-[#1C1C1E] border border-[#007AFF]/30 pl-2.5 pr-1.5 py-1.5 rounded-full active:scale-95 transition-transform group"
+          >
+            <span className="text-xs">🧠</span>
+            <span className="text-white text-xs font-bold max-w-[80px] truncate leading-none">
+              {formatCompactNeyron(balance)}
+            </span>
+            <div className="w-4 h-4 rounded-full bg-[#007AFF] flex items-center justify-center text-white ml-0.5 group-hover:scale-110 transition-transform">
+              <Plus className="w-3 h-3 stroke-[3]" />
+            </div>
+          </button>
+
+        </div>
+
       </div>
-    </div>
+    </header>
   );
 }

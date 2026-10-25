@@ -46,5 +46,7 @@ export function useHaptic() {
     notificationSuccess,
     notificationError,
     selectionChanged,
+    success: notificationSuccess,
+    error: notificationError,
   };
 }
