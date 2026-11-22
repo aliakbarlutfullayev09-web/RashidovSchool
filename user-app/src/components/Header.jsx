@@ -33,7 +33,12 @@ export default function Header({ user, onOpenTopUp }) {
   };
 
   return (
-    <header className="w-full bg-[#000000] sticky top-0 z-30 pt-[calc(env(safe-area-inset-top,16px)+12px)] pb-3 px-4 border-b border-white/[0.04]">
+    <header 
+      className="w-full bg-[#000000] sticky top-0 z-30 pb-3 px-4 border-b border-white/[0.04]"
+      style={{
+        paddingTop: 'calc(var(--safe-area-top, 16px) + 8px)'
+      }}
+    >
       <div className="flex items-center justify-between gap-2 max-w-5xl mx-auto">
         
         {/* Left: Avatar + Name + Class */}

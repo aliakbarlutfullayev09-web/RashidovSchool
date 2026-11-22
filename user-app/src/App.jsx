@@ -13,7 +13,7 @@ import { Loader2 } from 'lucide-react';
 
 function MainApp() {
   const [activeTab, setActiveTab] = useState(0);
-  const { tg, user: tgUser } = useTelegram();
+  const { tg, isTelegram, user: tgUser, setBackButton } = useTelegram();
   const [dbUser, setDbUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -22,6 +22,9 @@ function MainApp() {
 
   // Global TopUp Modal Trigger
   const [isTopUpOpen, setIsTopUpOpen] = useState(false);
+
+  // Back action registered from nested views (e.g. LessonsPage views)
+  const [lessonsBackAction, setLessonsBackAction] = useState(null);
 
   // Viewport / Orientation Detection
   const [isLandscapeDesktop, setIsLandscapeDesktop] = useState(
@@ -36,17 +39,32 @@ function MainApp() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Coordinated Navigation-Level BackButton Handler (Telegram WebApp 6.1+)
   useEffect(() => {
-    if (tg) {
-      try {
-        tg.setHeaderColor('#000000');
-        tg.setBackgroundColor('#000000');
-        tg.expand();
-      } catch (e) {
-        console.error(e);
-      }
+    let handler = null;
+
+    if (isVideoPlaying) {
+      handler = () => {
+        if (typeof window !== 'undefined' && typeof window.__rb_exit_video === 'function') {
+          window.__rb_exit_video();
+        } else {
+          setIsVideoPlaying(false);
+        }
+      };
+    } else if (isTopUpOpen) {
+      handler = () => setIsTopUpOpen(false);
+    } else if (activeTab === 0 && typeof lessonsBackAction === 'function') {
+      handler = lessonsBackAction;
+    } else if (activeTab !== 0) {
+      handler = () => setActiveTab(0);
     }
-  }, [tg]);
+
+    if (handler) {
+      setBackButton(true, handler);
+    } else {
+      setBackButton(false);
+    }
+  }, [isVideoPlaying, isTopUpOpen, activeTab, lessonsBackAction, setBackButton]);
 
   useEffect(() => {
     let mounted = true;
@@ -113,6 +131,7 @@ function MainApp() {
           <LessonsPage 
             user={dbUser} 
             onPlayingChange={setIsVideoPlaying}
+            onRegisterBackAction={setLessonsBackAction}
           />
         );
       case 1:
@@ -131,15 +150,22 @@ function MainApp() {
           <LessonsPage 
             user={dbUser} 
             onPlayingChange={setIsVideoPlaying}
+            onRegisterBackAction={setLessonsBackAction}
           />
         );
     }
   };
 
   return (
-    <div className={`min-h-screen bg-[#000000] text-white relative flex flex-col ${
-      isLandscapeDesktop ? 'max-w-5xl mx-auto' : 'w-full max-w-[480px] mx-auto'
-    }`}>
+    <div 
+      className={`bg-[#000000] text-white relative flex flex-col ${
+        isLandscapeDesktop ? 'max-w-5xl mx-auto' : 'w-full max-w-[480px] mx-auto'
+      }`}
+      style={{
+        height: 'var(--app-viewport-stable-height, 100dvh)',
+        minHeight: 'var(--app-viewport-stable-height, 100dvh)'
+      }}
+    >
       {/* 
         Top Status Bar: 
         Only shown on Testlar, Reyting, Profil tabs.

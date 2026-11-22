@@ -23,7 +23,12 @@ export default function TabBar({ activeTab, onTabChange }) {
   ];
 
   return (
-    <nav className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[92%] max-w-[420px] z-40">
+    <nav 
+      className="fixed left-1/2 -translate-x-1/2 w-[92%] max-w-[420px] z-40 transition-all duration-200"
+      style={{
+        bottom: 'calc(var(--safe-area-bottom, 0px) + 12px)'
+      }}
+    >
       <div className="bg-[#121214]/90 backdrop-blur-xl border border-[#333336] rounded-full px-2 py-1.5 flex items-center justify-around shadow-2xl relative">
         {tabs.map((tab) => {
           const isActive = activeTab === tab.id;

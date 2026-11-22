@@ -11,9 +11,15 @@ import {
 import { useLanguage } from '../context/LanguageContext';
 import { useHaptic } from '../hooks/useHaptic';
 
-export default function LessonsPage({ user, onPlayingChange }) {
+export default function LessonsPage({ user, onPlayingChange, onRegisterBackAction }) {
   const { t } = useLanguage();
   const { selectionChanged, impactLight, impactMedium } = useHaptic();
+
+  // Telegram client & BackButton support detection
+  const tg = typeof window !== 'undefined' ? window.Telegram?.WebApp : null;
+  const isTelegramWithBack = Boolean(
+    tg && tg.initData !== undefined && tg.isVersionAtLeast && tg.isVersionAtLeast('6.1')
+  );
 
   // Navigation views: 'carousel' (Screen 1) | 'subject_hub' (Screen 2) | 'lesson_list' (Screen 3)
   const [currentView, setCurrentView] = useState('carousel');
@@ -189,6 +195,37 @@ export default function LessonsPage({ user, onPlayingChange }) {
     }, 50);
   };
 
+  // Synchronize Back Action with Telegram Native BackButton via App
+  useEffect(() => {
+    if (typeof onRegisterBackAction !== 'function') return;
+
+    if (playingLesson) {
+      window.__rb_exit_video = handleBackFromPlayer;
+      onRegisterBackAction(() => handleBackFromPlayer());
+    } else {
+      window.__rb_exit_video = null;
+      if (currentView === 'lesson_list') {
+        onRegisterBackAction(() => {
+          impactLight();
+          setCurrentView('subject_hub');
+          setSelectedCourse(null);
+          setSearchQuery('');
+        });
+      } else if (currentView === 'subject_hub') {
+        onRegisterBackAction(() => {
+          impactLight();
+          setCurrentView('carousel');
+        });
+      } else {
+        onRegisterBackAction(null);
+      }
+    }
+
+    return () => {
+      window.__rb_exit_video = null;
+    };
+  }, [playingLesson, currentView, onRegisterBackAction]);
+
   // Filter lessons
   const normalizedQuery = searchQuery.trim().toLowerCase().replace(/[`'‘’ʼ]/g, "'");
 
@@ -245,12 +282,15 @@ export default function LessonsPage({ user, onPlayingChange }) {
   const currentSubjectKey = isBio ? 'biologiya' : isKimyo ? 'kimyo' : 'matematika';
   const currentSubjectTitle = isBio ? 'BIOLOGIYA' : isKimyo ? 'KIMYO' : 'MATEMATIKA';
 
-  // Distinct custom high-res background per subject (NO anatomical heart model on biology!)
-  const subjectImage = activeSubject?.image_url || (isBio 
-    ? 'https://images.unsplash.com/photo-1530026405186-ed1f139313f8?auto=format&fit=crop&w=1200&q=85'
-    : isKimyo
-    ? 'https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?auto=format&fit=crop&w=1200&q=85'
-    : 'https://images.unsplash.com/photo-1633424974203-6c91b2a651ee?auto=format&fit=crop&w=1200&q=85');
+  // Distinct custom high-res background per subject (Glowing 3D DNA Helix for Bio, NOT heart!)
+  let subjectImage = activeSubject?.image_url;
+  if (!subjectImage || subjectImage.includes('photo-1530026405186') || subjectImage.includes('photo-1635070041078')) {
+    subjectImage = isBio 
+      ? 'https://images.unsplash.com/photo-1628595351029-c2bf17511435?auto=format&fit=crop&w=1200&q=85'
+      : isKimyo
+      ? 'https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?auto=format&fit=crop&w=1200&q=85'
+      : 'https://images.unsplash.com/photo-1633424974203-6c91b2a651ee?auto=format&fit=crop&w=1200&q=85';
+  }
 
   const buttonGradient = isKimyo 
     ? 'from-[#8B5CF6] via-[#A855F7] to-[#7C3AED] shadow-[0_0_25px_rgba(168,85,247,0.45)]'
@@ -277,14 +317,20 @@ export default function LessonsPage({ user, onPlayingChange }) {
     : 'from-[#031B13] via-[#020E0A] to-[#000000]';
 
   return (
-    <div className="w-full min-h-screen pb-24 px-4 max-w-md mx-auto text-white select-none flex flex-col">
+    <div 
+      className="w-full min-h-screen px-4 max-w-md mx-auto text-white select-none flex flex-col"
+      style={{
+        paddingTop: 'calc(var(--safe-area-top, 16px) + 6px)',
+        paddingBottom: 'calc(var(--safe-area-bottom, 0px) + 84px)'
+      }}
+    >
       
       {/* ──────────────────────────────────────────────────────────
           SCREEN 1: HERO SUBJECT CAROUSEL BANNER (STRETCHED & THEMED)
       ────────────────────────────────────────────────────────── */}
       {currentView === 'carousel' && (
         <div 
-          className="flex-1 flex flex-col justify-between items-center pt-[calc(env(safe-area-inset-top,16px)+6px)] pb-3 animate-in fade-in duration-300 overflow-hidden"
+          className="flex-1 flex flex-col justify-between items-center pb-2 w-full animate-in fade-in duration-300 overflow-hidden"
           onTouchStart={(e) => {
             touchStartXRef.current = e.touches[0].clientX;
           }}
@@ -295,21 +341,27 @@ export default function LessonsPage({ user, onPlayingChange }) {
           }}
         >
           {/* Top Brand Logo (Original Official Logo) */}
-          <div className="mb-2.5 flex-shrink-0">
+          <div className="mb-2 flex-shrink-0">
             <RashidovLogo className="h-8" />
           </div>
 
           {/* Stretched Vertical Card — Fills viewport height cleanly with spring jump & slide transition */}
-          <div className="relative w-full flex-1 min-h-[calc(100dvh-180px)] max-h-[calc(100dvh-165px)] flex items-stretch">
+          <div 
+            className="relative w-full flex-1 flex flex-col justify-center"
+            style={{
+              minHeight: 'calc(var(--app-viewport-stable-height, 100dvh) - var(--safe-area-top, 44px) - var(--safe-area-bottom, 20px) - 120px)',
+              height: 'calc(var(--app-viewport-stable-height, 100dvh) - var(--safe-area-top, 44px) - var(--safe-area-bottom, 20px) - 120px)'
+            }}
+          >
             <AnimatePresence mode="wait" custom={slideDirection}>
               <motion.div 
                 key={activeSubjectIndex}
                 custom={slideDirection}
                 variants={{
                   enter: (dir) => ({
-                    x: dir > 0 ? 85 : -85,
-                    y: 18,
-                    scale: 0.93,
+                    x: dir > 0 ? 80 : -80,
+                    y: 16,
+                    scale: 0.94,
                     opacity: 0,
                     rotate: dir > 0 ? 1.5 : -1.5,
                   }),
@@ -327,9 +379,9 @@ export default function LessonsPage({ user, onPlayingChange }) {
                     }
                   },
                   exit: (dir) => ({
-                    x: dir > 0 ? -85 : 85,
+                    x: dir > 0 ? -80 : 80,
                     y: -14,
-                    scale: 0.93,
+                    scale: 0.94,
                     opacity: 0,
                     rotate: dir > 0 ? -1.5 : 1.5,
                     transition: {
@@ -348,9 +400,10 @@ export default function LessonsPage({ user, onPlayingChange }) {
                 style={{
                   isolation: 'isolate',
                   WebkitMaskImage: '-webkit-radial-gradient(white, black)',
-                  transform: 'translateZ(0)',
+                  minHeight: 'calc(var(--app-viewport-stable-height, 100dvh) - var(--safe-area-top, 44px) - var(--safe-area-bottom, 20px) - 120px)',
+                  height: 'calc(var(--app-viewport-stable-height, 100dvh) - var(--safe-area-top, 44px) - var(--safe-area-bottom, 20px) - 120px)'
                 }}
-                className={`relative w-full h-full rounded-[28px] overflow-hidden border ${cardBorderClass} ${cardShadowClass} bg-gradient-to-b ${cardBgGradient} cursor-pointer group active:scale-[0.985] flex flex-col justify-between p-6 select-none`}
+                className={`relative w-full rounded-[28px] overflow-hidden border ${cardBorderClass} ${cardShadowClass} bg-gradient-to-b ${cardBgGradient} cursor-pointer group active:scale-[0.985] flex flex-col justify-between p-6 select-none`}
               >
                 {/* Background Subject Artwork */}
                 <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -367,8 +420,8 @@ export default function LessonsPage({ user, onPlayingChange }) {
                 {/* ── DISTINCT SUBJECT ANIMATION EFFECTS (BIOLOGY / CHEMISTRY / MATH) ── */}
                 <SubjectBannerEffects subjectKey={currentSubjectKey} />
 
-                {/* Spacer */}
-                <div className="relative z-10 w-full" />
+                {/* Spacer that expands and keeps button and title at bottom */}
+                <div className="relative z-10 w-full flex-1" />
 
                 {/* Bottom Card Content: Title & "Boshlash" Button */}
                 <div className="relative z-10 w-full flex flex-col items-start pt-6">
@@ -419,32 +472,23 @@ export default function LessonsPage({ user, onPlayingChange }) {
           SCREEN 2: SUBJECT HUB (2x2 CATEGORIES & RECENT LESSON)
       ────────────────────────────────────────────────────────── */}
       {currentView === 'subject_hub' && (
-        <div className="pt-[calc(env(safe-area-inset-top,16px)+8px)] animate-in fade-in duration-300">
+        <div className="animate-in fade-in duration-300">
           
-          {/* Top Telegram Bar with Back Button */}
-          <div className="flex items-center justify-between py-2 mb-2">
-            <button
-              onClick={() => {
-                impactLight();
-                setCurrentView('carousel');
-              }}
-              className="w-8 h-8 rounded-full bg-[#1C1C1E] border border-white/5 flex items-center justify-center text-white active:scale-95 transition-transform"
-              title="Orqaga"
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </button>
+          {/* Header: Native BackButton used in Telegram; fallback Back button outside Telegram */}
+          <div className="relative flex items-center justify-center mb-4 min-h-[36px]">
+            {!isTelegramWithBack && (
+              <button
+                onClick={() => {
+                  impactLight();
+                  setCurrentView('carousel');
+                }}
+                className="absolute left-0 w-8 h-8 rounded-full bg-[#1C1C1E] border border-white/10 flex items-center justify-center text-white active:scale-95 transition-transform"
+                title="Orqaga"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+            )}
 
-            <span className="text-xs font-bold text-white/90">
-              {activeSubject.name}
-            </span>
-
-            <div className="w-8 h-8 flex items-center justify-center text-[#8E8E93]">
-              <MoreHorizontal className="w-4 h-4" />
-            </div>
-          </div>
-
-          {/* Centered Brand Logo */}
-          <div className="mb-4">
             <RashidovLogo className="h-8" />
           </div>
 
@@ -589,33 +633,24 @@ export default function LessonsPage({ user, onPlayingChange }) {
           SCREEN 3: LESSON LIST & SEARCH RESULTS
       ────────────────────────────────────────────────────────── */}
       {currentView === 'lesson_list' && (
-        <div className="pt-[calc(env(safe-area-inset-top,16px)+8px)] animate-in fade-in duration-300">
+        <div className="animate-in fade-in duration-300">
           
-          {/* Top Telegram Bar */}
-          <div className="flex items-center justify-between py-2 mb-2">
-            <button
-              onClick={() => {
-                impactLight();
-                setCurrentView('subject_hub');
-                setSelectedCourse(null);
-              }}
-              className="w-8 h-8 rounded-full bg-[#1C1C1E] border border-white/5 flex items-center justify-center text-white active:scale-95 transition-transform"
-              title="Orqaga"
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </button>
+          {/* Header: Native BackButton used in Telegram; fallback Back button outside Telegram */}
+          <div className="relative flex items-center justify-center mb-4 min-h-[36px]">
+            {!isTelegramWithBack && (
+              <button
+                onClick={() => {
+                  impactLight();
+                  setCurrentView('subject_hub');
+                  setSelectedCourse(null);
+                }}
+                className="absolute left-0 w-8 h-8 rounded-full bg-[#1C1C1E] border border-white/10 flex items-center justify-center text-white active:scale-95 transition-transform"
+                title="Orqaga"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+            )}
 
-            <span className="text-xs font-bold text-white/90">
-              {selectedCourse ? selectedCourse.title : activeSubject.name}
-            </span>
-
-            <div className="w-8 h-8 flex items-center justify-center text-[#8E8E93]">
-              <MoreHorizontal className="w-4 h-4" />
-            </div>
-          </div>
-
-          {/* Centered Brand Logo */}
-          <div className="mb-4">
             <RashidovLogo className="h-8" />
           </div>
 

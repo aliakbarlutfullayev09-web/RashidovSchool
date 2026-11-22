@@ -362,9 +362,14 @@ export default function VideoPlayer({
       onClick={resetControlsTimeout}
     >
       {/* ── TOP BAR (SAFE FROM TELEGRAM CLOSE & STATUS BAR) ── */}
-      <div className={`p-4 pt-[calc(env(safe-area-inset-top,16px)+10px)] flex items-center justify-between z-20 bg-gradient-to-b from-black/90 via-black/50 to-transparent transition-opacity duration-300 ${
-        showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
-      }`}>
+      <div 
+        className={`p-4 flex items-center justify-between z-20 bg-gradient-to-b from-black/90 via-black/50 to-transparent transition-opacity duration-300 ${
+          showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+        style={{
+          paddingTop: 'calc(var(--safe-area-top, 16px) + 8px)'
+        }}
+      >
         {/* Back Button (Safe margin from Telegram controls) */}
         <button 
           onClick={onBack}
@@ -485,9 +490,12 @@ export default function VideoPlayer({
       {/* ── CONTROLS & SEEKBAR ── */}
       <div 
         onClick={(e) => e.stopPropagation()}
-        className={`p-4 pb-[calc(env(safe-area-inset-bottom,16px)+12px)] max-w-xl mx-auto w-full space-y-3 z-20 bg-gradient-to-t from-black via-black/70 to-transparent transition-opacity duration-300 ${
+        className={`p-4 max-w-xl mx-auto w-full space-y-3 z-20 bg-gradient-to-t from-black via-black/70 to-transparent transition-opacity duration-300 ${
           showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
+        style={{
+          paddingBottom: 'calc(var(--safe-area-bottom, 16px) + 12px)'
+        }}
       >
         {/* Seekbar Container */}
         <div 

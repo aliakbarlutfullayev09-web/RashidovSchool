@@ -14,10 +14,10 @@ export const mockSubjects = [
     key: 'biologiya',
     name: 'Biologiya', 
     emoji: '🧬', 
-    image_url: 'https://images.unsplash.com/photo-1530026405186-ed1f139313f8?auto=format&fit=crop&w=1200&q=85',
+    image_url: 'https://images.unsplash.com/photo-1628595351029-c2bf17511435?auto=format&fit=crop&w=1200&q=85',
     accent_color: '#10B981',
     border_class: 'border-emerald-500/35',
-    shadow_class: 'shadow-[0_0_50px_rgba(16,185,129,0.22)]',
+    shadow_class: 'shadow-[0_8px_32px_rgba(16,185,129,0.22)]',
     bg_gradient: 'from-[#031B13] via-[#020E0A] to-[#000000]',
     description: 'DNK, hujayra, tirik organizmlar va tabiat qonuniyatlari'
   },

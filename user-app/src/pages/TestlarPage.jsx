@@ -6,6 +6,7 @@ import {
 import { isUzbekMatch } from '../utils/uzbekFuzzy';
 import { useHaptic } from '../hooks/useHaptic';
 import { useLanguage } from '../context/LanguageContext';
+import { useTelegram } from '../hooks/useTelegram';
 import { supabase } from '../api/supabase';
 
 const DTM_SAMPLE_QUESTIONS = [
@@ -38,6 +39,7 @@ const DTM_SAMPLE_QUESTIONS = [
 export default function TestlarPage({ user }) {
   const { t } = useLanguage();
   const { selectionChanged, impactLight, impactMedium, notificationSuccess, notificationError } = useHaptic();
+  const { setClosingConfirmation } = useTelegram();
 
   // Mode: 'dtm' | 'sertifikat' | 'trenajyor'
   const [activeMode, setActiveMode] = useState('dtm');
@@ -77,6 +79,18 @@ export default function TestlarPage({ user }) {
   // Results & Tahlil State
   const [examFinished, setExamFinished] = useState(false);
   const [showTahlil, setShowTahlil] = useState(false);
+
+  // Telegram Closing Confirmation: Only protect when an exam with unsaved progress is running
+  useEffect(() => {
+    if (examActive && !examFinished) {
+      setClosingConfirmation(true);
+    } else {
+      setClosingConfirmation(false);
+    }
+    return () => {
+      setClosingConfirmation(false);
+    };
+  }, [examActive, examFinished, setClosingConfirmation]);
 
   // Focus / Anti-cheat detector
   useEffect(() => {
