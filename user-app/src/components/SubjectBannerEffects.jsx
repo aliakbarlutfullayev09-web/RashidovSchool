@@ -61,40 +61,18 @@ export default function SubjectBannerEffects({ subjectKey = 'biologiya' }) {
           />
         ))}
 
-        {/* DNA Helix Strand Ambient Structure */}
-        <motion.svg
-          className="absolute -right-4 top-14 w-36 h-72 text-emerald-400/30 stroke-current"
-          viewBox="0 0 100 200"
-          fill="none"
-          strokeWidth="2.5"
-          animate={{ y: [-8, 8, -8], opacity: [0.25, 0.55, 0.25] }}
-          transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
-        >
-          <path d="M 20 20 Q 50 50 80 80 T 20 140 T 80 200" strokeDasharray="4 4" />
-          <path d="M 80 20 Q 50 50 20 80 T 80 140 T 20 200" strokeDasharray="4 4" />
-          <line x1="28" y1="35" x2="72" y2="35" stroke="#34D399" strokeWidth="3" />
-          <line x1="38" y1="65" x2="62" y2="65" stroke="#10B981" strokeWidth="3" />
-          <line x1="28" y1="125" x2="72" y2="125" stroke="#34D399" strokeWidth="3" />
-          <line x1="38" y1="155" x2="62" y2="155" stroke="#10B981" strokeWidth="3" />
-          <line x1="28" y1="185" x2="72" y2="185" stroke="#34D399" strokeWidth="3" />
-        </motion.svg>
-
-        {/* Secondary Biological Chlorophyll Particle Left */}
-        <motion.svg
-          className="absolute -left-3 bottom-24 w-28 h-28 text-teal-400/25 stroke-current fill-teal-500/10"
-          viewBox="0 0 100 100"
-          animate={{ rotate: [0, 10, -10, 0], scale: [0.95, 1.05, 0.95] }}
-          transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-        >
-          <path d="M 10 90 Q 50 10 90 90 Q 50 50 10 90 Z" strokeWidth="2" />
-          <line x1="50" y1="35" x2="50" y2="75" strokeWidth="2" strokeDasharray="3 3" />
-        </motion.svg>
+        {/* Subtle Ambient Bioluminescent Pulses */}
+        <motion.div
+          className="absolute -right-6 top-16 w-32 h-32 rounded-full bg-emerald-400/20 blur-2xl"
+          animate={{ scale: [0.9, 1.25, 0.9], opacity: [0.2, 0.5, 0.2] }}
+          transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
+        />
       </div>
     );
   }
 
   // ──────────────────────────────────────────────────────────
-  // 2. KIMYO (🧪 Pure Chemistry: Boiling Reaction Bubbles & Benzene Rings)
+  // 2. KIMYO (🧪 Pure Chemistry: Reaction Particles & Left Corner Wireframes)
   // ──────────────────────────────────────────────────────────
   if (isChem) {
     return (
@@ -109,14 +87,14 @@ export default function SubjectBannerEffects({ subjectKey = 'biologiya' }) {
           className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full bg-gradient-to-br from-purple-600/35 via-fuchsia-500/25 to-indigo-900/20 blur-3xl"
         />
 
-        {/* Bubbling Reaction Particles (Rising Upwards like boiling test tube) */}
+        {/* Bubbling Reaction Particles (Rising Upwards) */}
         {[
-          { id: 1, left: '18%', size: 8, delay: 0, duration: 4.0 },
-          { id: 2, left: '36%', size: 11, delay: 1.2, duration: 4.8 },
-          { id: 3, left: '52%', size: 6, delay: 0.6, duration: 3.5 },
-          { id: 4, left: '70%', size: 10, delay: 2.1, duration: 5.2 },
-          { id: 5, left: '84%', size: 7, delay: 1.7, duration: 4.2 },
-          { id: 6, left: '26%', size: 9, delay: 2.8, duration: 4.6 },
+          { id: 1, left: '14%', size: 8, delay: 0, duration: 4.0 },
+          { id: 2, left: '26%', size: 10, delay: 1.2, duration: 4.8 },
+          { id: 3, left: '42%', size: 6, delay: 0.6, duration: 3.5 },
+          { id: 4, left: '60%', size: 9, delay: 2.1, duration: 5.2 },
+          { id: 5, left: '78%', size: 7, delay: 1.7, duration: 4.2 },
+          { id: 6, left: '32%', size: 8, delay: 2.8, duration: 4.6 },
         ].map(b => (
           <motion.div
             key={b.id}
@@ -142,9 +120,10 @@ export default function SubjectBannerEffects({ subjectKey = 'biologiya' }) {
           />
         ))}
 
-        {/* Rotating Chemical Benzene Ring 1 */}
+        {/* ── LEFT CORNER ANIMATIONS: Hexagons and Orbital Oval ── */}
+        {/* Rotating Chemical Benzene Ring on Upper Left */}
         <motion.svg
-          className="absolute top-12 right-6 w-16 h-16 text-purple-400/40 stroke-current"
+          className="absolute top-12 left-6 w-16 h-16 text-purple-400/40 stroke-current"
           viewBox="0 0 100 100"
           fill="none"
           strokeWidth="3.2"
@@ -155,18 +134,18 @@ export default function SubjectBannerEffects({ subjectKey = 'biologiya' }) {
           <circle cx="50" cy="50" r="22" strokeDasharray="5 5" />
         </motion.svg>
 
-        {/* Rotating Molecular Orbital Ellipse */}
+        {/* Rotating Molecular Orbital Ellipse on Mid-Left */}
         <motion.div
-          className="absolute top-1/3 right-8 w-24 h-12 rounded-full border-2 border-fuchsia-400/35"
+          className="absolute top-1/3 left-6 w-24 h-12 rounded-full border-2 border-fuchsia-400/35"
           animate={{ rotate: [0, 180, 360] }}
           transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
         >
           <div className="w-2.5 h-2.5 rounded-full bg-fuchsia-300 shadow-[0_0_8px_#f472b6] absolute -top-1.5 left-1/2" />
         </motion.div>
 
-        {/* Rotating Chemical Hexagon 2 */}
+        {/* Rotating Chemical Hexagon 2 on Lower-Left */}
         <motion.svg
-          className="absolute bottom-36 left-6 w-12 h-12 text-pink-400/30 stroke-current"
+          className="absolute bottom-36 left-8 w-12 h-12 text-pink-400/30 stroke-current"
           viewBox="0 0 100 100"
           fill="none"
           strokeWidth="3"

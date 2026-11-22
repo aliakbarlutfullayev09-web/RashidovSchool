@@ -7,7 +7,7 @@ import CheckpointModal from './CheckpointModal';
 import GlossaryPanel from './GlossaryPanel';
 import { formatTime } from '../utils/formatters';
 import { useHaptic } from '../hooks/useHaptic';
-import { getWatchProgress, saveWatchProgress, incrementViewCount } from '../api/supabase';
+import { getWatchProgress, saveWatchProgress, incrementViewCount, saveLessonQuizProgress } from '../api/supabase';
 
 export default function VideoPlayer({ 
   videoUrl, 
@@ -304,6 +304,9 @@ export default function VideoPlayer({
       setMaxWatchedSeconds(full);
       maxWatchedRef.current = full;
       saveWatchProgress(userId, lessonId, full, full);
+    }
+    if (userId && lessonId) {
+      saveLessonQuizProgress(userId, lessonId, 3, 100);
     }
   };
 

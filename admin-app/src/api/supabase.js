@@ -6,67 +6,135 @@ const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1N
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
 
-const isMock = false;
-
 export const api = {
-  // Video Checkpoints
+  // Video Checkpoints (with questions table fallback for resilient cloud persistence)
   getVideoCheckpoints: async (lessonId) => {
-    const { data, error } = await supabase
-      .from('video_checkpoints')
-      .select('*')
-      .eq('lesson_id', lessonId)
-      .order('trigger_time_sec', { ascending: true });
-    
-    if (error) {
-      console.error('Error fetching checkpoints:', error);
-      return [];
+    try {
+      const { data, error } = await supabase
+        .from('video_checkpoints')
+        .select('*')
+        .eq('lesson_id', lessonId)
+        .order('trigger_time_sec', { ascending: true });
+      
+      if (!error && data) {
+        return data.map(cp => ({
+          ...cp,
+          trigger_time_sec: cp.trigger_time_sec || 0,
+          rewind_to_sec: cp.rewind_to_sec ?? cp.rewind_time_sec ?? 0,
+          rewind_time_sec: cp.rewind_time_sec ?? cp.rewind_to_sec ?? 0,
+          question_text: cp.question_text || cp.question || '',
+          question: cp.question || cp.question_text || '',
+          correct_option_index: cp.correct_option_index ?? cp.correct_option ?? 0,
+          correct_option: cp.correct_option ?? cp.correct_option_index ?? 0
+        }));
+      }
+
+      // Fallback: load from questions table where image_url starts with cp_meta:
+      const { data: qData } = await supabase
+        .from('questions')
+        .select('*')
+        .eq('lesson_id', lessonId);
+
+      if (qData && qData.length > 0) {
+        const cps = [];
+        qData.forEach(q => {
+          if (q.image_url && q.image_url.startsWith('cp_meta:')) {
+            try {
+              const meta = JSON.parse(q.image_url.replace('cp_meta:', ''));
+              cps.push({
+                id: q.id,
+                lesson_id: q.lesson_id,
+                trigger_time_sec: meta.trigger_time_sec || 0,
+                rewind_to_sec: meta.rewind_time_sec || 0,
+                rewind_time_sec: meta.rewind_time_sec || 0,
+                question_text: q.text,
+                question: q.text,
+                options: Array.isArray(q.options) ? q.options : [],
+                correct_option_index: q.correct_option_index,
+                correct_option: q.correct_option_index
+              });
+            } catch {}
+          }
+        });
+        return cps.sort((a, b) => a.trigger_time_sec - b.trigger_time_sec);
+      }
+    } catch (e) {
+      console.warn('Error fetching checkpoints:', e);
     }
-    return (data || []).map(cp => ({
-      ...cp,
-      trigger_time_sec: cp.trigger_time_sec || 0,
-      rewind_to_sec: cp.rewind_to_sec ?? cp.rewind_time_sec ?? 0,
-      rewind_time_sec: cp.rewind_time_sec ?? cp.rewind_to_sec ?? 0,
-      question_text: cp.question_text || cp.question || '',
-      question: cp.question || cp.question_text || '',
-      correct_option_index: cp.correct_option_index ?? cp.correct_option ?? 0,
-      correct_option: cp.correct_option ?? cp.correct_option_index ?? 0
-    }));
+    return [];
   },
 
   saveVideoCheckpoints: async (lessonId, checkpoints) => {
-    // Delete existing
-    await supabase.from('video_checkpoints').delete().eq('lesson_id', lessonId);
-    
-    // Insert new
-    if (checkpoints && checkpoints.length > 0) {
-      const { error } = await supabase.from('video_checkpoints').insert(
-        checkpoints.map(cp => ({
-          lesson_id: lessonId,
-          trigger_time_sec: cp.trigger_time_sec || 0,
-          rewind_time_sec: cp.rewind_time_sec !== undefined ? cp.rewind_time_sec : (cp.rewind_to_sec || 0),
-          question: cp.question || cp.question_text || '',
-          options: cp.options || [],
-          correct_option: cp.correct_option !== undefined ? cp.correct_option : (cp.correct_option_index || 0)
-        }))
-      );
-      if (error) {
-        console.error('Error saving checkpoints:', error);
-        return false;
+    try {
+      // 1. Try video_checkpoints table
+      const { error: delError } = await supabase.from('video_checkpoints').delete().eq('lesson_id', lessonId);
+      
+      if (!delError) {
+        if (checkpoints && checkpoints.length > 0) {
+          const { error: insError } = await supabase.from('video_checkpoints').insert(
+            checkpoints.map(cp => ({
+              lesson_id: lessonId,
+              trigger_time_sec: cp.trigger_time_sec || 0,
+              rewind_time_sec: cp.rewind_time_sec !== undefined ? cp.rewind_time_sec : (cp.rewind_to_sec || 0),
+              question: cp.question || cp.question_text || '',
+              options: cp.options || [],
+              correct_option: cp.correct_option !== undefined ? cp.correct_option : (cp.correct_option_index || 0)
+            }))
+          );
+          if (!insError) return true;
+        } else {
+          return true;
+        }
       }
+
+      // 2. Fallback: Store checkpoints in questions table with cp_meta: image_url
+      // Delete existing checkpoint questions for this lesson
+      const { data: existingQ } = await supabase.from('questions').select('id, image_url').eq('lesson_id', lessonId);
+      if (existingQ && existingQ.length > 0) {
+        const cpIdsToDelete = existingQ
+          .filter(q => q.image_url && q.image_url.startsWith('cp_meta:'))
+          .map(q => q.id);
+        if (cpIdsToDelete.length > 0) {
+          await supabase.from('questions').delete().in('id', cpIdsToDelete);
+        }
+      }
+
+      if (checkpoints && checkpoints.length > 0) {
+        const rows = checkpoints.map(cp => ({
+          lesson_id: lessonId,
+          text: cp.question || cp.question_text || '',
+          options: cp.options || [],
+          correct_option_index: cp.correct_option !== undefined ? cp.correct_option : (cp.correct_option_index || 0),
+          time_limit: 30,
+          image_url: `cp_meta:${JSON.stringify({
+            trigger_time_sec: cp.trigger_time_sec || 0,
+            rewind_time_sec: cp.rewind_time_sec !== undefined ? cp.rewind_time_sec : (cp.rewind_to_sec || 0)
+          })}`
+        }));
+        const { error: fallbackInsErr } = await supabase.from('questions').insert(rows);
+        if (fallbackInsErr) {
+          console.error('Fallback save error:', fallbackInsErr);
+          return false;
+        }
+      }
+      return true;
+    } catch (e) {
+      console.error('Error saving checkpoints:', e);
+      return false;
     }
-    return true;
   },
 
   deleteVideoCheckpoint: async (id) => {
-    const { error } = await supabase.from('video_checkpoints').delete().eq('id', id);
-    if (error) {
-      console.error('Error deleting checkpoint:', error);
+    try {
+      await supabase.from('video_checkpoints').delete().eq('id', id);
+      await supabase.from('questions').delete().eq('id', id);
+      return true;
+    } catch (e) {
+      console.error('Error deleting checkpoint:', e);
       return false;
     }
-    return true;
   },
 
-  // Реальный запрос пользователя
   getUser: async (telegramId) => {
     const { data, error } = await supabase.from('users').select('*').eq('telegram_id', telegramId).single();
     if (error) {
@@ -78,8 +146,7 @@ export const api = {
 
   getSubjectStats: async (subjectId) => {
     try {
-      // 1. Total students (assigned to this subject or all students if we consider all students can buy courses)
-      // Actually, students are not assigned to subjects, they can buy any course. We'll count all students.
+      // 1. Total students
       const { count: studentsCount } = await supabase.from('users').select('*', { count: 'exact', head: true }).eq('role', 'student');
       
       // 2. Total lessons in this subject
@@ -105,29 +172,42 @@ export const api = {
         }
       }
 
+      // Active today
+      const today = new Date().toISOString().split('T')[0];
+      const { count: activeToday } = await supabase
+        .from('users')
+        .select('*', { count: 'exact', head: true })
+        .eq('last_active_date', today);
+
       return {
         total_students: studentsCount || 0,
         total_lessons: lessonsCount,
         total_tests_taken: testsCount,
-        avg_score: avg_score,
-        active_today: 0
+        avg_score: avg_score || 0,
+        active_today: activeToday || 0
       };
     } catch (e) {
       console.error(e);
       return mockStats;
     }
   },
+
   getRedZones: async (subjectId) => {
-    const { data } = await supabase.from('users').select('*').order('streak_days', { ascending: true }).limit(5);
-    return (data || []).map(u => ({
-      id: u.telegram_id,
-      studentName: u.full_name,
-      classGroup: u.class_group,
-      issue: u.streak_days === 0 ? 'Потерял стрик' : 'Низкая активность',
-      lastActive: u.last_active_date || 'Неизвестно',
-      balance: u.balance
-    }));
+    try {
+      const { data } = await supabase.from('users').select('*').order('streak_days', { ascending: true }).limit(5);
+      return (data || []).map(u => ({
+        id: u.telegram_id,
+        studentName: u.full_name || `ID ${u.telegram_id}`,
+        classGroup: u.class_group || '11-A',
+        issue: u.streak_days === 0 ? 'Faollik pasaygan' : `${u.streak_days} kunlik streak`,
+        lastActive: u.last_active_date || 'Noma‘lum',
+        balance: u.balance || 0
+      }));
+    } catch {
+      return mockRedZones;
+    }
   },
+
   getSubjects: async () => {
     const { data } = await supabase.from('subjects').select('*').order('id');
     return data || [];
@@ -136,7 +216,7 @@ export const api = {
   createSubject: async (name) => {
     const { data, error } = await supabase.from('subjects').insert([{ name }]).select().single();
     if (error) {
-      alert("Ошибка создания предмета: " + error.message);
+      alert("Fan yaratishda xatolik: " + error.message);
       return null;
     }
     return data;
@@ -144,7 +224,7 @@ export const api = {
 
   deleteSubject: async (subjectId) => {
     const { error } = await supabase.from('subjects').delete().eq('id', subjectId);
-    if (error) alert("Ошибка удаления предмета: " + error.message);
+    if (error) alert("Fan o'chirishda xatolik: " + error.message);
     return !error;
   },
 
@@ -152,20 +232,20 @@ export const api = {
     const { data: c, error } = await supabase.from('courses').insert([{
       subject_id: subjectId, 
       title, 
-      price: parseInt(price) || 0
+      price: parseInt(price, 10) || 0
     }]).select().single();
     
     if (error) {
       console.error("Course creation error:", error);
-      alert("Ошибка при сохранении: " + error.message);
+      alert("Kurs yaratishda xatolik: " + error.message);
       return null;
     }
-    
     return c;
   },
   
   createLesson: async (courseId, title, videoUrl, testQuestionCount, thumbnailUrl, duration, isFree) => {
     try {
+      // 1. Try with extra columns
       const payload = {
         course_id: courseId,
         title,
@@ -178,7 +258,7 @@ export const api = {
       const { data: l, error } = await supabase.from('lessons').insert([payload]).select().single();
       if (!error && l) return l;
 
-      // Fallback if schema does not yet have extra columns
+      // 2. Fallback if extra columns don't exist in live table
       const { data: fallbackL, error: fallbackErr } = await supabase.from('lessons').insert([{
         course_id: courseId,
         title,
@@ -188,7 +268,7 @@ export const api = {
 
       if (fallbackErr) {
         console.error("Lesson creation error:", fallbackErr);
-        alert("Ошибка при сохранении урока: " + fallbackErr.message);
+        alert("Dars yaratishda xatolik: " + fallbackErr.message);
         return null;
       }
       return fallbackL;
@@ -200,19 +280,19 @@ export const api = {
 
   deleteCourse: async (courseId) => {
     const { error } = await supabase.from('courses').delete().eq('id', courseId);
-    if (error) alert("Ошибка удаления курса: " + error.message);
+    if (error) alert("Kurs o'chirishda xatolik: " + error.message);
     return !error;
   },
 
   deleteLesson: async (lessonId) => {
     const { error } = await supabase.from('lessons').delete().eq('id', lessonId);
-    if (error) alert("Ошибка удаления урока: " + error.message);
+    if (error) alert("Dars o'chirishda xatolik: " + error.message);
     return !error;
   },
 
   deleteQuestion: async (questionId) => {
     const { error } = await supabase.from('questions').delete().eq('id', questionId);
-    if (error) alert("Ошибка удаления вопроса: " + error.message);
+    if (error) alert("Savol o'chirishda xatolik: " + error.message);
     return !error;
   },
 
@@ -228,7 +308,7 @@ export const api = {
     
     if (error) {
       console.error("Question creation error:", error);
-      alert("Ошибка при сохранении вопроса: " + error.message);
+      alert("Savol saqlashda xatolik: " + error.message);
       return null;
     }
     return data;
@@ -250,35 +330,43 @@ export const api = {
 
   getQuestions: async (lessonId) => {
     const { data } = await supabase.from('questions').select('*').eq('lesson_id', lessonId);
-    return data || [];
+    // Filter out checkpoint metadata questions
+    return (data || []).filter(q => !q.image_url || !q.image_url.startsWith('cp_meta:'));
   },
+
   generatePromo: async (code, bonus, maxUses, createdBy) => {
     const { data, error } = await supabase.from('promo_codes').insert([{
-      code,
-      bonus_amount: parseInt(bonus) || 0,
-      max_uses: parseInt(maxUses) || 1,
-      created_by: createdBy
+      code: code.trim().toUpperCase(),
+      bonus_amount: parseInt(bonus, 10) || 0,
+      max_uses: parseInt(maxUses, 10) || 1,
+      created_by: createdBy || null
     }]).select().single();
+
     if (error) {
       console.error("Promo error:", error);
-      alert("Ошибка создания промокода: " + error.message);
+      alert("Promokod yaratishda xatolik: " + error.message);
       return null;
     }
-    return data ? { code: data.code, bonus: data.bonus_amount, maxUses: data.max_uses } : null;
+    return data ? { code: data.code, bonus: data.bonus_amount, maxUses: data.max_uses, currentUses: 0, createdAt: data.created_at } : null;
   },
+
   addTeacher: async (telegramId, subjectName, permissions) => {
-    // Находим предмет
-    const { data: subjectData } = await supabase.from('subjects').select('id').ilike('name', `%${subjectName.substring(0, 4)}%`).single();
-    const assigned_subject_id = subjectData ? subjectData.id : null;
-    
-    // Проверяем существует ли пользователь
+    // 1. Check if user exists in database
     const { data: userExists } = await supabase.from('users').select('telegram_id, full_name').eq('telegram_id', telegramId).single();
     if (!userExists) {
-      alert(`Ошибка: Пользователь с ID ${telegramId} не найден в базе. Сначала он должен запустить бота.`);
+      alert(`Xatolik: ID ${telegramId} raqamli foydalanuvchi bazada topilmadi. Avval o'quvchi ilovani ochishi kerak.`);
       return null;
     }
 
-    // Обновляем роль пользователя
+    // 2. Find subject
+    const { data: subjects } = await supabase.from('subjects').select('id, name');
+    const matchedSubject = (subjects || []).find(s => 
+      s.name.toLowerCase().includes(subjectName.toLowerCase()) || 
+      subjectName.toLowerCase().includes(s.name.toLowerCase())
+    );
+    const assigned_subject_id = matchedSubject ? matchedSubject.id : null;
+
+    // 3. Update user role and permissions
     try {
       await supabase.from('users').update({ 
         role: 'teacher',
@@ -289,7 +377,7 @@ export const api = {
       await supabase.from('users').update({ role: 'teacher' }).eq('telegram_id', telegramId);
     }
 
-    // Синхронизируем с subject_admins
+    // 4. Upsert into subject_admins
     if (assigned_subject_id) {
       await supabase.from('subject_admins').upsert({
         user_id: telegramId,
@@ -298,7 +386,12 @@ export const api = {
       }, { onConflict: 'user_id, subject_id' }).catch(() => {});
     }
     
-    return { telegram_id: telegramId, full_name: userExists.full_name, permissions, subject: subjectName };
+    return { 
+      telegram_id: telegramId, 
+      full_name: userExists.full_name || `ID ${telegramId}`, 
+      permissions, 
+      subject: matchedSubject ? matchedSubject.name : subjectName 
+    };
   },
 
   removeTeacher: async (telegramId) => {
@@ -315,7 +408,7 @@ export const api = {
     return true;
   },
   
-  getTeachers: async (subjectId) => {
+  getTeachers: async () => {
     try {
       const { data } = await supabase.from('users').select('*').in('role', ['teacher', 'superadmin']);
       const { data: subjects } = await supabase.from('subjects').select('id, name');
@@ -324,7 +417,7 @@ export const api = {
       return (data || []).map(u => ({
         telegram_id: u.telegram_id,
         full_name: u.full_name || `ID ${u.telegram_id}`,
-        subject: u.role === 'superadmin' ? 'Все предметы' : (subMap[u.assigned_subject_id] || 'Преподаватель'),
+        subject: u.role === 'superadmin' ? 'Barcha fanlar' : (subMap[u.assigned_subject_id] || 'O‘qituvchi'),
         permissions: u.role === 'superadmin' ? {
           can_promo: true,
           can_gift: true,
@@ -342,10 +435,21 @@ export const api = {
     return data || [];
   },
   
-  updateUserBalance: async (telegramId, newBalance) => {
+  updateUserBalance: async (telegramId, newBalance, giftAmount = null) => {
     const { data } = await supabase.from('users').update({ balance: newBalance }).eq('telegram_id', telegramId).select().single();
+    
+    if (giftAmount !== null) {
+      await supabase.from('transactions').insert([{
+        user_id: telegramId,
+        amount: giftAmount,
+        type: 'gift',
+        description: `Ustoz / Admin tomonidan neyronlar kiritildi: ${giftAmount > 0 ? '+' : ''}${giftAmount} 🧠`
+      }]).catch(() => {});
+    }
+
     return data;
   },
+
   getAllStats: async () => {
     try {
       // 1. Total students
@@ -383,7 +487,7 @@ export const api = {
         total_students: studentsCount || 0,
         total_lessons: lessonsCount || 0,
         total_tests_taken: testsCount,
-        avg_score: avg_score,
+        avg_score: avg_score || 0,
         active_today: activeToday || 0
       };
     } catch (e) {

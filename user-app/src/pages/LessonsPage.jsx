@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import VideoPlayer from '../components/VideoPlayer';
 import RashidovLogo from '../components/RashidovLogo';
 import SubjectBannerEffects from '../components/SubjectBannerEffects';
-import { getSubjects, getCourses, getLessons, getProgress, getVideoCheckpoints } from '../api/supabase';
+import { getSubjects, getCoursesAndLessons, getProgress, getVideoCheckpoints, getQuestions, saveLessonQuizProgress } from '../api/supabase';
 import { 
   Play, Search, X, Bookmark, BookmarkCheck, Clock, 
   ChevronRight, MoreHorizontal, ArrowLeft 
@@ -54,6 +54,7 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
   // Video playback state
   const [playingLesson, setPlayingLesson] = useState(null);
   const [checkpoints, setCheckpoints] = useState([]);
+  const [lessonQuiz, setLessonQuiz] = useState(null);
 
   // Carousel touch swipe handling
   const touchStartXRef = useRef(0);
@@ -100,15 +101,9 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
   const loadData = async () => {
     setLoading(true);
     try {
-      const dbCourses = await getCourses(activeSubject.id);
+      const { courses: dbCourses, lessons: allLessons } = await getCoursesAndLessons(activeSubject.id);
       setCourses(dbCourses || []);
-
-      let allLessons = [];
-      for (const course of (dbCourses || [])) {
-        const cLessons = await getLessons(course.id);
-        allLessons = [...allLessons, ...(cLessons || [])];
-      }
-      setLessons(allLessons);
+      setLessons(allLessons || []);
 
       // User progress
       const userUid = user?.telegram_id || user?.id;
@@ -255,6 +250,90 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
     return true;
   });
 
+  // If in quiz mode for lesson
+  if (lessonQuiz) {
+    const q = lessonQuiz.questions[lessonQuiz.currentQ];
+    const isLast = lessonQuiz.currentQ === lessonQuiz.questions.length - 1;
+
+    const handleAnswerQuiz = async (selectedOptionIndex) => {
+      impactLight();
+      const newAnswers = { ...lessonQuiz.answers, [lessonQuiz.currentQ]: selectedOptionIndex };
+      
+      if (!isLast) {
+        setLessonQuiz({ ...lessonQuiz, currentQ: lessonQuiz.currentQ + 1, answers: newAnswers });
+      } else {
+        let correctCount = 0;
+        lessonQuiz.questions.forEach((question, idx) => {
+          if (newAnswers[idx] === question.correct_option_index) {
+            correctCount++;
+          }
+        });
+        const ratio = correctCount / lessonQuiz.questions.length;
+        const stars = ratio >= 0.8 ? 3 : ratio >= 0.5 ? 2 : 1;
+        const uid = user?.telegram_id || user?.id;
+
+        if (uid) {
+          await saveLessonQuizProgress(uid, lessonQuiz.lesson.id, stars, Math.round(ratio * 100));
+        }
+
+        alert(`Tabriklaymiz! Test yakunlandi.\nTo'g'ri javoblar: ${correctCount}/${lessonQuiz.questions.length}\nYulduzlar: ${'⭐️'.repeat(stars)}\nHisobingizga neyronlar qo'shildi!`);
+        
+        if (uid) {
+          const prog = await getProgress(uid);
+          const pMap = {};
+          (prog || []).forEach(p => { pMap[p.lesson_id] = p; });
+          setProgressMap(pMap);
+        }
+        setLessonQuiz(null);
+        setPlayingLesson(null);
+      }
+    };
+
+    return (
+      <div className="fixed inset-0 z-50 bg-black/95 text-white flex flex-col p-4 max-w-md mx-auto">
+        <div className="flex items-center justify-between py-3 border-b border-white/10">
+          <button 
+            onClick={() => setLessonQuiz(null)}
+            className="w-9 h-9 rounded-full bg-[#1C1C1E] flex items-center justify-center text-white active:scale-95"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+          <span className="text-xs font-bold text-blue-400">
+            Savol {lessonQuiz.currentQ + 1} / {lessonQuiz.questions.length}
+          </span>
+          <div className="w-9" />
+        </div>
+
+        <div className="flex-1 flex flex-col justify-center py-6">
+          {q.image_url && !q.image_url.startsWith('cp_meta:') && (
+            <div className="relative w-full aspect-video rounded-2xl overflow-hidden mb-4 border border-white/10 bg-black">
+              <img src={q.image_url} alt="" className="w-full h-full object-contain" />
+            </div>
+          )}
+
+          <h3 className="text-lg font-bold text-white mb-6 leading-snug">
+            {q.text}
+          </h3>
+
+          <div className="space-y-3">
+            {(q.options || []).map((opt, optIdx) => (
+              <button
+                key={optIdx}
+                onClick={() => handleAnswerQuiz(optIdx)}
+                className="w-full p-4 rounded-2xl bg-[#1C1C1E] border border-white/10 hover:border-blue-500/50 text-left text-sm font-semibold flex items-center gap-3 active:scale-98 transition-all"
+              >
+                <span className="w-6 h-6 rounded-full bg-[#2C2C2E] flex items-center justify-center text-xs font-bold text-white/70">
+                  {['A', 'B', 'C', 'D'][optIdx]}
+                </span>
+                <span className="flex-1 text-white">{opt}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // If in video playback, render VideoPlayer covering screen
   if (playingLesson) {
     return (
@@ -265,57 +344,66 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
         terms={playingLesson.terms || []}
         checkpoints={checkpoints}
         userId={user?.telegram_id || user?.id}
-        onStartQuiz={() => {
-          setPlayingLesson(null);
-          alert("Dars testi Testlar bo'limida boshlanadi!");
+        onStartQuiz={async () => {
+          const qs = await getQuestions(playingLesson.id);
+          if (qs && qs.length > 0) {
+            setLessonQuiz({ lesson: playingLesson, questions: qs, currentQ: 0, answers: {} });
+          } else {
+            alert("Ushbu dars uchun savollar ustoz tomonidan tayyorlanmoqda. Umumiy testlarni Testlar bo'limida yechishingiz mumkin.");
+            setPlayingLesson(null);
+          }
         }}
         onBack={handleBackFromPlayer}
       />
     );
   }
 
-  // Bulletproof Subject Detection (supports Uzbek, Russian, IDs)
+  // Bulletproof Subject Detection (supports Uzbek, Russian, IDs, and dynamic custom subjects)
   const normKey = (activeSubject?.key || activeSubject?.name || '').toString().toLowerCase();
   const isBio = normKey.includes('bio') || normKey.includes('био') || activeSubject?.id === 1;
   const isKimyo = normKey.includes('kim') || normKey.includes('хим') || activeSubject?.id === 2;
-  const isMatem = (!isBio && !isKimyo) || normKey.includes('mat') || normKey.includes('мат') || activeSubject?.id === 3;
+  const isMatem = normKey.includes('mat') || normKey.includes('мат') || activeSubject?.id === 3;
 
-  const currentSubjectKey = isBio ? 'biologiya' : isKimyo ? 'kimyo' : 'matematika';
-  const currentSubjectTitle = isBio ? 'BIOLOGIYA' : isKimyo ? 'KIMYO' : 'MATEMATIKA';
+  const currentSubjectKey = isBio ? 'biologiya' : isKimyo ? 'kimyo' : isMatem ? 'matematika' : (activeSubject?.key || 'subject');
+  const currentSubjectTitle = (activeSubject?.name || (isBio ? 'BIOLOGIYA' : isKimyo ? 'KIMYO' : isMatem ? 'MATEMATIKA' : 'FAN')).toUpperCase();
 
-  // Distinct custom high-res background per subject (Glowing 3D DNA Helix for Bio, NOT heart!)
+  // Distinct custom high-res background & video per subject
   let subjectImage = activeSubject?.image_url;
-  if (!subjectImage || subjectImage.includes('photo-1530026405186') || subjectImage.includes('photo-1635070041078')) {
+  if (!subjectImage || subjectImage.includes('unsplash.com/photo-1530026405186') || subjectImage.includes('photo-1635070041078')) {
     subjectImage = isBio 
-      ? 'https://images.unsplash.com/photo-1628595351029-c2bf17511435?auto=format&fit=crop&w=1200&q=85'
+      ? '/banners/biologiya_banner.jpg'
       : isKimyo
-      ? 'https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?auto=format&fit=crop&w=1200&q=85'
-      : 'https://images.unsplash.com/photo-1633424974203-6c91b2a651ee?auto=format&fit=crop&w=1200&q=85';
+      ? '/banners/kimyo_banner.jpg'
+      : isMatem
+      ? 'https://images.unsplash.com/photo-1633424974203-6c91b2a651ee?auto=format&fit=crop&w=1200&q=85'
+      : 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1200&q=85';
   }
+
+  const subjectVideo = isBio 
+    ? '/banners/biologiya_banner.mp4' 
+    : isKimyo 
+    ? '/banners/kimyo_banner.mp4' 
+    : activeSubject?.video_url || null;
 
   const buttonGradient = isKimyo 
     ? 'from-[#8B5CF6] via-[#A855F7] to-[#7C3AED] shadow-[0_0_25px_rgba(168,85,247,0.45)]'
     : isMatem
     ? 'from-[#007AFF] via-[#0A84FF] to-[#0056D2] shadow-[0_0_25px_rgba(0,122,255,0.45)]'
-    : 'from-[#007AFF] via-[#0A84FF] to-[#0066FF] shadow-[0_0_25px_rgba(0,122,255,0.45)]';
+    : isBio
+    ? 'from-[#007AFF] via-[#0A84FF] to-[#0066FF] shadow-[0_0_25px_rgba(0,122,255,0.45)]'
+    : 'from-[#06B6D4] via-[#0EA5E9] to-[#0284C7] shadow-[0_0_25px_rgba(6,182,212,0.45)]';
 
-  const cardBorderClass = isKimyo 
-    ? 'border-purple-500/35' 
-    : isMatem 
-    ? 'border-blue-500/35' 
-    : 'border-emerald-500/35';
+  const cardBorderClass = activeSubject?.border_class || (
+    isKimyo ? 'border-purple-500/35' : isMatem ? 'border-blue-500/35' : 'border-emerald-500/35'
+  );
 
-  const cardShadowClass = isKimyo 
-    ? 'shadow-[0_8px_32px_rgba(168,85,247,0.22)]' 
-    : isMatem 
-    ? 'shadow-[0_8px_32px_rgba(0,122,255,0.22)]' 
-    : 'shadow-[0_8px_32px_rgba(16,185,129,0.22)]';
+  const cardShadowClass = activeSubject?.shadow_class || (
+    isKimyo ? 'shadow-[0_8px_32px_rgba(168,85,247,0.22)]' : isMatem ? 'shadow-[0_8px_32px_rgba(0,122,255,0.22)]' : 'shadow-[0_8px_32px_rgba(16,185,129,0.22)]'
+  );
 
-  const cardBgGradient = isKimyo 
-    ? 'from-[#19092B] via-[#0D0417] to-[#000000]' 
-    : isMatem 
-    ? 'from-[#05142B] via-[#020A17] to-[#000000]' 
-    : 'from-[#031B13] via-[#020E0A] to-[#000000]';
+  const cardBgGradient = activeSubject?.bg_gradient || (
+    isKimyo ? 'from-[#19092B] via-[#0D0417] to-[#000000]' : isMatem ? 'from-[#05142B] via-[#020A17] to-[#000000]' : 'from-[#031B13] via-[#020E0A] to-[#000000]'
+  );
 
   const handleBack = () => {
     impactLight();
@@ -359,35 +447,32 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
           }}
         >
           {/* Stretched Vertical Card Container: flex-1 min-h-0 fills exact screen height with zero overflow */}
-          <div className="relative w-full flex-1 min-h-0 flex flex-col my-1 overflow-hidden">
-            <AnimatePresence initial={false} custom={slideDirection} mode="popLayout">
+          <div className="relative w-full flex-1 min-h-0 my-1 overflow-hidden">
+            <AnimatePresence initial={false} custom={slideDirection}>
               <motion.div 
                 key={activeSubjectIndex}
                 custom={slideDirection}
                 variants={{
                   enter: (dir) => ({
                     x: dir > 0 ? '100%' : '-100%',
-                    opacity: 0,
-                    scale: 0.96,
+                    opacity: 1,
+                    scale: 1,
                   }),
                   center: {
                     x: 0,
                     opacity: 1,
                     scale: 1,
                     transition: {
-                      x: { type: "spring", stiffness: 280, damping: 30, mass: 0.8 },
-                      opacity: { duration: 0.28, ease: "easeOut" },
-                      scale: { duration: 0.28, ease: "easeOut" }
+                      x: { type: "spring", stiffness: 320, damping: 32, mass: 0.8 },
                     }
                   },
                   exit: (dir) => ({
                     x: dir > 0 ? '-100%' : '100%',
-                    opacity: 0,
-                    scale: 0.96,
+                    opacity: 0.9,
+                    scale: 0.98,
                     transition: {
-                      x: { type: "spring", stiffness: 280, damping: 30, mass: 0.8 },
-                      opacity: { duration: 0.22, ease: "easeIn" },
-                      scale: { duration: 0.22, ease: "easeIn" }
+                      x: { type: "spring", stiffness: 320, damping: 32, mass: 0.8 },
+                      opacity: { duration: 0.28 }
                     }
                   })
                 }}
@@ -403,15 +488,29 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
                   isolation: 'isolate',
                   WebkitMaskImage: '-webkit-radial-gradient(white, black)'
                 }}
-                className={`relative w-full h-full rounded-[28px] overflow-hidden border ${cardBorderClass} ${cardShadowClass} bg-gradient-to-b ${cardBgGradient} cursor-pointer group active:scale-[0.99] transition-transform duration-200 flex flex-col justify-between p-5 sm:p-6 select-none`}
+                className={`absolute inset-0 w-full h-full rounded-[28px] overflow-hidden border ${cardBorderClass} ${cardShadowClass} bg-gradient-to-b ${cardBgGradient} cursor-pointer group active:scale-[0.99] transition-transform duration-200 flex flex-col justify-between p-5 sm:p-6 select-none`}
               >
                 {/* Background Subject Artwork */}
                 <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                  <img 
-                    src={subjectImage} 
-                    alt={currentSubjectTitle} 
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 opacity-80" 
-                  />
+                  {subjectVideo ? (
+                    <video 
+                      key={subjectVideo}
+                      src={subjectVideo} 
+                      poster={subjectImage}
+                      autoPlay 
+                      loop 
+                      muted 
+                      playsInline 
+                      preload="auto"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 opacity-85" 
+                    />
+                  ) : (
+                    <img 
+                      src={subjectImage} 
+                      alt={currentSubjectTitle} 
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 opacity-80" 
+                    />
+                  )}
                   {/* Deep Cinematic Vignette Overlays */}
                   <div className="absolute inset-0 bg-gradient-to-t from-black via-black/45 to-transparent" />
                   <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black" />
@@ -523,32 +622,38 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
             })}
           </div>
 
-          {/* 2x2 Grid of Thematic Categories (Botanika, Zoologiya, Anatomiya, Genetika) */}
+          {/* Grid of Thematic Courses */}
           <div className="grid grid-cols-2 gap-3 mb-6">
-            {courses.slice(0, 4).map((course, idx) => (
-              <div
-                key={course.id || idx}
-                onClick={() => {
-                  impactLight();
-                  setSelectedCourse(course);
-                  setCurrentView('lesson_list');
-                }}
-                className="relative aspect-[4/3] rounded-2xl overflow-hidden border border-white/5 hover:border-emerald-500/40 cursor-pointer active:scale-[0.98] transition-all group shadow-lg"
-              >
-                <img 
-                  src={course.image_url || 'https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?auto=format&fit=crop&w=600&q=80'} 
-                  alt={course.title} 
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
+            {courses.length > 0 ? (
+              courses.map((course, idx) => (
+                <div
+                  key={course.id || idx}
+                  onClick={() => {
+                    impactLight();
+                    setSelectedCourse(course);
+                    setCurrentView('lesson_list');
+                  }}
+                  className="relative aspect-[4/3] rounded-2xl overflow-hidden border border-white/5 hover:border-emerald-500/40 cursor-pointer active:scale-[0.98] transition-all group shadow-lg"
+                >
+                  <img 
+                    src={course.image_url || 'https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?auto=format&fit=crop&w=600&q=80'} 
+                    alt={course.title} 
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
 
-                <div className="absolute bottom-3 left-3 right-3">
-                  <h4 className="text-white font-bold text-sm tracking-wide leading-tight">
-                    {course.title}
-                  </h4>
+                  <div className="absolute bottom-3 left-3 right-3">
+                    <h4 className="text-white font-bold text-sm tracking-wide leading-tight">
+                      {course.title}
+                    </h4>
+                  </div>
                 </div>
+              ))
+            ) : (
+              <div className="col-span-2 p-5 bg-[#1C1C1E] border border-white/5 rounded-2xl text-center text-xs text-[#8E8E93]">
+                Ushbu fanda kurslar mavjud emas
               </div>
-            ))}
+            )}
           </div>
 
           {/* "Ko'rishni davom ettirish" (Continue Watching Section) */}

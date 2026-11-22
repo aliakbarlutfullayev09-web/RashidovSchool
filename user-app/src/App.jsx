@@ -7,7 +7,7 @@ import TestlarPage from './pages/TestlarPage';
 import LeaderboardPage from './pages/LeaderboardPage';
 import ProfilePage from './pages/ProfilePage';
 import { useTelegram } from './hooks/useTelegram';
-import { getUserData } from './api/supabase';
+import { getUserData, syncUserSession } from './api/supabase';
 import { LanguageProvider } from './context/LanguageContext';
 import { Loader2 } from 'lucide-react';
 
@@ -32,6 +32,13 @@ function MainApp() {
   const registerLessonsBackAction = useCallback((action) => {
     // Explicitly wrap in functional setter so React does not execute the action callback during state update
     setLessonsBackAction(() => action);
+  }, []);
+
+  // Back action registered from nested views in TestlarPage
+  const [testlarBackAction, setTestlarBackAction] = useState(null);
+
+  const registerTestlarBackAction = useCallback((action) => {
+    setTestlarBackAction(() => action);
   }, []);
 
   // Viewport / Orientation Detection
@@ -63,6 +70,8 @@ function MainApp() {
       handler = () => setIsTopUpOpen(false);
     } else if (activeTab === 0 && typeof lessonsBackAction === 'function') {
       handler = lessonsBackAction;
+    } else if (activeTab === 1 && typeof testlarBackAction === 'function') {
+      handler = testlarBackAction;
     } else if (activeTab !== 0) {
       handler = () => setActiveTab(0);
     }
@@ -72,7 +81,7 @@ function MainApp() {
     } else {
       setBackButton(false);
     }
-  }, [isVideoPlaying, isTopUpOpen, activeTab, lessonsBackAction, setBackButton]);
+  }, [isVideoPlaying, isTopUpOpen, activeTab, lessonsBackAction, testlarBackAction, setBackButton]);
 
   useEffect(() => {
     let mounted = true;
@@ -88,26 +97,30 @@ function MainApp() {
       const tgUserObj = tgApp?.initDataUnsafe?.user;
       
       const telegramId = urlUserId ? parseInt(urlUserId, 10) : (tgUserObj?.id || tgUser?.id || tgUser?.telegram_id);
-      
-      if (telegramId) {
-        try {
-          const { data, error } = await getUserData(telegramId);
-          if (data) {
-            setDbUser(data);
-            setLoading(false);
-            return;
-          }
-        } catch (e) {
-          console.error(`Crash: ${e.message} | ID: ${telegramId}`);
+      const firstName = tgUserObj?.first_name || tgUser?.first_name || 'Aliakbar Lutfullayev';
+
+      const rawUser = {
+        id: telegramId || 123456789,
+        telegram_id: telegramId || 123456789,
+        first_name: firstName
+      };
+
+      try {
+        const synced = await syncUserSession(rawUser);
+        if (mounted && synced) {
+          setDbUser(synced);
+          setLoading(false);
+          return;
         }
+      } catch (e) {
+        console.warn('Session sync warning:', e);
       }
       
-      const firstName = tgUserObj?.first_name || tgUser?.first_name || 'Aliakbar Lutfullayev';
       setDbUser({
         telegram_id: telegramId || 123456789,
         full_name: firstName,
-        balance: 1850,
-        streak_days: 7,
+        balance: 1000,
+        streak_days: 1,
         class_group: '11-A',
         language: 'uz',
         role: 'student'
@@ -143,7 +156,12 @@ function MainApp() {
           />
         );
       case 1:
-        return <TestlarPage user={dbUser} />;
+        return (
+          <TestlarPage 
+            user={dbUser} 
+            onRegisterBackAction={registerTestlarBackAction}
+          />
+        );
       case 2:
         return <LeaderboardPage user={dbUser} />;
       case 3:
@@ -181,10 +199,16 @@ function MainApp() {
       */}
       {!isVideoPlaying && (
         <Header 
-          showBackButton={!isTelegramWithBack && (activeTab !== 0 || typeof lessonsBackAction === 'function')}
+          showBackButton={!isTelegramWithBack && (
+            (activeTab === 0 && typeof lessonsBackAction === 'function') ||
+            (activeTab === 1 && typeof testlarBackAction === 'function') ||
+            (activeTab > 1)
+          )}
           onBack={() => {
             if (activeTab === 0 && typeof lessonsBackAction === 'function') {
               lessonsBackAction();
+            } else if (activeTab === 1 && typeof testlarBackAction === 'function') {
+              testlarBackAction();
             } else if (activeTab !== 0) {
               setActiveTab(0);
             }
@@ -193,9 +217,9 @@ function MainApp() {
       )}
 
       {/* Main Tab Content */}
-      <main className={`flex-1 no-scrollbar ${
-        activeTab === 0 && !lessonsBackAction 
-          ? 'overflow-hidden' 
+      <main className={`flex-1 min-h-0 no-scrollbar ${
+        (activeTab === 0 && !lessonsBackAction) || (activeTab === 1 && !testlarBackAction) || activeTab === 2
+          ? 'overflow-hidden flex flex-col' 
           : 'overflow-y-auto app-scroll-container'
       }`}>
         {renderTabContent()}

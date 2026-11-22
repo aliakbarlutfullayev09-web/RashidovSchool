@@ -30,7 +30,7 @@ export default function UserList() {
 
     const amount = parseInt(giftAmount, 10);
     const newBalance = (selectedUserForGift.balance || 0) + amount;
-    await api.updateUserBalance(selectedUserForGift.telegram_id, newBalance);
+    await api.updateUserBalance(selectedUserForGift.telegram_id, newBalance, amount);
     
     setUsers(prev => prev.map(u => 
       u.telegram_id === selectedUserForGift.telegram_id ? { ...u, balance: newBalance } : u
