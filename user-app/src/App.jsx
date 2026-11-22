@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Header from './components/Header';
 import TabBar from './components/TabBar';
 import TopUpModal from './components/TopUpModal';
@@ -28,6 +28,11 @@ function MainApp() {
 
   // Back action registered from nested views (e.g. LessonsPage views)
   const [lessonsBackAction, setLessonsBackAction] = useState(null);
+
+  const registerLessonsBackAction = useCallback((action) => {
+    // Explicitly wrap in functional setter so React does not execute the action callback during state update
+    setLessonsBackAction(() => action);
+  }, []);
 
   // Viewport / Orientation Detection
   const [isLandscapeDesktop, setIsLandscapeDesktop] = useState(
@@ -134,7 +139,7 @@ function MainApp() {
           <LessonsPage 
             user={dbUser} 
             onPlayingChange={setIsVideoPlaying}
-            onRegisterBackAction={setLessonsBackAction}
+            onRegisterBackAction={registerLessonsBackAction}
           />
         );
       case 1:
@@ -153,7 +158,7 @@ function MainApp() {
           <LessonsPage 
             user={dbUser} 
             onPlayingChange={setIsVideoPlaying}
-            onRegisterBackAction={setLessonsBackAction}
+            onRegisterBackAction={registerLessonsBackAction}
           />
         );
     }
@@ -188,7 +193,11 @@ function MainApp() {
       )}
 
       {/* Main Tab Content */}
-      <main className="flex-1 overflow-y-auto no-scrollbar app-scroll-container">
+      <main className={`flex-1 no-scrollbar ${
+        activeTab === 0 && !lessonsBackAction 
+          ? 'overflow-hidden' 
+          : 'overflow-y-auto app-scroll-container'
+      }`}>
         {renderTabContent()}
       </main>
 

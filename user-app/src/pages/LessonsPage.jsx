@@ -57,6 +57,7 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
 
   // Carousel touch swipe handling
   const touchStartXRef = useRef(0);
+  const touchStartYRef = useRef(0);
   const savedScrollPositionRef = useRef(0);
 
   // Sync playing state up to App to hide TabBar
@@ -329,9 +330,13 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
 
   return (
     <div 
-      className="w-full min-h-screen text-white select-none flex flex-col"
+      className={`w-full text-white select-none flex flex-col ${
+        currentView === 'carousel' ? 'h-full flex-1 overflow-hidden' : 'min-h-full'
+      }`}
       style={{
-        paddingBottom: 'calc(var(--safe-area-bottom, 0px) + 84px)'
+        paddingBottom: currentView === 'carousel' 
+          ? 'calc(var(--safe-area-bottom, 0px) + 74px)' 
+          : 'calc(var(--safe-area-bottom, 0px) + 88px)'
       }}
     >
       {/* ──────────────────────────────────────────────────────────
@@ -339,75 +344,66 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
       ────────────────────────────────────────────────────────── */}
       {currentView === 'carousel' && (
         <div 
-          className="flex-1 flex flex-col justify-between items-center px-4 pt-2 pb-2 w-full max-w-md mx-auto animate-in fade-in duration-300 overflow-hidden"
+          className="h-full flex-1 flex flex-col justify-between items-center px-4 pt-1 pb-1 w-full max-w-md mx-auto overflow-hidden select-none"
           onTouchStart={(e) => {
             touchStartXRef.current = e.touches[0].clientX;
+            touchStartYRef.current = e.touches[0].clientY;
           }}
           onTouchEnd={(e) => {
             const deltaX = touchStartXRef.current - e.changedTouches[0].clientX;
-            if (deltaX > 45) handleNextSubject();
-            else if (deltaX < -45) handlePrevSubject();
+            const deltaY = Math.abs(touchStartYRef.current - e.changedTouches[0].clientY);
+            if (Math.abs(deltaX) > 35 && Math.abs(deltaX) > deltaY) {
+              if (deltaX > 0) handleNextSubject();
+              else handlePrevSubject();
+            }
           }}
         >
-          {/* Stretched Vertical Card — Fills viewport height cleanly with spring jump & slide transition */}
-          <div 
-            className="relative w-full flex-1 flex flex-col justify-center"
-            style={{
-              minHeight: 'calc(var(--app-viewport-stable-height, 100dvh) - var(--safe-area-top, 16px) - var(--safe-area-bottom, 0px) - 148px)',
-              height: 'calc(var(--app-viewport-stable-height, 100dvh) - var(--safe-area-top, 16px) - var(--safe-area-bottom, 0px) - 148px)'
-            }}
-          >
-            <AnimatePresence mode="wait" custom={slideDirection}>
+          {/* Stretched Vertical Card Container: flex-1 min-h-0 fills exact screen height with zero overflow */}
+          <div className="relative w-full flex-1 min-h-0 flex flex-col my-1 overflow-hidden">
+            <AnimatePresence initial={false} custom={slideDirection} mode="popLayout">
               <motion.div 
                 key={activeSubjectIndex}
                 custom={slideDirection}
                 variants={{
                   enter: (dir) => ({
-                    x: dir > 0 ? 80 : -80,
-                    y: 16,
-                    scale: 0.94,
+                    x: dir > 0 ? '100%' : '-100%',
                     opacity: 0,
-                    rotate: dir > 0 ? 1.5 : -1.5,
+                    scale: 0.96,
                   }),
                   center: {
                     x: 0,
-                    y: 0,
-                    scale: 1,
                     opacity: 1,
-                    rotate: 0,
+                    scale: 1,
                     transition: {
-                      type: "spring",
-                      stiffness: 340,
-                      damping: 26,
-                      mass: 0.75,
+                      x: { type: "spring", stiffness: 280, damping: 30, mass: 0.8 },
+                      opacity: { duration: 0.28, ease: "easeOut" },
+                      scale: { duration: 0.28, ease: "easeOut" }
                     }
                   },
                   exit: (dir) => ({
-                    x: dir > 0 ? -80 : 80,
-                    y: -14,
-                    scale: 0.94,
+                    x: dir > 0 ? '-100%' : '100%',
                     opacity: 0,
-                    rotate: dir > 0 ? -1.5 : 1.5,
+                    scale: 0.96,
                     transition: {
-                      duration: 0.2,
-                      ease: "easeInOut"
+                      x: { type: "spring", stiffness: 280, damping: 30, mass: 0.8 },
+                      opacity: { duration: 0.22, ease: "easeIn" },
+                      scale: { duration: 0.22, ease: "easeIn" }
                     }
                   })
                 }}
                 initial="enter"
                 animate="center"
                 exit="exit"
-                onClick={() => {
+                onClick={(e) => {
+                  e.preventDefault();
                   impactLight();
                   setCurrentView('subject_hub');
                 }}
                 style={{
                   isolation: 'isolate',
-                  WebkitMaskImage: '-webkit-radial-gradient(white, black)',
-                  minHeight: 'calc(var(--app-viewport-stable-height, 100dvh) - var(--safe-area-top, 16px) - var(--safe-area-bottom, 0px) - 148px)',
-                  height: 'calc(var(--app-viewport-stable-height, 100dvh) - var(--safe-area-top, 16px) - var(--safe-area-bottom, 0px) - 148px)'
+                  WebkitMaskImage: '-webkit-radial-gradient(white, black)'
                 }}
-                className={`relative w-full rounded-[28px] overflow-hidden border ${cardBorderClass} ${cardShadowClass} bg-gradient-to-b ${cardBgGradient} cursor-pointer group active:scale-[0.985] flex flex-col justify-between p-6 select-none`}
+                className={`relative w-full h-full rounded-[28px] overflow-hidden border ${cardBorderClass} ${cardShadowClass} bg-gradient-to-b ${cardBgGradient} cursor-pointer group active:scale-[0.99] transition-transform duration-200 flex flex-col justify-between p-5 sm:p-6 select-none`}
               >
                 {/* Background Subject Artwork */}
                 <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -425,23 +421,25 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
                 <SubjectBannerEffects subjectKey={currentSubjectKey} />
 
                 {/* Spacer that expands and keeps button and title at bottom */}
-                <div className="relative z-10 w-full flex-1" />
+                <div className="relative z-10 w-full flex-1 min-h-0" />
 
                 {/* Bottom Card Content: Title & "Boshlash" Button */}
-                <div className="relative z-10 w-full flex flex-col items-start pt-6">
+                <div className="relative z-10 w-full flex flex-col items-start pt-3">
                   {/* Bold Uppercase Subject Title with Modern Display Font */}
-                  <h2 className="text-white font-black text-3xl sm:text-4xl tracking-[0.06em] uppercase mb-4 drop-shadow-[0_4px_16px_rgba(0,0,0,0.9)] font-sans">
+                  <h2 className="text-white font-black text-2xl sm:text-3xl tracking-[0.06em] uppercase mb-3 drop-shadow-[0_4px_16px_rgba(0,0,0,0.9)] font-sans">
                     {currentSubjectTitle}
                   </h2>
 
                   {/* Glowing Action Button: "Boshlash" */}
                   <button
+                    type="button"
                     onClick={(e) => {
+                      e.preventDefault();
                       e.stopPropagation();
                       impactMedium();
                       setCurrentView('subject_hub');
                     }}
-                    className={`w-full bg-gradient-to-r ${buttonGradient} hover:brightness-110 text-white font-bold py-3.5 px-6 rounded-full text-base active:scale-95 transition-all text-center flex items-center justify-center gap-2`}
+                    className={`w-full bg-gradient-to-r ${buttonGradient} hover:brightness-110 text-white font-bold py-3 px-6 rounded-full text-sm sm:text-base active:scale-95 transition-all text-center flex items-center justify-center gap-2 shadow-lg cursor-pointer z-20`}
                   >
                     <span>Boshlash</span>
                   </button>
@@ -451,7 +449,7 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
           </div>
 
           {/* Carousel Pagination Dots */}
-          <div className="flex items-center justify-center gap-2 mt-3 flex-shrink-0">
+          <div className="flex items-center justify-center gap-2 pt-1 pb-1 flex-shrink-0">
             {subjects.map((s, idx) => (
               <button
                 key={s.id || idx}
