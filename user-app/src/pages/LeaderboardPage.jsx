@@ -33,47 +33,9 @@ export default function LeaderboardPage({ user }) {
       </div>
 
       {/* Section Title */}
-      <h2 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-wide mb-2 font-sans z-10">
-        Reyting Tizimi
+      <h2 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-wide font-sans z-10">
+        Reyting
       </h2>
-
-      {/* Subtitle */}
-      <p className="text-xs sm:text-sm text-[#8E8E93] max-w-xs leading-relaxed mb-6 z-10">
-        O‘quvchilar o‘rtasida umumrespublika reytingi, bilim daraxti musobaqalari va oylik qimmatbaho sovg‘alar tez kunlarda ishga tushadi!
-      </p>
-
-      {/* Feature Preview Cards */}
-      <div className="w-full space-y-2.5 max-w-sm z-10">
-        <div className="bg-[#1C1C1E] border border-white/5 rounded-2xl p-3.5 flex items-center gap-3.5 text-left">
-          <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-lg flex-shrink-0">
-            🎁
-          </div>
-          <div className="flex-1 min-w-0">
-            <h4 className="text-white font-bold text-xs">Oylik sovg'alar</h4>
-            <p className="text-[11px] text-[#8E8E93]">Eng yuqori ball to‘plagan o‘quvchilarga Telegram sovg‘alari</p>
-          </div>
-        </div>
-
-        <div className="bg-[#1C1C1E] border border-white/5 rounded-2xl p-3.5 flex items-center gap-3.5 text-left">
-          <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-lg flex-shrink-0">
-            🌳
-          </div>
-          <div className="flex-1 min-w-0">
-            <h4 className="text-white font-bold text-xs">Bilim daraxti</h4>
-            <p className="text-[11px] text-[#8E8E93]">Niholdan ulkan daraxtgacha darajalar va o‘sish tizimi</p>
-          </div>
-        </div>
-
-        <div className="bg-[#1C1C1E] border border-white/5 rounded-2xl p-3.5 flex items-center gap-3.5 text-left">
-          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-lg flex-shrink-0">
-            🧠
-          </div>
-          <div className="flex-1 min-w-0">
-            <h4 className="text-white font-bold text-xs">Neyron ballari</h4>
-            <p className="text-[11px] text-[#8E8E93]">Darslarni ko‘rish va testlarni muvaffaqiyatli topshirish orqali to‘planadi</p>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
