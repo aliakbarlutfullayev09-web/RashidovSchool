@@ -1,38 +1,66 @@
-import React, { useState, useEffect } from 'react';
-import TreeOfKnowledge from '../components/TreeOfKnowledge';
-import BottomSheet from '../components/BottomSheet';
+import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import VideoPlayer from '../components/VideoPlayer';
+import RashidovLogo from '../components/RashidovLogo';
+import SubjectBannerEffects from '../components/SubjectBannerEffects';
 import { getSubjects, getCourses, getLessons, getProgress, getVideoCheckpoints } from '../api/supabase';
-import { mockCourses, mockLessons, mockProgress } from '../mock/data';
-import { Play, CheckCircle2, Lock, Trophy, Clock, HelpCircle, Sparkles } from 'lucide-react';
+import { 
+  Play, Search, X, Bookmark, BookmarkCheck, Clock, 
+  ChevronRight, MoreHorizontal, ArrowLeft 
+} from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { useHaptic } from '../hooks/useHaptic';
 
-const DEFAULT_SUBJECT_CHIPS = [
-  { id: 1, name: 'Biologiya', emoji: '🧬' },
-  { id: 2, name: 'Kimyo', emoji: '🧪' },
-  { id: 3, name: 'Matematika', emoji: '📐' }
-];
-
-export default function LessonsPage({ user }) {
+export default function LessonsPage({ user, onPlayingChange }) {
   const { t } = useLanguage();
-  const { selectionChanged, impactLight } = useHaptic();
+  const { selectionChanged, impactLight, impactMedium } = useHaptic();
 
-  const [subjects, setSubjects] = useState(DEFAULT_SUBJECT_CHIPS);
-  const [activeSubjectId, setActiveSubjectId] = useState(1);
+  // Navigation views: 'carousel' (Screen 1) | 'subject_hub' (Screen 2) | 'lesson_list' (Screen 3)
+  const [currentView, setCurrentView] = useState('carousel');
+
+  // Subjects & courses
+  const [subjects, setSubjects] = useState([]);
+  const [activeSubjectIndex, setActiveSubjectIndex] = useState(0);
+  const [slideDirection, setSlideDirection] = useState(1); // 1 = next, -1 = prev (spring jump & slide transition)
+  const [selectedCourse, setSelectedCourse] = useState(null); // Category filter (e.g. Botanika)
+
   const [courses, setCourses] = useState([]);
   const [lessons, setLessons] = useState([]);
   const [progressMap, setProgressMap] = useState({});
   const [loading, setLoading] = useState(true);
 
-  // Lesson Preview Bottom Sheet state
-  const [bottomSheetOpen, setBottomSheetOpen] = useState(false);
-  const [selectedLesson, setSelectedLesson] = useState(null);
+  // Search & Filter state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeFilter, setActiveFilter] = useState('all'); // 'all' | 'unwatched' | 'continue' | 'saved'
+  const [savedLessonIds, setSavedLessonIds] = useState(() => {
+    try {
+      const saved = localStorage.getItem('rb_saved_lessons');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Last watched lesson for "Ko'rishni davom ettirish" card
+  const [lastWatchedLesson, setLastWatchedLesson] = useState(null);
+  const [lastWatchedPct, setLastWatchedPct] = useState(0);
 
   // Video playback state
   const [playingLesson, setPlayingLesson] = useState(null);
   const [checkpoints, setCheckpoints] = useState([]);
 
+  // Carousel touch swipe handling
+  const touchStartXRef = useRef(0);
+  const savedScrollPositionRef = useRef(0);
+
+  // Sync playing state up to App to hide TabBar
+  useEffect(() => {
+    if (onPlayingChange) {
+      onPlayingChange(!!playingLesson);
+    }
+  }, [playingLesson, onPlayingChange]);
+
+  // Load subjects on mount
   useEffect(() => {
     loadSubjects();
   }, []);
@@ -42,318 +70,684 @@ export default function LessonsPage({ user }) {
       const dbSubjects = await getSubjects();
       if (dbSubjects && dbSubjects.length > 0) {
         setSubjects(dbSubjects);
-        setActiveSubjectId(prev => (dbSubjects.some(s => s.id === prev) ? prev : dbSubjects[0].id));
       }
     } catch (e) {
-      console.warn("Failed to load dynamic subjects:", e);
+      console.warn("Error loading subjects:", e);
     }
   };
 
+  const activeSubject = subjects[activeSubjectIndex] || subjects[0] || { 
+    id: 1, 
+    key: 'biologiya', 
+    name: 'Biologiya',
+    bg_gradient: 'from-[#031B13] via-[#020E0A] to-[#000000]',
+    border_class: 'border-emerald-500/35',
+    shadow_class: 'shadow-[0_0_50px_rgba(16,185,129,0.22)]'
+  };
+
+  // Load courses & lessons whenever active subject changes
   useEffect(() => {
     loadData();
-  }, [user, activeSubjectId]);
+  }, [activeSubject?.id, user]);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      // 1. Fetch courses for subject
-      const dbCourses = await getCourses(activeSubjectId);
-      const activeCourses = (dbCourses && dbCourses.length > 0) ? dbCourses : mockCourses;
-      setCourses(activeCourses);
+      const dbCourses = await getCourses(activeSubject.id);
+      setCourses(dbCourses || []);
 
-      // 2. Fetch lessons
       let allLessons = [];
-      for (const course of activeCourses) {
+      for (const course of (dbCourses || [])) {
         const cLessons = await getLessons(course.id);
         allLessons = [...allLessons, ...(cLessons || [])];
       }
-      if (allLessons.length === 0) {
-        allLessons = mockLessons;
-      }
       setLessons(allLessons);
 
-      // 3. Fetch user progress
-      if (user?.telegram_id || user?.id) {
-        const userUid = user.telegram_id || user.id;
+      // User progress
+      const userUid = user?.telegram_id || user?.id;
+      if (userUid) {
         const prog = await getProgress(userUid);
         const pMap = {};
         if (prog && prog.length > 0) {
           prog.forEach(p => { pMap[p.lesson_id] = p; });
-        } else {
-          mockProgress.forEach(p => { pMap[p.lesson_id] = p; });
         }
         setProgressMap(pMap);
-      } else {
-        const pMap = {};
-        mockProgress.forEach(p => { pMap[p.lesson_id] = p; });
-        setProgressMap(pMap);
       }
+
+      // Check last watched lesson in localStorage
+      findLastWatchedLesson(allLessons);
     } catch (err) {
-      console.error("Error loading lessons data:", err);
-      setCourses(mockCourses);
-      setLessons(mockLessons);
+      console.error("Error loading subject data:", err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSubjectChange = (subjectId) => {
-    if (activeSubjectId !== subjectId) {
-      selectionChanged();
-      setActiveSubjectId(subjectId);
+  const findLastWatchedLesson = (allLessons) => {
+    if (!allLessons || allLessons.length === 0) return;
+    for (const l of allLessons) {
+      const raw = localStorage.getItem(`rb_watch_progress_${user?.telegram_id || 'guest'}_${l.id}`);
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed.maxWatchedSeconds > 0) {
+            setLastWatchedLesson(l);
+            setLastWatchedPct(Math.min(100, Math.round((parsed.maxWatchedSeconds / 600) * 100)));
+            return;
+          }
+        } catch {}
+      }
+    }
+    if (allLessons.length > 0) {
+      setLastWatchedLesson(allLessons[0]);
+      setLastWatchedPct(40);
     }
   };
 
-  const handleLessonClick = (lesson) => {
+  const handleNextSubject = () => {
     impactLight();
-    setSelectedLesson(lesson);
-    setBottomSheetOpen(true);
+    selectionChanged();
+    setSlideDirection(1);
+    setActiveSubjectIndex(prev => (prev + 1) % (subjects.length || 1));
   };
 
-  const handleStartVideo = async (lesson) => {
-    setBottomSheetOpen(false);
+  const handlePrevSubject = () => {
+    impactLight();
+    selectionChanged();
+    setSlideDirection(-1);
+    setActiveSubjectIndex(prev => (prev - 1 + subjects.length) % (subjects.length || 1));
+  };
+
+  const toggleBookmark = (e, lessonId) => {
+    e.stopPropagation();
+    impactLight();
+    setSavedLessonIds(prev => {
+      const updated = prev.includes(lessonId) 
+        ? prev.filter(id => id !== lessonId)
+        : [...prev, lessonId];
+      localStorage.setItem('rb_saved_lessons', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const handleStartLesson = async (lesson) => {
+    impactLight();
+    savedScrollPositionRef.current = window.scrollY;
     try {
       const cps = await getVideoCheckpoints(lesson.id);
-      setCheckpoints(cps && cps.length > 0 ? cps : [
-        { id: 1, trigger_time_sec: 5, question: "Hujayraning energetik stansiyasi nima?", options: ["Ribosoma", "Mitoxondriya", "Xloroplast", "Golji"], correct_option: "Mitoxondriya", rewind_time_sec: 0 }
-      ]);
+      setCheckpoints(cps && cps.length > 0 ? cps : []);
     } catch {
       setCheckpoints([]);
     }
     setPlayingLesson(lesson);
   };
 
-  // Calculate overall stats for Tree of Knowledge
-  const totalLessons = lessons.length || 1;
-  const completedLessons = Object.values(progressMap).filter(p => p?.stars > 0).length;
+  const handleBackFromPlayer = () => {
+    setPlayingLesson(null);
+    setTimeout(() => {
+      window.scrollTo({ top: savedScrollPositionRef.current, behavior: 'instant' });
+    }, 50);
+  };
 
+  // Filter lessons
+  const normalizedQuery = searchQuery.trim().toLowerCase().replace(/[`'‘’ʼ]/g, "'");
+
+  const filteredLessons = lessons.filter(lesson => {
+    if (selectedCourse && lesson.course_id !== selectedCourse.id) {
+      return false;
+    }
+    if (normalizedQuery) {
+      const title = (lesson.title || '').toLowerCase().replace(/[`'‘’ʼ]/g, "'");
+      const category = (lesson.category_name || '').toLowerCase().replace(/[`'‘’ʼ]/g, "'");
+      if (!title.includes(normalizedQuery) && !category.includes(normalizedQuery)) {
+        return false;
+      }
+    }
+    const prog = progressMap[lesson.id];
+    const hasWatched = prog && prog.stars > 0;
+    const isSaved = savedLessonIds.includes(lesson.id);
+
+    if (activeFilter === 'unwatched') return !hasWatched;
+    if (activeFilter === 'continue') {
+      const local = localStorage.getItem(`rb_watch_progress_${user?.telegram_id || 'guest'}_${lesson.id}`);
+      return !!local && !hasWatched;
+    }
+    if (activeFilter === 'saved') return isSaved;
+
+    return true;
+  });
+
+  // If in video playback, render VideoPlayer covering screen
   if (playingLesson) {
     return (
       <VideoPlayer
         videoUrl={playingLesson.video_url}
         lessonId={playingLesson.id}
         lessonTitle={playingLesson.title}
+        terms={playingLesson.terms || []}
         checkpoints={checkpoints}
+        userId={user?.telegram_id || user?.id}
         onStartQuiz={() => {
           setPlayingLesson(null);
-          alert("Dars testi botda yoki Testlar bo'limida boshlanadi!");
+          alert("Dars testi Testlar bo'limida boshlanadi!");
         }}
-        onBack={() => setPlayingLesson(null)}
+        onBack={handleBackFromPlayer}
       />
     );
   }
 
+  // Bulletproof Subject Detection (supports Uzbek, Russian, IDs)
+  const normKey = (activeSubject?.key || activeSubject?.name || '').toString().toLowerCase();
+  const isBio = normKey.includes('bio') || normKey.includes('био') || activeSubject?.id === 1;
+  const isKimyo = normKey.includes('kim') || normKey.includes('хим') || activeSubject?.id === 2;
+  const isMatem = (!isBio && !isKimyo) || normKey.includes('mat') || normKey.includes('мат') || activeSubject?.id === 3;
+
+  const currentSubjectKey = isBio ? 'biologiya' : isKimyo ? 'kimyo' : 'matematika';
+  const currentSubjectTitle = isBio ? 'BIOLOGIYA' : isKimyo ? 'KIMYO' : 'MATEMATIKA';
+
+  // Distinct custom high-res background per subject (NO anatomical heart model on biology!)
+  const subjectImage = activeSubject?.image_url || (isBio 
+    ? 'https://images.unsplash.com/photo-1530026405186-ed1f139313f8?auto=format&fit=crop&w=1200&q=85'
+    : isKimyo
+    ? 'https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?auto=format&fit=crop&w=1200&q=85'
+    : 'https://images.unsplash.com/photo-1633424974203-6c91b2a651ee?auto=format&fit=crop&w=1200&q=85');
+
+  const buttonGradient = isKimyo 
+    ? 'from-[#8B5CF6] via-[#A855F7] to-[#7C3AED] shadow-[0_0_25px_rgba(168,85,247,0.45)]'
+    : isMatem
+    ? 'from-[#007AFF] via-[#0A84FF] to-[#0056D2] shadow-[0_0_25px_rgba(0,122,255,0.45)]'
+    : 'from-[#007AFF] via-[#0A84FF] to-[#0066FF] shadow-[0_0_25px_rgba(0,122,255,0.45)]';
+
+  const cardBorderClass = isKimyo 
+    ? 'border-purple-500/35' 
+    : isMatem 
+    ? 'border-blue-500/35' 
+    : 'border-emerald-500/35';
+
+  const cardShadowClass = isKimyo 
+    ? 'shadow-[0_8px_32px_rgba(168,85,247,0.22)]' 
+    : isMatem 
+    ? 'shadow-[0_8px_32px_rgba(0,122,255,0.22)]' 
+    : 'shadow-[0_8px_32px_rgba(16,185,129,0.22)]';
+
+  const cardBgGradient = isKimyo 
+    ? 'from-[#19092B] via-[#0D0417] to-[#000000]' 
+    : isMatem 
+    ? 'from-[#05142B] via-[#020A17] to-[#000000]' 
+    : 'from-[#031B13] via-[#020E0A] to-[#000000]';
+
   return (
-    <div className="w-full pb-28 pt-2 px-4 max-w-5xl mx-auto">
+    <div className="w-full min-h-screen pb-24 px-4 max-w-md mx-auto text-white select-none flex flex-col">
       
-      {/* Hero Banner: Interactive Tree of Knowledge */}
-      <TreeOfKnowledge
-        completedCount={completedLessons}
-        totalCount={totalLessons}
-        onContinue={() => {
-          const nextLesson = lessons.find(l => !progressMap[l.id]?.stars) || lessons[0];
-          if (nextLesson) handleLessonClick(nextLesson);
-        }}
-      />
+      {/* ──────────────────────────────────────────────────────────
+          SCREEN 1: HERO SUBJECT CAROUSEL BANNER (STRETCHED & THEMED)
+      ────────────────────────────────────────────────────────── */}
+      {currentView === 'carousel' && (
+        <div 
+          className="flex-1 flex flex-col justify-between items-center pt-[calc(env(safe-area-inset-top,16px)+6px)] pb-3 animate-in fade-in duration-300 overflow-hidden"
+          onTouchStart={(e) => {
+            touchStartXRef.current = e.touches[0].clientX;
+          }}
+          onTouchEnd={(e) => {
+            const deltaX = touchStartXRef.current - e.changedTouches[0].clientX;
+            if (deltaX > 45) handleNextSubject();
+            else if (deltaX < -45) handlePrevSubject();
+          }}
+        >
+          {/* Top Brand Logo (Original Official Logo) */}
+          <div className="mb-2.5 flex-shrink-0">
+            <RashidovLogo className="h-8" />
+          </div>
 
-      {/* Sticky Subject Chips Row */}
-      <div className="sticky top-[72px] z-20 bg-[#000000]/90 backdrop-blur-md py-2.5 -mx-4 px-4 mb-4 border-b border-white/[0.04]">
-        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
-          {subjects.map((chip) => {
-            const isActive = activeSubjectId === chip.id;
-            const emoji = chip.emoji || chip.icon || (chip.name?.toLowerCase().includes('kimyo') ? '🧪' : chip.name?.toLowerCase().includes('matem') ? '📐' : '🧬');
-            return (
-              <button
-                key={chip.id}
-                onClick={() => handleSubjectChange(chip.id)}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold transition-all select-none whitespace-nowrap active:scale-95 ${
-                  isActive
-                    ? 'bg-[#007AFF] text-white shadow-lg shadow-blue-500/20'
-                    : 'bg-[#1C1C1E] border border-white/5 text-[#8E8E93] hover:text-white'
-                }`}
+          {/* Stretched Vertical Card — Fills viewport height cleanly with spring jump & slide transition */}
+          <div className="relative w-full flex-1 min-h-[calc(100dvh-180px)] max-h-[calc(100dvh-165px)] flex items-stretch">
+            <AnimatePresence mode="wait" custom={slideDirection}>
+              <motion.div 
+                key={activeSubjectIndex}
+                custom={slideDirection}
+                variants={{
+                  enter: (dir) => ({
+                    x: dir > 0 ? 85 : -85,
+                    y: 18,
+                    scale: 0.93,
+                    opacity: 0,
+                    rotate: dir > 0 ? 1.5 : -1.5,
+                  }),
+                  center: {
+                    x: 0,
+                    y: 0,
+                    scale: 1,
+                    opacity: 1,
+                    rotate: 0,
+                    transition: {
+                      type: "spring",
+                      stiffness: 340,
+                      damping: 26,
+                      mass: 0.75,
+                    }
+                  },
+                  exit: (dir) => ({
+                    x: dir > 0 ? -85 : 85,
+                    y: -14,
+                    scale: 0.93,
+                    opacity: 0,
+                    rotate: dir > 0 ? -1.5 : 1.5,
+                    transition: {
+                      duration: 0.2,
+                      ease: "easeInOut"
+                    }
+                  })
+                }}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                onClick={() => {
+                  impactLight();
+                  setCurrentView('subject_hub');
+                }}
+                style={{
+                  isolation: 'isolate',
+                  WebkitMaskImage: '-webkit-radial-gradient(white, black)',
+                  transform: 'translateZ(0)',
+                }}
+                className={`relative w-full h-full rounded-[28px] overflow-hidden border ${cardBorderClass} ${cardShadowClass} bg-gradient-to-b ${cardBgGradient} cursor-pointer group active:scale-[0.985] flex flex-col justify-between p-6 select-none`}
               >
-                <span>{emoji}</span>
-                <span>{chip.name}</span>
-              </button>
-            );
-          })}
+                {/* Background Subject Artwork */}
+                <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                  <img 
+                    src={subjectImage} 
+                    alt={currentSubjectTitle} 
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 opacity-80" 
+                  />
+                  {/* Deep Cinematic Vignette Overlays */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/45 to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black" />
+                </div>
+
+                {/* ── DISTINCT SUBJECT ANIMATION EFFECTS (BIOLOGY / CHEMISTRY / MATH) ── */}
+                <SubjectBannerEffects subjectKey={currentSubjectKey} />
+
+                {/* Spacer */}
+                <div className="relative z-10 w-full" />
+
+                {/* Bottom Card Content: Title & "Boshlash" Button */}
+                <div className="relative z-10 w-full flex flex-col items-start pt-6">
+                  {/* Bold Uppercase Subject Title with Modern Display Font */}
+                  <h2 className="text-white font-black text-3xl sm:text-4xl tracking-[0.06em] uppercase mb-4 drop-shadow-[0_4px_16px_rgba(0,0,0,0.9)] font-sans">
+                    {currentSubjectTitle}
+                  </h2>
+
+                  {/* Glowing Action Button: "Boshlash" */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      impactMedium();
+                      setCurrentView('subject_hub');
+                    }}
+                    className={`w-full bg-gradient-to-r ${buttonGradient} hover:brightness-110 text-white font-bold py-3.5 px-6 rounded-full text-base active:scale-95 transition-all text-center flex items-center justify-center gap-2`}
+                  >
+                    <span>Boshlash</span>
+                  </button>
+                </div>
+              </motion.div>
+            </AnimatePresence>
+          </div>
+
+          {/* Carousel Pagination Dots */}
+          <div className="flex items-center justify-center gap-2 mt-3 flex-shrink-0">
+            {subjects.map((s, idx) => (
+              <button
+                key={s.id || idx}
+                onClick={() => {
+                  impactLight();
+                  setSlideDirection(idx >= activeSubjectIndex ? 1 : -1);
+                  setActiveSubjectIndex(idx);
+                }}
+                className={`h-1.5 rounded-full transition-all duration-300 ${
+                  activeSubjectIndex === idx 
+                    ? 'w-6 bg-white shadow-[0_0_8px_white]' 
+                    : 'w-1.5 bg-white/30'
+                }`}
+                aria-label={`Fan ${idx + 1}`}
+              />
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Modular YouTube-Style Lesson Feed */}
-      <div className="space-y-8">
-        {courses.map((course, cIdx) => {
-          const courseLessons = lessons.filter(l => l.course_id === course.id);
-          const courseCompletedCount = courseLessons.filter(l => progressMap[l.id]?.stars > 0).length;
-          const courseProgressPct = Math.round((courseCompletedCount / (courseLessons.length || 1)) * 100);
+      {/* ──────────────────────────────────────────────────────────
+          SCREEN 2: SUBJECT HUB (2x2 CATEGORIES & RECENT LESSON)
+      ────────────────────────────────────────────────────────── */}
+      {currentView === 'subject_hub' && (
+        <div className="pt-[calc(env(safe-area-inset-top,16px)+8px)] animate-in fade-in duration-300">
+          
+          {/* Top Telegram Bar with Back Button */}
+          <div className="flex items-center justify-between py-2 mb-2">
+            <button
+              onClick={() => {
+                impactLight();
+                setCurrentView('carousel');
+              }}
+              className="w-8 h-8 rounded-full bg-[#1C1C1E] border border-white/5 flex items-center justify-center text-white active:scale-95 transition-transform"
+              title="Orqaga"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
 
-          return (
-            <div key={course.id || cIdx} className="space-y-4">
-              
-              {/* Module Header with Progress */}
-              <div className="bg-[#1C1C1E] border border-white/5 p-4 rounded-2xl flex items-center justify-between">
-                <div>
-                  <h3 className="text-white font-bold text-sm leading-tight">
-                    {cIdx + 1}-Modul: {course.title}
-                  </h3>
-                  <span className="text-[11px] text-[#8E8E93]">
-                    {courseCompletedCount}/{courseLessons.length} dars topshirildi
-                  </span>
-                </div>
-                <div className="text-right">
-                  <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full">
-                    {courseProgressPct}%
-                  </span>
-                </div>
-              </div>
+            <span className="text-xs font-bold text-white/90">
+              {activeSubject.name}
+            </span>
 
-              {/* Lesson Cards in Module */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {courseLessons.map((lesson, lIdx) => {
-                  const prog = progressMap[lesson.id];
-                  const isLocked = prog?.is_unlocked === false && !lesson.is_free;
-                  const isCompleted = prog?.stars > 0;
-                  const score = prog?.score || 95;
+            <div className="w-8 h-8 flex items-center justify-center text-[#8E8E93]">
+              <MoreHorizontal className="w-4 h-4" />
+            </div>
+          </div>
 
-                  return (
-                    <div
-                      key={lesson.id || lIdx}
-                      onClick={() => handleLessonClick(lesson)}
-                      className="bg-[#1C1C1E] border border-white/5 hover:border-white/10 rounded-3xl overflow-hidden p-3 transition-all cursor-pointer active:scale-[0.98] group flex flex-col justify-between"
-                    >
-                      {/* 16:9 Thumbnail Area */}
-                      <div className="relative w-full aspect-video rounded-2xl overflow-hidden bg-[#2C2C2E] mb-3">
-                        {lesson.thumbnail_url ? (
-                          <img 
-                            src={lesson.thumbnail_url} 
-                            alt={lesson.title} 
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
-                          />
-                        ) : (
-                          <div className="w-full h-full bg-gradient-to-tr from-blue-900/40 to-indigo-900/30 flex items-center justify-center">
-                            <span className="text-3xl">🧬</span>
-                          </div>
-                        )}
+          {/* Centered Brand Logo */}
+          <div className="mb-4">
+            <RashidovLogo className="h-8" />
+          </div>
 
-                        {/* Top-Left: Lesson Number Badge */}
-                        <div className="absolute top-2 left-2 bg-black/75 backdrop-blur-md text-white text-[10px] font-bold px-2 py-0.5 rounded-md">
-                          {lesson.order_index || lIdx + 1}-Dars
-                        </div>
+          {/* Search Input Bar */}
+          <div className="relative mb-3">
+            <Search className="w-4 h-4 text-[#8E8E93] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                if (e.target.value.trim().length > 0) {
+                  setCurrentView('lesson_list');
+                }
+              }}
+              placeholder="Mavzu, termin yoki paragraf"
+              className="w-full bg-[#1C1C1E] border border-white/5 focus:border-[#007AFF] rounded-full py-2.5 pl-10 pr-4 text-xs text-white placeholder-[#8E8E93] outline-none transition-colors"
+            />
+          </div>
 
-                        {/* Bottom-Right: Duration Badge */}
-                        <div className="absolute bottom-2 right-2 bg-black/85 backdrop-blur-md text-white text-[10px] font-mono px-1.5 py-0.5 rounded flex items-center gap-1">
-                          <Clock className="w-2.5 h-2.5 text-[#8E8E93]" />
-                          <span>{lesson.duration || '14:20'}</span>
-                        </div>
-
-                        {/* Bottom-Left Status Badges */}
-                        <div className="absolute bottom-2 left-2">
-                          {isCompleted ? (
-                            <span className="bg-emerald-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded backdrop-blur-md flex items-center gap-1">
-                              <CheckCircle2 className="w-3 h-3" /> {score}%
-                            </span>
-                          ) : lesson.is_free ? (
-                            <span className="bg-emerald-600/90 text-white text-[10px] font-bold px-2 py-0.5 rounded backdrop-blur-md">
-                              Bepul
-                            </span>
-                          ) : isLocked ? (
-                            <span className="bg-black/80 text-white text-[10px] font-bold px-2 py-0.5 rounded backdrop-blur-md flex items-center gap-1">
-                              <Lock className="w-2.5 h-2.5" /> A'zolik
-                            </span>
-                          ) : null}
-                        </div>
-                      </div>
-
-                      {/* Card Body */}
-                      <div className="flex flex-col flex-1 justify-between px-1">
-                        <div>
-                          <h4 className="text-white font-bold text-sm leading-snug line-clamp-2 mb-1">
-                            {lesson.title}
-                          </h4>
-                          <p className="text-[11px] text-[#8E8E93] mb-3">
-                            Rashidov Biologiya • {lesson.test_question_count || 10} ta test savoli
-                          </p>
-                        </div>
-
-                        {/* Action Pill */}
-                        <div className="pt-2 border-t border-white/[0.04] flex items-center justify-between">
-                          {isCompleted ? (
-                            <span className="text-[11px] font-semibold text-emerald-400 flex items-center gap-1">
-                              ✓ Topshirildi
-                            </span>
-                          ) : isLocked ? (
-                            <span className="text-[11px] font-semibold text-[#8E8E93] flex items-center gap-1">
-                              🔒 Qulflangan
-                            </span>
-                          ) : (
-                            <span className="text-[11px] font-bold text-[#007AFF] flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
-                              <span>▶️ Boshlash</span>
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Module Boss Card — Module Mock Test */}
-              <div className="mt-4 bg-gradient-to-r from-amber-500/10 via-[#1C1C1E] to-emerald-500/10 border border-amber-500/30 rounded-3xl p-4 flex items-center justify-between shadow-lg">
-                <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-xl flex-shrink-0">
-                    🏆
-                  </div>
-                  <div>
-                    <h4 className="text-white font-bold text-xs leading-tight">
-                      {cIdx + 1}-Modul Yakuniy Mock Testi
-                    </h4>
-                    <span className="text-[11px] text-[#8E8E93]">
-                      20 ta savol • 25 daqiqa • Sertifikat
-                    </span>
-                  </div>
-                </div>
-
+          {/* Filter Chips */}
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar mb-5 py-1">
+            {[
+              { id: 'all', label: 'Barchasi' },
+              { id: 'unwatched', label: 'Ko‘rilmagan' },
+              { id: 'continue', label: 'Qaytarish' },
+              { id: 'saved', label: 'Saqlangan' }
+            ].map((tab) => {
+              const isActive = activeFilter === tab.id;
+              return (
                 <button
+                  key={tab.id}
                   onClick={() => {
                     impactLight();
-                    if (courseCompletedCount < courseLessons.length) {
-                      alert("Ushbu mock testni ochish uchun avval barcha modul darslarini topshiring!");
-                    } else {
-                      alert("Modul Yakuniy Mock Testi boshlanmoqda...");
+                    setActiveFilter(tab.id);
+                    if (tab.id !== 'all') {
+                      setCurrentView('lesson_list');
                     }
                   }}
-                  className={`px-3 py-2 rounded-xl text-xs font-bold transition-all ${
-                    courseCompletedCount >= courseLessons.length
-                      ? 'bg-amber-500 hover:bg-amber-400 text-black shadow-lg shadow-amber-500/20'
-                      : 'bg-[#2C2C2E] text-[#8E8E93] cursor-not-allowed'
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap active:scale-95 ${
+                    isActive
+                      ? 'bg-[#007AFF] text-white shadow-md shadow-blue-500/20'
+                      : 'bg-[#1C1C1E] border border-white/5 text-[#8E8E93] hover:text-white'
                   }`}
                 >
-                  {courseCompletedCount >= courseLessons.length ? 'Boshlash' : '🔒 Qulflangan'}
+                  {tab.label}
                 </button>
+              );
+            })}
+          </div>
+
+          {/* 2x2 Grid of Thematic Categories (Botanika, Zoologiya, Anatomiya, Genetika) */}
+          <div className="grid grid-cols-2 gap-3 mb-6">
+            {courses.slice(0, 4).map((course, idx) => (
+              <div
+                key={course.id || idx}
+                onClick={() => {
+                  impactLight();
+                  setSelectedCourse(course);
+                  setCurrentView('lesson_list');
+                }}
+                className="relative aspect-[4/3] rounded-2xl overflow-hidden border border-white/5 hover:border-emerald-500/40 cursor-pointer active:scale-[0.98] transition-all group shadow-lg"
+              >
+                <img 
+                  src={course.image_url || 'https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?auto=format&fit=crop&w=600&q=80'} 
+                  alt={course.title} 
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
+
+                <div className="absolute bottom-3 left-3 right-3">
+                  <h4 className="text-white font-bold text-sm tracking-wide leading-tight">
+                    {course.title}
+                  </h4>
+                </div>
               </div>
+            ))}
+          </div>
 
+          {/* "Ko'rishni davom ettirish" (Continue Watching Section) */}
+          {lastWatchedLesson && (
+            <div className="mb-4">
+              <span className="text-xs font-bold text-[#8E8E93] block mb-2 px-1">
+                Ko‘rishni davom ettirish
+              </span>
+
+              <div
+                onClick={() => handleStartLesson(lastWatchedLesson)}
+                className="bg-[#1C1C1E] border border-white/5 hover:border-white/10 rounded-2xl p-3 flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all shadow-md"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-[#2C2C2E] flex-shrink-0">
+                    <img 
+                      src={lastWatchedLesson.thumbnail_url || 'https://images.unsplash.com/photo-1490750967868-88aa4486c946?auto=format&fit=crop&w=400&q=80'} 
+                      alt="" 
+                      className="w-full h-full object-cover" 
+                    />
+                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                      <Play className="w-4 h-4 fill-white text-white ml-0.5" />
+                    </div>
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <h5 className="text-white font-bold text-xs truncate leading-snug mb-1">
+                      {lastWatchedLesson.title}
+                    </h5>
+
+                    <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-emerald-400 rounded-full" 
+                        style={{ width: `${lastWatchedPct || 40}%` }} 
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <ChevronRight className="w-4 h-4 text-[#8E8E93] flex-shrink-0 ml-2" />
+              </div>
             </div>
-          );
-        })}
-      </div>
+          )}
 
-      {/* Lesson Preview Bottom Sheet */}
-      <BottomSheet
-        isOpen={bottomSheetOpen}
-        onClose={() => setBottomSheetOpen(false)}
-        lesson={selectedLesson}
-        progress={selectedLesson ? progressMap[selectedLesson.id] : null}
-        onWatch={handleStartVideo}
-        onRewatch={handleStartVideo}
-        onRetake={() => {
-          setBottomSheetOpen(false);
-          alert("Testni qayta topshirish botda boshlanadi!");
-        }}
-        onAnalysis={() => {
-          setBottomSheetOpen(false);
-          alert("Ushbu dars bo'yicha xatolar tahlili Profil bo'limida mavjud.");
-        }}
-      />
+          {/* Shortcut: "Biologiyaning barcha mavzulari" */}
+          <div
+            onClick={() => {
+              impactLight();
+              setSelectedCourse(null);
+              setCurrentView('lesson_list');
+            }}
+            className="bg-[#1C1C1E] border border-white/5 hover:border-white/10 rounded-2xl p-3 flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all mb-4"
+          >
+            <div className="flex items-center gap-2.5 text-xs font-semibold text-white/90">
+              <Search className="w-4 h-4 text-[#8E8E93]" />
+              <span>Biologiyaning barcha mavzulari</span>
+            </div>
+            <ChevronRight className="w-4 h-4 text-[#8E8E93]" />
+          </div>
+
+        </div>
+      )}
+
+      {/* ──────────────────────────────────────────────────────────
+          SCREEN 3: LESSON LIST & SEARCH RESULTS
+      ────────────────────────────────────────────────────────── */}
+      {currentView === 'lesson_list' && (
+        <div className="pt-[calc(env(safe-area-inset-top,16px)+8px)] animate-in fade-in duration-300">
+          
+          {/* Top Telegram Bar */}
+          <div className="flex items-center justify-between py-2 mb-2">
+            <button
+              onClick={() => {
+                impactLight();
+                setCurrentView('subject_hub');
+                setSelectedCourse(null);
+              }}
+              className="w-8 h-8 rounded-full bg-[#1C1C1E] border border-white/5 flex items-center justify-center text-white active:scale-95 transition-transform"
+              title="Orqaga"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+
+            <span className="text-xs font-bold text-white/90">
+              {selectedCourse ? selectedCourse.title : activeSubject.name}
+            </span>
+
+            <div className="w-8 h-8 flex items-center justify-center text-[#8E8E93]">
+              <MoreHorizontal className="w-4 h-4" />
+            </div>
+          </div>
+
+          {/* Centered Brand Logo */}
+          <div className="mb-4">
+            <RashidovLogo className="h-8" />
+          </div>
+
+          {/* Search Input Bar with Clear button */}
+          <div className="relative mb-3">
+            <Search className="w-4 h-4 text-[#8E8E93] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Mavzu, termin yoki paragraf"
+              className="w-full bg-[#1C1C1E] border border-white/5 focus:border-[#007AFF] rounded-full py-2.5 pl-10 pr-9 text-xs text-white placeholder-[#8E8E93] outline-none transition-colors"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-[#2C2C2E] flex items-center justify-center text-[#8E8E93] hover:text-white"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+
+          {/* Subtitle: "X ta dars topildi" */}
+          <div className="flex items-center justify-between mb-3 px-1">
+            <span className="text-xs text-[#8E8E93] font-medium">
+              {filteredLessons.length} ta dars topildi
+            </span>
+
+            {selectedCourse && (
+              <button
+                onClick={() => setSelectedCourse(null)}
+                className="text-[11px] text-[#007AFF] font-bold"
+              >
+                Barchasi
+              </button>
+            )}
+          </div>
+
+          {/* List of Compact Horizontal Lesson Cards */}
+          {filteredLessons.length > 0 ? (
+            <div className="space-y-2.5 mb-6">
+              {filteredLessons.map((lesson, idx) => {
+                const isSaved = savedLessonIds.includes(lesson.id);
+
+                return (
+                  <div
+                    key={lesson.id || idx}
+                    onClick={() => handleStartLesson(lesson)}
+                    className="bg-[#1C1C1E] border border-white/5 hover:border-white/15 rounded-2xl p-2.5 flex items-center gap-3 cursor-pointer active:scale-[0.98] transition-all shadow-md group"
+                  >
+                    {/* 16:9 Thumbnail Box */}
+                    <div className="relative w-28 aspect-video rounded-xl overflow-hidden bg-[#2C2C2E] flex-shrink-0">
+                      <img 
+                        src={lesson.thumbnail_url || 'https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?auto=format&fit=crop&w=400&q=80'} 
+                        alt="" 
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                      />
+                      {/* Duration Tag */}
+                      <div className="absolute bottom-1 left-1 bg-black/80 backdrop-blur-md px-1.5 py-0.5 rounded text-[9px] font-mono font-bold text-white flex items-center gap-1">
+                        <Play className="w-2 h-2 fill-white" />
+                        <span>{lesson.duration || '14 daq'}</span>
+                      </div>
+                    </div>
+
+                    {/* Lesson Title & Category */}
+                    <div className="flex-1 min-w-0 pr-1">
+                      <h4 className="text-white font-bold text-xs leading-snug line-clamp-2 mb-1 group-hover:text-blue-400 transition-colors">
+                        {lesson.title}
+                      </h4>
+                      <span className="text-[11px] text-[#8E8E93] block truncate">
+                        {lesson.category_name || 'Biologiya'}
+                      </span>
+                    </div>
+
+                    {/* Bookmark Button */}
+                    <button
+                      onClick={(e) => toggleBookmark(e, lesson.id)}
+                      className="w-8 h-8 rounded-full bg-[#2C2C2E] flex items-center justify-center text-white/80 active:scale-90 transition-transform flex-shrink-0"
+                      title="Saqlash"
+                    >
+                      {isSaved ? (
+                        <BookmarkCheck className="w-4 h-4 text-amber-400" />
+                      ) : (
+                        <Bookmark className="w-4 h-4 text-[#8E8E93]" />
+                      )}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            /* Empty State */
+            <div className="bg-[#1C1C1E] border border-white/5 rounded-3xl p-8 text-center my-6">
+              <div className="w-10 h-10 rounded-2xl bg-white/5 flex items-center justify-center text-lg mx-auto mb-3 text-[#8E8E93]">
+                🔍
+              </div>
+              <h4 className="text-white font-bold text-xs mb-1">Dars topilmadi</h4>
+              <p className="text-[11px] text-[#8E8E93] mb-4">
+                Boshqa kalit so‘z bilan qidirib ko‘ring
+              </p>
+              <button
+                onClick={() => {
+                  setSearchQuery('');
+                  setSelectedCourse(null);
+                  setActiveFilter('all');
+                }}
+                className="px-4 py-2 bg-[#2C2C2E] text-white text-xs font-bold rounded-xl"
+              >
+                Qidiruvni tozalash
+              </button>
+            </div>
+          )}
+
+          {/* Bottom link: "Biologiyaning barcha mavzulari >" */}
+          <div
+            onClick={() => {
+              impactLight();
+              setSelectedCourse(null);
+              setSearchQuery('');
+              setActiveFilter('all');
+            }}
+            className="text-center py-2 cursor-pointer active:scale-95 transition-transform"
+          >
+            <span className="text-xs font-bold text-[#007AFF] hover:underline">
+              {activeSubject.name}ning barcha mavzulari &gt;
+            </span>
+          </div>
+
+        </div>
+      )}
+
     </div>
   );
 }

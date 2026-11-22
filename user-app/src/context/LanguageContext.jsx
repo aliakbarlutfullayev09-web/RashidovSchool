@@ -14,49 +14,41 @@ const translations = {
     kun: 'kun',
     neyron: 'Neyron',
     rashidov_school: 'Rashidov School',
+    darslar_kutubxonasi: 'Video darslar kutubxonasi',
     streak_tooltip: 'Har kuni dars ko‘ring va test ishlang! Strikingiz qancha ko‘p bo‘lsa, shuncha ko‘p bonus Neyronlar beriladi.',
-    
-    // Tree of Knowledge
-    bilim_daraxti: 'Bilim Daraxti',
-    urug: 'Urug‘',
-    nihol: 'Nihol',
-    kochat: 'Ko‘chat',
-    gullagan_daraxt: 'Gullagan daraxt',
-    donishmand_daraxt: 'Bilim daraxti',
-    dars_yakunlandi: 'dars yakunlandi',
-    davom_ettirish: 'Darsni davom ettirish',
     
     // Subjects
     biologiya: 'Biologiya',
     kimyo: 'Kimyo',
     matematika: 'Matematika',
     
+    // Filters & Search
+    barcha_mavzular: 'Barchasi',
+    korilmagan: 'Ko‘rilmagan',
+    davom_ettirish: 'Davom etish',
+    saqlangan: 'Saqlangan',
+    qidiruv_placeholder: 'Mavzu yoki dars nomini qidiring...',
+    qidiruv_topilmadi: 'Ushbu so‘rov bo‘yicha hech qanday dars topilmadi',
+    qidiruv_topilmadi_desc: 'Boshqa so‘z bilan qidirib ko‘ring yoki barcha mavzularni ko‘ring',
+    qidiruvni_tozalash: 'Qidiruvni tozalash',
+    bosh_darslar: 'Ushbu fanda hozircha darslar mavjud emas',
+    
     // Lessons & Cards
     dars: 'Dars',
     bepul: 'Bepul',
     topshirildi: 'Topshirildi',
-    qulflangan: 'Kanalga a‘zo bo‘lish',
-    boshlash: 'Boshlash',
-    test_savoli: 'ta test savoli',
     korildi: 'ko‘rildi',
-    modul_mock: 'Modul Yakuniy Mock Testi',
     savol: 'savol',
     daqiqa: 'daqiqa',
+    videoni_korish: 'Videoni ko‘rish',
     
-    // Top-Up & Shop
-    balansni_toldirish: 'Balansni to‘ldirish',
-    promo_faollashtirish: 'Promo-kod faollashtirish',
-    mening_xatolarim: 'Mening xatolarim — Tahlil',
-    rasmiy_kanal: 'Rashidov Biologiya Rasmiy Kanali',
-    
-    // Testlar Page
-    dtm_mock: 'DTM Mock',
-    milliy_sertifikat: 'Milliy Sertifikat',
-    mavzuli_trenajyor: 'Mavzuli Trenajyor',
-    ball: 'ball',
-    yakunlash: 'Testni yakunlash',
-    natija: 'Natija',
-    xatolar_tahlili: 'Xatolar tahlili',
+    // Player & Glossary
+    dars_terminlari: 'Dars terminlari',
+    terminlar_bosh: 'Ushbu dars uchun terminlar lug‘ati hali kiritilmagan.',
+    seek_blocked_notice: 'Oldinga faqat ko‘rilgan daqiqagacha o‘tkazish mumkin',
+    term_seek_blocked: 'Ushbu termin video davomida tushuntiriladi. Unga o‘tish uchun darsni ko‘ring.',
+    orqaga_qaytish: 'Orqaga',
+    qayta_korish: 'Qayta ko‘rish',
     
     // Common
     orqaga: 'Orqaga',
@@ -77,49 +69,41 @@ const translations = {
     kun: 'дней',
     neyron: 'Нейронов',
     rashidov_school: 'Rashidov School',
+    darslar_kutubxonasi: 'Библиотека видеоуроков',
     streak_tooltip: 'Занимайтесь каждый день! Чем дольше ударный режим, тем больше бонусных Нейронов.',
-    
-    // Tree of Knowledge
-    bilim_daraxti: 'Древо Знаний',
-    urug: 'Семя',
-    nihol: 'Росток',
-    kochat: 'Саженец',
-    gullagan_daraxt: 'Цветущее дерево',
-    donishmand_daraxt: 'Древо мудрости',
-    dars_yakunlandi: 'уроков пройдено',
-    davom_ettirish: 'Продолжить обучение',
     
     // Subjects
     biologiya: 'Биология',
     kimyo: 'Химия',
     matematika: 'Математика',
     
+    // Filters & Search
+    barcha_mavzular: 'Все темы',
+    korilmagan: 'Не смотрел',
+    davom_ettirish: 'Продолжить',
+    saqlangan: 'Сохранённые',
+    qidiruv_placeholder: 'Поиск темы или урока...',
+    qidiruv_topilmadi: 'По вашему запросу ничего не найдено',
+    qidiruv_topilmadi_desc: 'Попробуйте изменить формулировку или сбросьте фильтр',
+    qidiruvni_tozalash: 'Сбросить поиск',
+    bosh_darslar: 'В этом предмете пока нет уроков',
+    
     // Lessons & Cards
     dars: 'Урок',
     bepul: 'Бесплатно',
     topshirildi: 'Пройдено',
-    qulflangan: 'Подписка на канал',
-    boshlash: 'Начать',
-    test_savoli: 'вопросов теста',
     korildi: 'просмотров',
-    modul_mock: 'Итоговый Мок-тест Модуля',
     savol: 'вопросов',
     daqiqa: 'минут',
+    videoni_korish: 'Смотреть видео',
     
-    // Top-Up & Shop
-    balansni_toldirish: 'Пополнить баланс',
-    promo_faollashtirish: 'Активировать промокод',
-    mening_xatolarim: 'Мои ошибки — Анализ',
-    rasmiy_kanal: 'Официальный канал Rashidov Biologiya',
-    
-    // Testlar Page
-    dtm_mock: 'ДТМ Мок',
-    milliy_sertifikat: 'Национальный сертификат',
-    mavzuli_trenajyor: 'Тренажер по темам',
-    ball: 'баллов',
-    yakunlash: 'Завершить тест',
-    natija: 'Результат',
-    xatolar_tahlili: 'Анализ ошибок',
+    // Player & Glossary
+    dars_terminlari: 'Термины урока',
+    terminlar_bosh: 'Словарь терминов для этого урока пока не заполнен.',
+    seek_blocked_notice: 'Перемотка вперед доступна только до подтвержденной точки просмотра',
+    term_seek_blocked: 'Этот термин объясняется далее. Посмотрите видео, чтобы перейти к нему.',
+    orqaga_qaytish: 'Назад',
+    qayta_korish: 'Смотреть снова',
     
     // Common
     orqaga: 'Назад',

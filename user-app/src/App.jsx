@@ -17,6 +17,9 @@ function MainApp() {
   const [dbUser, setDbUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Video playback active flag (hides TabBar)
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+
   // Global TopUp Modal Trigger
   const [isTopUpOpen, setIsTopUpOpen] = useState(false);
 
@@ -106,7 +109,12 @@ function MainApp() {
   const renderTabContent = () => {
     switch (activeTab) {
       case 0:
-        return <LessonsPage user={dbUser} />;
+        return (
+          <LessonsPage 
+            user={dbUser} 
+            onPlayingChange={setIsVideoPlaying}
+          />
+        );
       case 1:
         return <TestlarPage user={dbUser} />;
       case 2:
@@ -119,7 +127,12 @@ function MainApp() {
           />
         );
       default:
-        return <LessonsPage user={dbUser} />;
+        return (
+          <LessonsPage 
+            user={dbUser} 
+            onPlayingChange={setIsVideoPlaying}
+          />
+        );
     }
   };
 
@@ -127,22 +140,30 @@ function MainApp() {
     <div className={`min-h-screen bg-[#000000] text-white relative flex flex-col ${
       isLandscapeDesktop ? 'max-w-5xl mx-auto' : 'w-full max-w-[480px] mx-auto'
     }`}>
-      {/* Persistent OLED Top Status Bar */}
-      <Header 
-        user={dbUser} 
-        onOpenTopUp={() => setIsTopUpOpen(true)} 
-      />
+      {/* 
+        Top Status Bar: 
+        Only shown on Testlar, Reyting, Profil tabs.
+        On Lessons tab, LessonsPage displays the clean teacher/school branding header.
+      */}
+      {activeTab !== 0 && !isVideoPlaying && (
+        <Header 
+          user={dbUser} 
+          onOpenTopUp={() => setIsTopUpOpen(true)} 
+        />
+      )}
 
       {/* Main Tab Content */}
       <main className="flex-1 overflow-y-auto no-scrollbar">
         {renderTabContent()}
       </main>
 
-      {/* Floating Bottom Navigation Dock */}
-      <TabBar 
-        activeTab={activeTab} 
-        onTabChange={setActiveTab} 
-      />
+      {/* Floating Bottom Navigation Dock (Hidden during video playback) */}
+      {!isVideoPlaying && (
+        <TabBar 
+          activeTab={activeTab} 
+          onTabChange={setActiveTab} 
+        />
+      )}
 
       {/* Global Top-Up Modal */}
       <TopUpModal
