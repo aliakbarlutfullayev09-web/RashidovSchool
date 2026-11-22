@@ -9,7 +9,7 @@ export default function LeaderboardPage({ user }) {
     <div 
       className="w-full min-h-[calc(var(--app-viewport-stable-height,100dvh)-80px)] px-4 max-w-md mx-auto flex flex-col items-center justify-center text-center select-none"
       style={{
-        paddingTop: 'calc(var(--safe-area-top, 16px) + 20px)',
+        paddingTop: '24px',
         paddingBottom: 'calc(var(--safe-area-bottom, 0px) + 96px)'
       }}
     >

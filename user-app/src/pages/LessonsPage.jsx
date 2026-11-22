@@ -316,21 +316,30 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
     ? 'from-[#05142B] via-[#020A17] to-[#000000]' 
     : 'from-[#031B13] via-[#020E0A] to-[#000000]';
 
+  const handleBack = () => {
+    impactLight();
+    if (currentView === 'lesson_list') {
+      setCurrentView('subject_hub');
+      setSelectedCourse(null);
+      setSearchQuery('');
+    } else if (currentView === 'subject_hub') {
+      setCurrentView('carousel');
+    }
+  };
+
   return (
     <div 
-      className="w-full min-h-screen px-4 max-w-md mx-auto text-white select-none flex flex-col"
+      className="w-full min-h-screen text-white select-none flex flex-col"
       style={{
-        paddingTop: 'calc(var(--safe-area-top, 16px) + 6px)',
         paddingBottom: 'calc(var(--safe-area-bottom, 0px) + 84px)'
       }}
     >
-      
       {/* ──────────────────────────────────────────────────────────
           SCREEN 1: HERO SUBJECT CAROUSEL BANNER (STRETCHED & THEMED)
       ────────────────────────────────────────────────────────── */}
       {currentView === 'carousel' && (
         <div 
-          className="flex-1 flex flex-col justify-between items-center pb-2 w-full animate-in fade-in duration-300 overflow-hidden"
+          className="flex-1 flex flex-col justify-between items-center px-4 pt-2 pb-2 w-full max-w-md mx-auto animate-in fade-in duration-300 overflow-hidden"
           onTouchStart={(e) => {
             touchStartXRef.current = e.touches[0].clientX;
           }}
@@ -340,17 +349,12 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
             else if (deltaX < -45) handlePrevSubject();
           }}
         >
-          {/* Top Brand Logo (Original Official Logo) */}
-          <div className="mb-2 flex-shrink-0">
-            <RashidovLogo className="h-8" />
-          </div>
-
           {/* Stretched Vertical Card — Fills viewport height cleanly with spring jump & slide transition */}
           <div 
             className="relative w-full flex-1 flex flex-col justify-center"
             style={{
-              minHeight: 'calc(var(--app-viewport-stable-height, 100dvh) - var(--safe-area-top, 44px) - var(--safe-area-bottom, 20px) - 120px)',
-              height: 'calc(var(--app-viewport-stable-height, 100dvh) - var(--safe-area-top, 44px) - var(--safe-area-bottom, 20px) - 120px)'
+              minHeight: 'calc(var(--app-viewport-stable-height, 100dvh) - var(--safe-area-top, 16px) - var(--safe-area-bottom, 0px) - 148px)',
+              height: 'calc(var(--app-viewport-stable-height, 100dvh) - var(--safe-area-top, 16px) - var(--safe-area-bottom, 0px) - 148px)'
             }}
           >
             <AnimatePresence mode="wait" custom={slideDirection}>
@@ -400,8 +404,8 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
                 style={{
                   isolation: 'isolate',
                   WebkitMaskImage: '-webkit-radial-gradient(white, black)',
-                  minHeight: 'calc(var(--app-viewport-stable-height, 100dvh) - var(--safe-area-top, 44px) - var(--safe-area-bottom, 20px) - 120px)',
-                  height: 'calc(var(--app-viewport-stable-height, 100dvh) - var(--safe-area-top, 44px) - var(--safe-area-bottom, 20px) - 120px)'
+                  minHeight: 'calc(var(--app-viewport-stable-height, 100dvh) - var(--safe-area-top, 16px) - var(--safe-area-bottom, 0px) - 148px)',
+                  height: 'calc(var(--app-viewport-stable-height, 100dvh) - var(--safe-area-top, 16px) - var(--safe-area-bottom, 0px) - 148px)'
                 }}
                 className={`relative w-full rounded-[28px] overflow-hidden border ${cardBorderClass} ${cardShadowClass} bg-gradient-to-b ${cardBgGradient} cursor-pointer group active:scale-[0.985] flex flex-col justify-between p-6 select-none`}
               >
@@ -472,27 +476,8 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
           SCREEN 2: SUBJECT HUB (2x2 CATEGORIES & RECENT LESSON)
       ────────────────────────────────────────────────────────── */}
       {currentView === 'subject_hub' && (
-        <div className="animate-in fade-in duration-300">
-          
-          {/* Header: Native BackButton used in Telegram; fallback Back button outside Telegram */}
-          <div className="relative flex items-center justify-center mb-4 min-h-[36px]">
-            {!isTelegramWithBack && (
-              <button
-                onClick={() => {
-                  impactLight();
-                  setCurrentView('carousel');
-                }}
-                className="absolute left-0 w-8 h-8 rounded-full bg-[#1C1C1E] border border-white/10 flex items-center justify-center text-white active:scale-95 transition-transform"
-                title="Orqaga"
-              >
-                <ArrowLeft className="w-4 h-4" />
-              </button>
-            )}
-
-            <RashidovLogo className="h-8" />
-          </div>
-
-          {/* Search Input Bar */}
+        <div className="w-full max-w-md mx-auto px-4 pt-3 pb-8 animate-in fade-in duration-300">
+          {/* Search Input Bar with glass styling */}
           <div className="relative mb-3">
             <Search className="w-4 h-4 text-[#8E8E93] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
@@ -505,7 +490,7 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
                 }
               }}
               placeholder="Mavzu, termin yoki paragraf"
-              className="w-full bg-[#1C1C1E] border border-white/5 focus:border-[#007AFF] rounded-full py-2.5 pl-10 pr-4 text-xs text-white placeholder-[#8E8E93] outline-none transition-colors"
+              className="w-full bg-[#1C1C1E]/85 backdrop-blur-md border border-white/10 focus:border-[#007AFF] rounded-full py-2.5 pl-10 pr-4 text-xs text-white placeholder-[#8E8E93] outline-none transition-colors shadow-sm"
             />
           </div>
 
@@ -633,28 +618,8 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
           SCREEN 3: LESSON LIST & SEARCH RESULTS
       ────────────────────────────────────────────────────────── */}
       {currentView === 'lesson_list' && (
-        <div className="animate-in fade-in duration-300">
-          
-          {/* Header: Native BackButton used in Telegram; fallback Back button outside Telegram */}
-          <div className="relative flex items-center justify-center mb-4 min-h-[36px]">
-            {!isTelegramWithBack && (
-              <button
-                onClick={() => {
-                  impactLight();
-                  setCurrentView('subject_hub');
-                  setSelectedCourse(null);
-                }}
-                className="absolute left-0 w-8 h-8 rounded-full bg-[#1C1C1E] border border-white/10 flex items-center justify-center text-white active:scale-95 transition-transform"
-                title="Orqaga"
-              >
-                <ArrowLeft className="w-4 h-4" />
-              </button>
-            )}
-
-            <RashidovLogo className="h-8" />
-          </div>
-
-          {/* Search Input Bar with Clear button */}
+        <div className="w-full max-w-md mx-auto px-4 pt-3 pb-8 animate-in fade-in duration-300">
+          {/* Search Input Bar with Clear button and glass styling */}
           <div className="relative mb-3">
             <Search className="w-4 h-4 text-[#8E8E93] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
@@ -662,7 +627,7 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Mavzu, termin yoki paragraf"
-              className="w-full bg-[#1C1C1E] border border-white/5 focus:border-[#007AFF] rounded-full py-2.5 pl-10 pr-9 text-xs text-white placeholder-[#8E8E93] outline-none transition-colors"
+              className="w-full bg-[#1C1C1E]/85 backdrop-blur-md border border-white/10 focus:border-[#007AFF] rounded-full py-2.5 pl-10 pr-9 text-xs text-white placeholder-[#8E8E93] outline-none transition-colors shadow-sm"
             />
             {searchQuery && (
               <button

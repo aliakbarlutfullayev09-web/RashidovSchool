@@ -14,6 +14,9 @@ import { Loader2 } from 'lucide-react';
 function MainApp() {
   const [activeTab, setActiveTab] = useState(0);
   const { tg, isTelegram, user: tgUser, setBackButton } = useTelegram();
+  const isTelegramWithBack = Boolean(
+    tg && tg.initData !== undefined && tg.isVersionAtLeast && tg.isVersionAtLeast('6.1')
+  );
   const [dbUser, setDbUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -167,19 +170,25 @@ function MainApp() {
       }}
     >
       {/* 
-        Top Status Bar: 
-        Only shown on Testlar, Reyting, Profil tabs.
-        On Lessons tab, LessonsPage displays the clean teacher/school branding header.
+        Top Pinned Glass Header:
+        Unified across ALL tabs (Darslar, Testlar, Reyting, Profil) with strictly centered Rashidov SCHOOL logo.
+        Hidden during fullscreen video playback.
       */}
-      {activeTab !== 0 && !isVideoPlaying && (
+      {!isVideoPlaying && (
         <Header 
-          user={dbUser} 
-          onOpenTopUp={() => setIsTopUpOpen(true)} 
+          showBackButton={!isTelegramWithBack && (activeTab !== 0 || typeof lessonsBackAction === 'function')}
+          onBack={() => {
+            if (activeTab === 0 && typeof lessonsBackAction === 'function') {
+              lessonsBackAction();
+            } else if (activeTab !== 0) {
+              setActiveTab(0);
+            }
+          }}
         />
       )}
 
       {/* Main Tab Content */}
-      <main className="flex-1 overflow-y-auto no-scrollbar">
+      <main className="flex-1 overflow-y-auto no-scrollbar app-scroll-container">
         {renderTabContent()}
       </main>
 

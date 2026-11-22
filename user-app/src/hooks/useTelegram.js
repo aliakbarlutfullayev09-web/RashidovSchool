@@ -56,6 +56,8 @@ export function useTelegram() {
     // Fallback: If in Telegram and topInset is 0 (older Telegram client), provide comfortable breathing room
     if (isTelegram && topInset === 0) {
       topInset = 44; // Standard Telegram mobile top header offset
+    } else if (!isTelegram && topInset === 0) {
+      topInset = 16; // Standard non-Telegram viewport breathing room
     }
 
     const docStyle = document.documentElement.style;
@@ -166,6 +168,27 @@ export function useTelegram() {
     }
   }, [tg]);
 
+  // 5. Vertical Swipes management (Telegram WebApp 7.7+)
+  const disableVerticalSwipes = useCallback(() => {
+    if (tg?.isVersionAtLeast && tg.isVersionAtLeast('7.7') && typeof tg.disableVerticalSwipes === 'function') {
+      try {
+        tg.disableVerticalSwipes();
+      } catch (e) {
+        console.warn('disableVerticalSwipes error:', e);
+      }
+    }
+  }, [tg]);
+
+  const enableVerticalSwipes = useCallback(() => {
+    if (tg?.isVersionAtLeast && tg.isVersionAtLeast('7.7') && typeof tg.enableVerticalSwipes === 'function') {
+      try {
+        tg.enableVerticalSwipes();
+      } catch (e) {
+        console.warn('enableVerticalSwipes error:', e);
+      }
+    }
+  }, [tg]);
+
   const close = () => tg?.close?.();
   const sendData = (data) => tg?.sendData?.(data);
 
@@ -176,6 +199,8 @@ export function useTelegram() {
     queryId: tg?.initDataUnsafe?.query_id,
     setBackButton,
     setClosingConfirmation,
+    disableVerticalSwipes,
+    enableVerticalSwipes,
     close,
     sendData,
   };

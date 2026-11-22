@@ -29,7 +29,7 @@ export default function TabBar({ activeTab, onTabChange }) {
         bottom: 'calc(var(--safe-area-bottom, 0px) + 12px)'
       }}
     >
-      <div className="bg-[#121214]/90 backdrop-blur-xl border border-[#333336] rounded-full px-2 py-1.5 flex items-center justify-around shadow-2xl relative">
+      <div className="glass-dock rounded-full px-2 py-1.5 flex items-center justify-around relative">
         {tabs.map((tab) => {
           const isActive = activeTab === tab.id;
           const Icon = tab.icon;
