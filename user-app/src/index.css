@@ -542,3 +542,43 @@ body {
   }
 }
 
+/* ═══════════════════════════════════════════
+   LIGHT THEME OVERRIDES (User selectable)
+   Default is Dark OLED. When theme is light:
+   ═══════════════════════════════════════════ */
+[data-theme="light"],
+[data-theme="light"] body {
+  background: #F2F2F7 !important;
+  color: #1C1C1E;
+}
+
+[data-theme="light"] .glass-header {
+  background: rgba(255, 255, 255, 0.88) !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+
+[data-theme="light"] .glass-dock {
+  background: rgba(255, 255, 255, 0.92) !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.12) !important;
+}
+
+[data-theme="light"] .glass-dock .text-white {
+  color: #1C1C1E !important;
+}
+
+[data-theme="light"] .glass-dock .bg-white\/10 {
+  background-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+[data-theme="light"] .card,
+[data-theme="light"] .card-grouped {
+  background: #FFFFFF !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+
+[data-theme="light"] .card-row:hover {
+  background: rgba(0, 0, 0, 0.03) !important;
+}
+
+

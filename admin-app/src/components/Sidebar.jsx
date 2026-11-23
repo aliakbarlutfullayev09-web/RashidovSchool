@@ -1,6 +1,6 @@
 import React from 'react';
 import { 
-  BarChart3, BookOpen, Ticket, Users, GraduationCap, ShieldCheck 
+  BarChart3, BookOpen, Ticket, Users, GraduationCap, ShieldCheck, Headphones 
 } from 'lucide-react';
 
 export default function Sidebar({ user, activeSection, onSectionChange }) {
@@ -13,6 +13,7 @@ export default function Sidebar({ user, activeSection, onSectionChange }) {
     { id: 'promo', label: 'Промокоды', icon: Ticket, roles: ['superadmin', 'teacher'], condition: user?.permissions?.can_promo },
     { id: 'users', label: 'Ученики', icon: Users, roles: ['superadmin', 'teacher'], condition: user?.permissions?.can_gift },
     { id: 'staff', label: 'Персонал', icon: GraduationCap, roles: ['superadmin'] },
+    { id: 'support', label: 'Aloqa & Yordam', icon: Headphones, roles: ['superadmin'] },
   ];
 
   const visibleItems = navItems.filter(item => 

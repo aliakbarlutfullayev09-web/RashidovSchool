@@ -5,13 +5,6 @@ import { useLanguage } from '../context/LanguageContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { applyPromoCode } from '../api/supabase';
 
-const CLICK_PACKAGES = [
-  { neyrons: 25000, priceUzs: 25000, label: "25 000 UZS", discount: null },
-  { neyrons: 65000, priceUzs: 56250, label: "56 250 UZS", discount: "-15%" },
-  { neyrons: 150000, priceUzs: 112500, label: "112 500 UZS", discount: "-25%", popular: true },
-  { neyrons: 1000000, priceUzs: 650000, label: "650 000 UZS", discount: "-35%" }
-];
-
 const STARS_PACKAGES = [
   { stars: 5, neyrons: 1250 },
   { stars: 100, neyrons: 25000 },
@@ -30,7 +23,7 @@ const DAILY_QUESTS = [
 export default function TopUpModal({ isOpen, onClose, user, onUpdateUser }) {
   const { t, lang } = useLanguage();
   const { selectionChanged, notificationSuccess, notificationError, impactMedium } = useHaptic();
-  const [activeTab, setActiveTab] = useState('click'); // 'click' | 'stars' | 'promo' | 'quests'
+  const [activeTab, setActiveTab] = useState('stars'); // 'stars' | 'promo' | 'quests'
 
   // Promo state
   const [promoInput, setPromoInput] = useState('');
@@ -43,16 +36,6 @@ export default function TopUpModal({ isOpen, onClose, user, onUpdateUser }) {
     if (tab !== activeTab) {
       selectionChanged();
       setActiveTab(tab);
-    }
-  };
-
-  const handleBuyClick = (pkg) => {
-    impactMedium();
-    const link = lang === 'uz' ? 'https://t.me/m/LC4tlXF_NjRi' : 'https://t.me/m/nmt7omDSMjEy';
-    if (window.Telegram?.WebApp?.openTelegramLink) {
-      window.Telegram.WebApp.openTelegramLink(link);
-    } else {
-      window.open(link, '_blank');
     }
   };
 
@@ -141,28 +124,20 @@ export default function TopUpModal({ isOpen, onClose, user, onUpdateUser }) {
               Joriy balans: <span className="text-blue-400 font-bold">{user?.balance?.toLocaleString('ru-RU') || 0} Neyron</span>
             </p>
 
-            {/* Segmented 4 Tabs */}
-            <div className="grid grid-cols-4 gap-1 w-full bg-[#242426] p-1 rounded-2xl mt-4">
-              <button
-                onClick={() => handleTabSwitch('click')}
-                className={`py-2 text-[11px] font-bold rounded-xl transition-all flex items-center justify-center gap-1 ${
-                  activeTab === 'click' ? 'bg-[#007AFF] text-white shadow-md' : 'text-[#8E8E93] hover:text-white'
-                }`}
-              >
-                <span>Click</span>
-              </button>
+            {/* Segmented 3 Tabs (Stars, Promo, Quests) */}
+            <div className="grid grid-cols-3 gap-1.5 w-full bg-[#242426] p-1 rounded-2xl mt-4">
               <button
                 onClick={() => handleTabSwitch('stars')}
-                className={`py-2 text-[11px] font-bold rounded-xl transition-all flex items-center justify-center gap-1 ${
+                className={`py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
                   activeTab === 'stars' ? 'bg-[#007AFF] text-white shadow-md' : 'text-[#8E8E93] hover:text-white'
                 }`}
               >
-                <span>Stars</span>
+                <span>Telegram Stars</span>
                 <span className="text-yellow-400">⭐️</span>
               </button>
               <button
                 onClick={() => handleTabSwitch('promo')}
-                className={`py-2 text-[11px] font-bold rounded-xl transition-all flex items-center justify-center gap-1 ${
+                className={`py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
                   activeTab === 'promo' ? 'bg-[#007AFF] text-white shadow-md' : 'text-[#8E8E93] hover:text-white'
                 }`}
               >
@@ -171,7 +146,7 @@ export default function TopUpModal({ isOpen, onClose, user, onUpdateUser }) {
               </button>
               <button
                 onClick={() => handleTabSwitch('quests')}
-                className={`py-2 text-[11px] font-bold rounded-xl transition-all flex items-center justify-center gap-1 ${
+                className={`py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
                   activeTab === 'quests' ? 'bg-[#007AFF] text-white shadow-md' : 'text-[#8E8E93] hover:text-white'
                 }`}
               >
@@ -183,47 +158,7 @@ export default function TopUpModal({ isOpen, onClose, user, onUpdateUser }) {
 
           {/* Modal Content */}
           <div className="p-5 overflow-y-auto space-y-3 pb-8">
-            {/* TAB 1: CLICK UZS */}
-            {activeTab === 'click' && (
-              <div className="space-y-3">
-                <p className="text-xs text-[#8E8E93] mb-2">Click orqali to'g'ridan-to'g'ri so'mda xarid qiling:</p>
-                {CLICK_PACKAGES.map((pkg, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => handleBuyClick(pkg)}
-                    className="w-full bg-[#1C1C1E] hover:bg-[#242426] border border-white/5 p-4 rounded-2xl flex items-center justify-between transition-all active:scale-[0.98] relative overflow-hidden group"
-                  >
-                    {pkg.popular && (
-                      <div className="absolute top-0 right-0 bg-[#007AFF] text-white text-[9px] font-extrabold px-2 py-0.5 rounded-bl-lg">
-                        TAVSIYA
-                      </div>
-                    )}
-                    <div className="flex items-center gap-3">
-                      <div className="w-11 h-11 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-xl">
-                        🧠
-                      </div>
-                      <div className="text-left">
-                        <div className="font-bold text-white text-base">+{pkg.neyrons.toLocaleString('ru-RU')} Neyron</div>
-                        <div className="text-xs text-[#8E8E93]">Tezkor hisobga o'tkazish</div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      {pkg.discount && (
-                        <span className="text-[11px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md">
-                          {pkg.discount}
-                        </span>
-                      )}
-                      <div className="bg-[#2C2C2E] group-hover:bg-[#007AFF] text-white font-bold text-xs px-3 py-2 rounded-xl transition-colors">
-                        {pkg.label}
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* TAB 2: STARS */}
+            {/* TAB 1: STARS */}
             {activeTab === 'stars' && (
               <div className="grid grid-cols-2 gap-3">
                 {STARS_PACKAGES.map((pkg, idx) => (

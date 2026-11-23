@@ -223,12 +223,17 @@ export const getSubjects = async () => {
           icon = d.icon || '📚';
         }
 
+        let desc = d.description;
+        if (desc && typeof desc === 'string' && desc.trim().startsWith('{')) {
+          desc = `${latinName} kursi bo'yicha video darslar va testlar`;
+        }
+
         return {
           id: d.id,
           key,
           name: latinName,
           original_name: d.name,
-          description: d.description || `${latinName} kursi bo'yicha video darslar va testlar`,
+          description: desc || `${latinName} kursi bo'yicha video darslar va testlar`,
           bg_gradient: bgGradient,
           border_class: borderClass,
           shadow_class: shadowClass,
@@ -582,4 +587,82 @@ export const incrementViewCount = async (lessonId) => {
       await supabase.rpc('increment_lesson_view', { lesson_id: lessonId }).catch(() => {});
     }
   } catch {}
+};
+
+export const DEFAULT_SUPPORT_CONTACTS = {
+  bio: {
+    telegram: '@rashidov_bio_mentor',
+    phone: '+998 90 123 45 67',
+    label_uz: 'Biologiya savollari',
+    label_ru: 'Вопросы по биологии',
+    desc_uz: 'Mavzular, darslar va biologiya testlari bo‘yicha',
+    desc_ru: 'По темам, урокам и тестам по биологии'
+  },
+  chem: {
+    telegram: '@rashidov_chem_mentor',
+    phone: '+998 90 765 43 21',
+    label_uz: 'Kimyo savollari',
+    label_ru: 'Вопросы по химии',
+    desc_uz: 'Kimyo darslari, masalalar va testlar bo‘yicha',
+    desc_ru: 'По темам, задачам и тестам по химии'
+  },
+  tech: {
+    telegram: '@rashidov_support',
+    phone: '+998 71 200 00 00',
+    label_uz: 'Texnik va boshqa masalalar',
+    label_ru: 'Технические и другие вопросы',
+    desc_uz: 'Ilova ishlashi, to‘lovlar va hisob masalalari',
+    desc_ru: 'Работа приложения, оплата и вопросы аккаунта'
+  }
+};
+
+export const getSupportContacts = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('subjects')
+      .select('id, description')
+      .eq('id', 1)
+      .maybeSingle();
+
+    if (!error && data?.description) {
+      try {
+        const parsed = JSON.parse(data.description);
+        if (parsed && typeof parsed === 'object') {
+          return {
+            bio: { ...DEFAULT_SUPPORT_CONTACTS.bio, ...(parsed.bio || {}) },
+            chem: { ...DEFAULT_SUPPORT_CONTACTS.chem, ...(parsed.chem || {}) },
+            tech: { ...DEFAULT_SUPPORT_CONTACTS.tech, ...(parsed.tech || {}) }
+          };
+        }
+      } catch {}
+    }
+  } catch (e) {
+    console.warn('getSupportContacts error:', e);
+  }
+
+  try {
+    const cached = localStorage.getItem('rb_support_contacts');
+    if (cached) return JSON.parse(cached);
+  } catch {}
+
+  return DEFAULT_SUPPORT_CONTACTS;
+};
+
+export const saveSupportContacts = async (contacts) => {
+  try {
+    const jsonStr = JSON.stringify(contacts);
+    const { error } = await supabase
+      .from('subjects')
+      .update({ description: jsonStr })
+      .eq('id', 1);
+
+    if (error) throw error;
+    try {
+      localStorage.setItem('rb_support_contacts', jsonStr);
+    } catch {}
+    return { success: true };
+  } catch (e) {
+    console.error('saveSupportContacts error:', e);
+    return { success: false, error: e.message };
+  }
 };

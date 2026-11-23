@@ -50,6 +50,21 @@ const translations = {
     orqaga_qaytish: 'Orqaga',
     qayta_korish: 'Qayta ko‘rish',
     
+    // Settings translations
+    mavzu_sarlavha: 'Ko‘rinish mavzusi',
+    mavzu_qorongu: 'Qorong‘i',
+    mavzu_yorug: 'Yorug‘',
+    mavzu_tizim: 'Tizim',
+    til_sarlavha: 'Ilova tili',
+    ovoz_sarlavha: 'Ovoz effektlari',
+    ovoz_izoh: 'Tugmalar, test va g‘alaba tovushlari',
+    vibratsiya_sarlavha: 'Vibratsiya (Haptic)',
+    vibratsiya_izoh: 'Bosish paytidagi taktil tebranish',
+    push_sarlavha: 'Push-bildirishnomalar',
+    push_izoh: 'Dars eslatmalari va yangi testlar',
+    sinab_korish: 'Ovoz va vibratsiyani tekshirish',
+    sinov_matni: 'Tugmani bosing va tekshiring',
+
     // Common
     orqaga: 'Orqaga',
     yopish: 'Yopish',
@@ -105,6 +120,21 @@ const translations = {
     orqaga_qaytish: 'Назад',
     qayta_korish: 'Смотреть снова',
     
+    // Settings translations
+    mavzu_sarlavha: 'Тема оформления',
+    mavzu_qorongu: 'Тёмная',
+    mavzu_yorug: 'Светлая',
+    mavzu_tizim: 'Системная',
+    til_sarlavha: 'Язык приложения',
+    ovoz_sarlavha: 'Звуковые эффекты',
+    ovoz_izoh: 'Звуки кнопок, тестов и наград',
+    vibratsiya_sarlavha: 'Вибрация (Haptic)',
+    vibratsiya_izoh: 'Тактильный отклик при нажатиях',
+    push_sarlavha: 'Push-уведомления',
+    push_izoh: 'Напоминания об уроках и новые тесты',
+    sinab_korish: 'Проверить звук и вибрацию',
+    sinov_matni: 'Нажмите для проверки',
+
     // Common
     orqaga: 'Назад',
     yopish: 'Закрыть',

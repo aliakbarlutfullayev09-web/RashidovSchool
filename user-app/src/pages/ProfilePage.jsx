@@ -1,27 +1,42 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
-  ChevronRight, CreditCard, Ticket, Microscope, Send, Settings, 
-  Sparkles, Flame, User, Edit3, ShieldCheck 
+  ChevronRight, CreditCard, Send, Settings, 
+  Sparkles, Flame, User, Edit3, ShieldCheck, Headphones 
 } from 'lucide-react';
 import Profile from '../components/Profile';
 import TopUpModal from '../components/TopUpModal';
-import PromoModal from '../components/PromoModal';
-import MistakesModal from '../components/MistakesModal';
 import SettingsModal from '../components/SettingsModal';
+import SupportModal from '../components/SupportModal';
 import { formatCompactNeyron } from '../utils/formatters';
 import { useHaptic } from '../hooks/useHaptic';
 import { useLanguage } from '../context/LanguageContext';
 
-export default function ProfilePage({ user, onUpdateUser }) {
-  const { t } = useLanguage();
+export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }) {
+  const { t, lang } = useLanguage();
   const { impactLight, impactMedium } = useHaptic();
 
   // Modal triggers
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
   const [isTopUpOpen, setIsTopUpOpen] = useState(false);
-  const [isPromoOpen, setIsPromoOpen] = useState(false);
-  const [isMistakesOpen, setIsMistakesOpen] = useState(false);
+  const [isSupportOpen, setIsSupportOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  // Synchronize modal state with Telegram Mini App BackButton
+  useEffect(() => {
+    if (typeof onRegisterBackAction !== 'function') return;
+
+    if (isSupportOpen) {
+      onRegisterBackAction(() => setIsSupportOpen(false));
+    } else if (isSettingsOpen) {
+      onRegisterBackAction(() => setIsSettingsOpen(false));
+    } else if (isEditProfileOpen) {
+      onRegisterBackAction(() => setIsEditProfileOpen(false));
+    } else if (isTopUpOpen) {
+      onRegisterBackAction(() => setIsTopUpOpen(false));
+    } else {
+      onRegisterBackAction(null);
+    }
+  }, [isSupportOpen, isSettingsOpen, isEditProfileOpen, isTopUpOpen, onRegisterBackAction]);
 
   const fullName = user?.full_name || 'Aliakbar Lutfullayev';
   const classGroup = user?.class_group || '11-A';
@@ -127,54 +142,42 @@ export default function ProfilePage({ user, onUpdateUser }) {
               <CreditCard className="w-5 h-5" />
             </div>
             <div>
-              <span className="font-bold text-white text-sm block">Balansni to'ldirish</span>
-              <span className="text-[11px] text-[#8E8E93]">Click, Stars yoki bepul vazifalar</span>
+              <span className="font-bold text-white text-sm block">
+                {lang === 'ru' ? 'Пополнить баланс' : "Balansni to'ldirish"}
+              </span>
+              <span className="text-[11px] text-[#8E8E93]">
+                {lang === 'ru' ? 'Telegram Stars или бесплатные задания' : 'Telegram Stars yoki bepul vazifalar'}
+              </span>
             </div>
           </div>
           <ChevronRight className="w-5 h-5 text-[#8E8E93]" />
         </div>
 
-        {/* Row 2: Promo-kod faollashtirish (Amber Squircle) */}
+        {/* Row 2: Aloqa va yordam (Emerald Squircle) */}
         <div
           onClick={() => {
             impactLight();
-            setIsPromoOpen(true);
+            setIsSupportOpen(true);
           }}
           className="card-row flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.03] transition-colors border-b border-white/[0.04]"
         >
           <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400">
-              <Ticket className="w-5 h-5" />
+            <div className="w-10 h-10 rounded-2xl bg-teal-500/20 border border-teal-500/30 flex items-center justify-center text-teal-400">
+              <Headphones className="w-5 h-5" />
             </div>
             <div>
-              <span className="font-bold text-white text-sm block">Promo-kod faollashtirish</span>
-              <span className="text-[11px] text-[#8E8E93]">Maxsus kod orqali bonus Neyronlar</span>
+              <span className="font-bold text-white text-sm block">
+                {lang === 'ru' ? 'Связь и помощь' : 'Aloqa va yordam'}
+              </span>
+              <span className="text-[11px] text-[#8E8E93]">
+                {lang === 'ru' ? 'Вопросы по био, хим и тех. поддержка' : 'Biologiya, kimyo va texnik yordam'}
+              </span>
             </div>
           </div>
           <ChevronRight className="w-5 h-5 text-[#8E8E93]" />
         </div>
 
-        {/* Row 3: Mening xatolarim — Tahlil (Purple Squircle) */}
-        <div
-          onClick={() => {
-            impactLight();
-            setIsMistakesOpen(true);
-          }}
-          className="card-row flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.03] transition-colors border-b border-white/[0.04]"
-        >
-          <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-2xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400">
-              <Microscope className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="font-bold text-white text-sm block">Mening xatolarim — Tahlil</span>
-              <span className="text-[11px] text-[#8E8E93]">Darslik manbalari bo'yicha tavsiyalar</span>
-            </div>
-          </div>
-          <ChevronRight className="w-5 h-5 text-[#8E8E93]" />
-        </div>
-
-        {/* Row 4: Telegram Kanal (Blue Squircle) */}
+        {/* Row 3: Telegram Kanal (Blue Squircle) */}
         <div
           onClick={handleOpenChannel}
           className="card-row flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.03] transition-colors border-b border-white/[0.04]"
@@ -191,7 +194,7 @@ export default function ProfilePage({ user, onUpdateUser }) {
           <ChevronRight className="w-5 h-5 text-[#8E8E93]" />
         </div>
 
-        {/* Row 5: Sozlamalar (Slate Squircle) */}
+        {/* Row 4: Sozlamalar (Slate Squircle) */}
         <div
           onClick={() => {
             impactLight();
@@ -200,12 +203,14 @@ export default function ProfilePage({ user, onUpdateUser }) {
           className="card-row flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.03] transition-colors"
         >
           <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-2xl bg-slate-500/20 border border-slate-500/30 flex items-center justify-center text-slate-300">
+            <div className="w-10 h-10 rounded-2xl bg-blue-500/15 border border-blue-500/25 flex items-center justify-center text-blue-400">
               <Settings className="w-5 h-5" />
             </div>
             <div>
-              <span className="font-bold text-white text-sm block">Sozlamalar</span>
-              <span className="text-[11px] text-[#8E8E93]">Til (Tilni o'zgartirish), tovush, haptic</span>
+              <span className="font-bold text-white text-sm block">{t('sozlamalar')}</span>
+              <span className="text-[11px] text-[#8E8E93]">
+                {lang === 'ru' ? 'Тема, язык, звук, вибрация и уведомления' : 'Mavzu, til, ovoz, vibratsiya va push'}
+              </span>
             </div>
           </div>
           <ChevronRight className="w-5 h-5 text-[#8E8E93]" />
@@ -233,16 +238,9 @@ export default function ProfilePage({ user, onUpdateUser }) {
         onUpdateUser={onUpdateUser}
       />
 
-      <PromoModal
-        isOpen={isPromoOpen}
-        onClose={() => setIsPromoOpen(false)}
-        user={user}
-        onUpdateUser={onUpdateUser}
-      />
-
-      <MistakesModal
-        isOpen={isMistakesOpen}
-        onClose={() => setIsMistakesOpen(false)}
+      <SupportModal
+        isOpen={isSupportOpen}
+        onClose={() => setIsSupportOpen(false)}
       />
 
       <SettingsModal

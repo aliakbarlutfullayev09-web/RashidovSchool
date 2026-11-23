@@ -495,4 +495,56 @@ export const api = {
       return mockStats;
     }
   },
+
+  // Support Contacts Management (Superadmin)
+  getSupportContacts: async () => {
+    try {
+      const { data, error } = await supabase
+        .from('subjects')
+        .select('id, description')
+        .eq('id', 1)
+        .maybeSingle();
+
+      if (!error && data?.description) {
+        try {
+          const parsed = JSON.parse(data.description);
+          if (parsed && typeof parsed === 'object') {
+            return parsed;
+          }
+        } catch {}
+      }
+    } catch (e) {
+      console.warn('Error fetching support contacts:', e);
+    }
+
+    try {
+      const cached = localStorage.getItem('rb_support_contacts');
+      if (cached) return JSON.parse(cached);
+    } catch {}
+
+    return {
+      bio: { telegram: '@rashidov_bio_mentor', phone: '+998 90 123 45 67' },
+      chem: { telegram: '@rashidov_chem_mentor', phone: '+998 90 765 43 21' },
+      tech: { telegram: '@rashidov_support', phone: '+998 71 200 00 00' }
+    };
+  },
+
+  saveSupportContacts: async (contacts) => {
+    try {
+      const jsonStr = JSON.stringify(contacts);
+      const { error } = await supabase
+        .from('subjects')
+        .update({ description: jsonStr })
+        .eq('id', 1);
+
+      if (error) throw error;
+      try {
+        localStorage.setItem('rb_support_contacts', jsonStr);
+      } catch {}
+      return { success: true };
+    } catch (e) {
+      console.error('Error saving support contacts:', e);
+      return { success: false, error: e.message };
+    }
+  }
 };

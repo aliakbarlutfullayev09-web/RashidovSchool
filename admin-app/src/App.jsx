@@ -7,6 +7,7 @@ import ContentPage from './pages/ContentPage';
 import StaffPage from './pages/StaffPage';
 import UserList from './components/UserList';
 import PromoGenerator from './components/PromoGenerator';
+import SupportSettings from './components/SupportSettings';
 import { api } from './api/supabase';
 import { Loader2 } from 'lucide-react';
 
@@ -75,6 +76,7 @@ function App() {
   const effectiveSection = (() => {
     if (activeSection === 'users' && dbUser.role !== 'superadmin' && dbUser.role !== 'admin' && !dbUser.permissions?.can_gift) return 'dashboard';
     if (activeSection === 'staff' && dbUser.role !== 'superadmin' && dbUser.role !== 'admin') return 'dashboard';
+    if (activeSection === 'support' && dbUser.role !== 'superadmin' && dbUser.role !== 'admin') return 'dashboard';
     if (activeSection === 'promo' && !dbUser.permissions?.can_promo) return 'dashboard';
     return activeSection;
   })();
@@ -86,6 +88,7 @@ function App() {
       case 'promo': return <PromoGenerator user={dbUser} />;
       case 'users': return <UserList />;
       case 'staff': return <StaffPage />;
+      case 'support': return <SupportSettings user={dbUser} />;
       default: return <DashboardPage user={dbUser} />;
     }
   };

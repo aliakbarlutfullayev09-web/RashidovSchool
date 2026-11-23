@@ -9,9 +9,12 @@ import ProfilePage from './pages/ProfilePage';
 import { useTelegram } from './hooks/useTelegram';
 import { getUserData, syncUserSession } from './api/supabase';
 import { LanguageProvider } from './context/LanguageContext';
+import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { Loader2 } from 'lucide-react';
 
 function MainApp() {
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === 'light';
   const [activeTab, setActiveTab] = useState(0);
   const { tg, isTelegram, user: tgUser, setBackButton } = useTelegram();
   const isTelegramWithBack = Boolean(
@@ -39,6 +42,13 @@ function MainApp() {
 
   const registerTestlarBackAction = useCallback((action) => {
     setTestlarBackAction(() => action);
+  }, []);
+
+  // Back action registered from nested views/modals in ProfilePage
+  const [profileBackAction, setProfileBackAction] = useState(null);
+
+  const registerProfileBackAction = useCallback((action) => {
+    setProfileBackAction(() => action);
   }, []);
 
   // Viewport / Orientation Detection
@@ -72,6 +82,8 @@ function MainApp() {
       handler = lessonsBackAction;
     } else if (activeTab === 1 && typeof testlarBackAction === 'function') {
       handler = testlarBackAction;
+    } else if (activeTab === 3 && typeof profileBackAction === 'function') {
+      handler = profileBackAction;
     } else if (activeTab !== 0) {
       handler = () => setActiveTab(0);
     }
@@ -81,7 +93,7 @@ function MainApp() {
     } else {
       setBackButton(false);
     }
-  }, [isVideoPlaying, isTopUpOpen, activeTab, lessonsBackAction, testlarBackAction, setBackButton]);
+  }, [isVideoPlaying, isTopUpOpen, activeTab, lessonsBackAction, testlarBackAction, profileBackAction, setBackButton]);
 
   useEffect(() => {
     let mounted = true;
@@ -169,6 +181,7 @@ function MainApp() {
           <ProfilePage 
             user={dbUser} 
             onUpdateUser={(updated) => setDbUser(updated)} 
+            onRegisterBackAction={registerProfileBackAction}
           />
         );
       default:
@@ -184,7 +197,7 @@ function MainApp() {
 
   return (
     <div 
-      className={`bg-[#000000] text-white relative flex flex-col ${
+      className={`${isLight ? 'bg-[#F2F2F7] text-[#1C1C1E]' : 'bg-[#000000] text-white'} relative flex flex-col ${
         isLandscapeDesktop ? 'max-w-5xl mx-auto' : 'w-full max-w-[480px] mx-auto'
       }`}
       style={{
@@ -202,13 +215,16 @@ function MainApp() {
           showBackButton={!isTelegramWithBack && (
             (activeTab === 0 && typeof lessonsBackAction === 'function') ||
             (activeTab === 1 && typeof testlarBackAction === 'function') ||
-            (activeTab > 1)
+            (activeTab === 3 && typeof profileBackAction === 'function') ||
+            (activeTab > 0)
           )}
           onBack={() => {
             if (activeTab === 0 && typeof lessonsBackAction === 'function') {
               lessonsBackAction();
             } else if (activeTab === 1 && typeof testlarBackAction === 'function') {
               testlarBackAction();
+            } else if (activeTab === 3 && typeof profileBackAction === 'function') {
+              profileBackAction();
             } else if (activeTab !== 0) {
               setActiveTab(0);
             }
@@ -246,8 +262,10 @@ function MainApp() {
 
 export default function App() {
   return (
-    <LanguageProvider initialLang="uz">
-      <MainApp />
-    </LanguageProvider>
+    <ThemeProvider initialTheme="dark">
+      <LanguageProvider initialLang="uz">
+        <MainApp />
+      </LanguageProvider>
+    </ThemeProvider>
   );
 }
