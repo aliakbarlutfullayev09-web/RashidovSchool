@@ -145,9 +145,6 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
               <span className="font-bold text-white text-sm block">
                 {lang === 'ru' ? 'Пополнить баланс' : "Balansni to'ldirish"}
               </span>
-              <span className="text-[11px] text-[#8E8E93]">
-                {lang === 'ru' ? 'Telegram Stars или бесплатные задания' : 'Telegram Stars yoki bepul vazifalar'}
-              </span>
             </div>
           </div>
           <ChevronRight className="w-5 h-5 text-[#8E8E93]" />
@@ -169,9 +166,6 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
               <span className="font-bold text-white text-sm block">
                 {lang === 'ru' ? 'Связь и помощь' : 'Aloqa va yordam'}
               </span>
-              <span className="text-[11px] text-[#8E8E93]">
-                {lang === 'ru' ? 'Вопросы по био, хим и тех. поддержка' : 'Biologiya, kimyo va texnik yordam'}
-              </span>
             </div>
           </div>
           <ChevronRight className="w-5 h-5 text-[#8E8E93]" />
@@ -188,7 +182,6 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
             </div>
             <div>
               <span className="font-bold text-white text-sm block">Rashidov Biologiya Rasmiy Kanali</span>
-              <span className="text-[11px] text-[#8E8E93]">@rashidov_biologiya</span>
             </div>
           </div>
           <ChevronRight className="w-5 h-5 text-[#8E8E93]" />
@@ -208,9 +201,6 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
             </div>
             <div>
               <span className="font-bold text-white text-sm block">{t('sozlamalar')}</span>
-              <span className="text-[11px] text-[#8E8E93]">
-                {lang === 'ru' ? 'Тема, язык, звук, вибрация и уведомления' : 'Mavzu, til, ovoz, vibratsiya va push'}
-              </span>
             </div>
           </div>
           <ChevronRight className="w-5 h-5 text-[#8E8E93]" />
@@ -219,8 +209,8 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
       </div>
 
       {/* Footer Branding */}
-      <p className="text-center text-[11px] text-[#8E8E93]/50 pt-2 pb-6">
-        Rashidov Biologiya EdTech • v2.0 OLED
+      <p className="text-center text-[11px] text-[#8E8E93]/50 pt-2 pb-6 tracking-wider">
+        Rashidov School &nbsp;&bull;&nbsp; since 2023
       </p>
 
       {/* Modals */}
