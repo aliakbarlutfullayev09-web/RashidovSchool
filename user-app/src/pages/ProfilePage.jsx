@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  ChevronRight, CreditCard, Send, Settings, 
+  ChevronRight, CreditCard, Settings, 
   Sparkles, Flame, User, Edit3, ShieldCheck, Headphones, Globe 
 } from 'lucide-react';
 import Profile from '../components/Profile';
@@ -11,6 +11,13 @@ import { formatCompactNeyron } from '../utils/formatters';
 import { useHaptic } from '../hooks/useHaptic';
 import { useLanguage } from '../context/LanguageContext';
 import { getSupportContacts } from '../api/supabase';
+
+// Telegram official SVG logo
+const TelegramIcon = ({ className = "w-5 h-5" }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/>
+  </svg>
+);
 
 export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }) {
   const { t, lang } = useLanguage();
@@ -94,7 +101,7 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
             impactLight();
             setIsEditProfileOpen(true);
           }}
-          className="absolute top-4 right-4 w-9 h-9 rounded-full bg-[#2C2C2E] border border-white/5 hover:bg-[#343438] flex items-center justify-center text-white/80 active:scale-95 transition-all"
+          className="absolute top-4 right-4 w-9 h-9 rounded-full bg-[#2C2C2E] border border-blue-500/20 hover:bg-[#343438] flex items-center justify-center text-blue-500 active:scale-95 transition-all"
         >
           <Edit3 className="w-4 h-4" />
         </button>
@@ -156,7 +163,7 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
       {/* iOS-Style Grouped Squircle Menu (Every Row is Clickable) */}
       <div className="card-grouped bg-[#1C1C1E] border border-white/5 rounded-3xl overflow-hidden shadow-2xl">
         
-        {/* Row 1: Balansni to'ldirish (Green Squircle) */}
+        {/* Row 1: Balansni to'ldirish (Dark Blue Squircle) */}
         <div
           onClick={() => {
             impactLight();
@@ -165,7 +172,7 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
           className="card-row flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.03] transition-colors border-b border-white/[0.04]"
         >
           <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+            <div className="w-10 h-10 rounded-2xl bg-blue-600/15 border border-blue-500/30 flex items-center justify-center text-blue-500">
               <CreditCard className="w-5 h-5" />
             </div>
             <div>
@@ -177,7 +184,7 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
           <ChevronRight className="w-5 h-5 text-[#8E8E93]" />
         </div>
 
-        {/* Row 2: Sozlamalar (Blue Squircle) */}
+        {/* Row 2: Sozlamalar (Dark Blue Squircle) */}
         <div
           onClick={() => {
             impactLight();
@@ -186,7 +193,7 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
           className="card-row flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.03] transition-colors border-b border-white/[0.04]"
         >
           <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-2xl bg-blue-500/15 border border-blue-500/25 flex items-center justify-center text-blue-400">
+            <div className="w-10 h-10 rounded-2xl bg-blue-600/15 border border-blue-500/30 flex items-center justify-center text-blue-500">
               <Settings className="w-5 h-5" />
             </div>
             <div>
@@ -196,7 +203,7 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
           <ChevronRight className="w-5 h-5 text-[#8E8E93]" />
         </div>
 
-        {/* Row 3: Aloqa va yordam (Teal Squircle) */}
+        {/* Row 3: Aloqa va yordam (Dark Blue Squircle) */}
         <div
           onClick={() => {
             impactLight();
@@ -205,7 +212,7 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
           className="card-row flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.03] transition-colors border-b border-white/[0.04]"
         >
           <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-2xl bg-teal-500/20 border border-teal-500/30 flex items-center justify-center text-teal-400">
+            <div className="w-10 h-10 rounded-2xl bg-blue-600/15 border border-blue-500/30 flex items-center justify-center text-blue-500">
               <Headphones className="w-5 h-5" />
             </div>
             <div>
@@ -217,14 +224,14 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
           <ChevronRight className="w-5 h-5 text-[#8E8E93]" />
         </div>
 
-        {/* Row 4: Telegram Kanal (Sky Blue Squircle) */}
+        {/* Row 4: Telegram Kanal (Dark Blue Squircle + Official Telegram Logo) */}
         <div
           onClick={handleOpenChannel}
           className="card-row flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.03] transition-colors border-b border-white/[0.04]"
         >
           <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-2xl bg-sky-500/20 border border-sky-500/30 flex items-center justify-center text-sky-400">
-              <Send className="w-5 h-5 ml-[-2px]" />
+            <div className="w-10 h-10 rounded-2xl bg-blue-600/15 border border-blue-500/30 flex items-center justify-center text-blue-500">
+              <TelegramIcon className="w-5 h-5" />
             </div>
             <div>
               <span className="font-bold text-white text-sm block">Rashidov Biologiya Rasmiy Kanali</span>
@@ -233,13 +240,13 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
           <ChevronRight className="w-5 h-5 text-[#8E8E93]" />
         </div>
 
-        {/* Row 5: Rasmiy sayt (Purple Squircle) */}
+        {/* Row 5: Rasmiy sayt (Dark Blue Squircle) */}
         <div
           onClick={handleOpenWebsite}
           className="card-row flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.03] transition-colors"
         >
           <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-2xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400">
+            <div className="w-10 h-10 rounded-2xl bg-blue-600/15 border border-blue-500/30 flex items-center justify-center text-blue-500">
               <Globe className="w-5 h-5" />
             </div>
             <div>

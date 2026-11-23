@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  ArrowLeft, Moon, Sun, Monitor, Volume2, VolumeX, 
+  Moon, Sun, Monitor, Volume2, VolumeX, 
   Smartphone, Bell, BellOff, Check, Settings 
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
@@ -70,6 +70,10 @@ export default function SettingsModal({ isOpen, onClose }) {
   useEffect(() => {
     if (!isOpen) return;
 
+    // Sync document.title for Telegram native header
+    const prevTitle = document.title;
+    document.title = t('sozlamalar');
+
     const tg = window.Telegram?.WebApp;
     if (tg?.BackButton) {
       const handleTelegramBack = () => {
@@ -84,13 +88,18 @@ export default function SettingsModal({ isOpen, onClose }) {
       }
 
       return () => {
+        document.title = prevTitle;
         try {
           tg.BackButton.offClick(handleTelegramBack);
           tg.BackButton.hide();
         } catch {}
       };
     }
-  }, [isOpen, onClose]);
+
+    return () => {
+      document.title = prevTitle;
+    };
+  }, [isOpen, onClose, t]);
 
   // Keyboard Escape listener
   useEffect(() => {
@@ -169,38 +178,22 @@ export default function SettingsModal({ isOpen, onClose }) {
             : 'bg-[#000000] text-white'
         }`}
       >
-        {/* Fullscreen Header with system back button */}
+        {/* Fullscreen Header with centered title between Telegram's back and menu controls */}
         <div 
-          className={`px-4 pb-3 flex items-center justify-between border-b ${
+          className={`px-4 pb-3 flex items-center justify-center border-b ${
             isLight ? 'border-black/5 bg-white/80' : 'border-white/5 bg-[#121214]/80'
           } backdrop-blur-xl shrink-0`}
           style={{
-            paddingTop: 'max(calc(var(--safe-area-top, 0px) + 12px), 16px)'
+            paddingTop: 'max(calc(var(--safe-area-top, 0px) + 6px), 12px)'
           }}
         >
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => {
-                impactLight();
-                onClose();
-              }}
-              className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-95 ${
-                isLight 
-                  ? 'bg-black/5 hover:bg-black/10 text-gray-800' 
-                  : 'bg-white/10 hover:bg-white/15 text-white'
-              }`}
-              title={lang === 'ru' ? 'Назад' : 'Orqaga'}
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-blue-500/15 border border-blue-500/25 flex items-center justify-center text-blue-400 font-bold">
-                <Settings className="w-4 h-4 text-blue-400" />
-              </div>
-              <h3 className="font-extrabold text-base leading-tight">
-                {t('sozlamalar')}
-              </h3>
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-blue-500/15 border border-blue-500/25 flex items-center justify-center text-blue-400 font-bold shrink-0">
+              <Settings className="w-4 h-4 text-blue-400" />
             </div>
+            <h3 className="font-extrabold text-base leading-tight text-center">
+              {t('sozlamalar')}
+            </h3>
           </div>
         </div>
 

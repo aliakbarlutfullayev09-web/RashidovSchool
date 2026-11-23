@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  ArrowLeft, Phone, Headphones, ExternalLink, Dna, FlaskConical, Settings 
+  Phone, Headphones, Dna, FlaskConical, Settings 
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
@@ -47,9 +47,12 @@ export default function SupportModal({ isOpen, onClose }) {
     return () => { mounted = false; };
   }, [isOpen]);
 
-  // Native Telegram WebApp BackButton coordination
+  // Native Telegram WebApp BackButton coordination & title sync
   useEffect(() => {
     if (!isOpen) return;
+
+    const prevTitle = document.title;
+    document.title = lang === 'ru' ? 'Связь и помощь' : 'Aloqa va yordam';
 
     const tg = window.Telegram?.WebApp;
     if (tg?.BackButton) {
@@ -65,13 +68,18 @@ export default function SupportModal({ isOpen, onClose }) {
       }
 
       return () => {
+        document.title = prevTitle;
         try {
           tg.BackButton.offClick(handleBack);
           tg.BackButton.hide();
         } catch {}
       };
     }
-  }, [isOpen, onClose]);
+
+    return () => {
+      document.title = prevTitle;
+    };
+  }, [isOpen, onClose, lang]);
 
   // Keyboard Escape listener
   useEffect(() => {
@@ -151,34 +159,15 @@ export default function SupportModal({ isOpen, onClose }) {
             : 'bg-[#000000] text-white'
         }`}
       >
-        {/* Fullscreen Header with centered title and system back button */}
+        {/* Fullscreen Header with centered title between Telegram's back and menu controls */}
         <div 
-          className={`px-4 pb-3 relative flex items-center justify-center border-b ${
+          className={`px-4 pb-3 flex items-center justify-center border-b ${
             isLight ? 'border-black/5 bg-white/80' : 'border-white/5 bg-[#121214]/80'
           } backdrop-blur-xl shrink-0`}
           style={{
-            paddingTop: 'max(calc(var(--safe-area-top, 0px) + 12px), 16px)'
+            paddingTop: 'max(calc(var(--safe-area-top, 0px) + 6px), 12px)'
           }}
         >
-          {/* Back Button on Left */}
-          <button
-            onClick={() => {
-              impactLight();
-              onClose();
-            }}
-            className={`absolute left-4 w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-95 ${
-              isLight 
-                ? 'bg-black/5 hover:bg-black/10 text-gray-800' 
-                : 'bg-white/10 hover:bg-white/15 text-white'
-            }`}
-            style={{
-              top: 'max(calc(var(--safe-area-top, 0px) + 10px), 14px)'
-            }}
-            title={lang === 'ru' ? 'Назад' : 'Orqaga'}
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-
           {/* Centered Title */}
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center text-emerald-400 font-bold shrink-0">
@@ -220,29 +209,26 @@ export default function SupportModal({ isOpen, onClose }) {
                   </h4>
                 </div>
 
-                {/* Action Buttons Row: Telegram (with logo & text) + Qo'ng'iroq (compact) */}
+                {/* Action Buttons Row: Qo'ng'iroq (Phone number) + Telegram */}
                 <div className="flex items-center gap-2">
                   
-                  {/* Telegram Button with TG Logo and "Telegram" only */}
-                  <button
-                    onClick={() => handleOpenTelegram(tgHandle)}
-                    className="flex-1 py-2.5 px-3.5 rounded-xl bg-[#229ED9]/15 hover:bg-[#229ED9]/25 border border-[#229ED9]/30 flex items-center justify-between text-[#229ED9] active:scale-[0.98] transition-all group min-w-0"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <TelegramIcon className="w-4 h-4 shrink-0 text-[#229ED9]" />
-                      <span className="font-bold text-xs shrink-0">Telegram</span>
-                    </div>
-                    <ExternalLink className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100 shrink-0 ml-1" />
-                  </button>
-
-                  {/* Phone Call Button (Slightly reduced / compact) */}
+                  {/* Phone Call Button (Displays phone number directly) */}
                   <button
                     onClick={() => handleCallPhone(phoneNum)}
-                    className="py-2.5 px-3.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 flex items-center gap-1.5 text-emerald-400 font-bold text-xs active:scale-[0.98] transition-all shrink-0"
+                    className="flex-1 py-2.5 px-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 flex items-center justify-center gap-2 text-emerald-400 font-bold text-xs active:scale-[0.98] transition-all min-w-0"
                     title={phoneNum}
                   >
                     <Phone className="w-3.5 h-3.5 shrink-0" />
-                    <span>{lang === 'ru' ? 'Вызов' : 'Qo‘ng‘iroq'}</span>
+                    <span className="font-mono text-[11px] sm:text-xs truncate">{phoneNum}</span>
+                  </button>
+
+                  {/* Telegram Button with TG Logo and "Telegram" */}
+                  <button
+                    onClick={() => handleOpenTelegram(tgHandle)}
+                    className="py-2.5 px-4 rounded-xl bg-[#229ED9]/15 hover:bg-[#229ED9]/25 border border-[#229ED9]/30 flex items-center justify-center gap-2 text-[#229ED9] active:scale-[0.98] transition-all group shrink-0"
+                  >
+                    <TelegramIcon className="w-4 h-4 shrink-0 text-[#229ED9]" />
+                    <span className="font-bold text-xs shrink-0">Telegram</span>
                   </button>
 
                 </div>
