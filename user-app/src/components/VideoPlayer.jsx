@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
-  Play, Pause, RotateCcw, Maximize, ArrowLeft, 
-  BookOpen, Clock, AlertCircle, RefreshCw, Sparkles, CheckCircle2 
+  Play, Pause, RotateCcw, Maximize, 
+  BookOpen, Clock, AlertCircle, RefreshCw, Sparkles, CheckCircle2, 
+  X, ZoomIn, ZoomOut, ChevronDown 
 } from 'lucide-react';
 import CheckpointModal from './CheckpointModal';
 import GlossaryPanel from './GlossaryPanel';
@@ -21,7 +22,26 @@ export default function VideoPlayer({
 }) {
   const videoRef = useRef(null);
   const containerRef = useRef(null);
+  const seekbarRef = useRef(null);
   const { impactLight, impactMedium, notificationSuccess } = useHaptic();
+
+  // Orientation state
+  const [isLandscape, setIsLandscape] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth > window.innerHeight;
+  });
+
+  useEffect(() => {
+    const handleOrientation = () => {
+      setIsLandscape(window.innerWidth > window.innerHeight);
+    };
+    window.addEventListener('resize', handleOrientation);
+    window.addEventListener('orientationchange', handleOrientation);
+    return () => {
+      window.removeEventListener('resize', handleOrientation);
+      window.removeEventListener('orientationchange', handleOrientation);
+    };
+  }, []);
 
   // Playback state
   const [isPlaying, setIsPlaying] = useState(false);
@@ -48,12 +68,34 @@ export default function VideoPlayer({
   // End state
   const [isEnded, setIsEnded] = useState(false);
 
+  // ── PINCH-TO-ZOOM & PAN STATE ──
+  const [zoomScale, setZoomScale] = useState(1);
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const touchStateRef = useRef({
+    initialDist: 0,
+    initialScale: 1,
+    isPinching: false,
+    lastTapTime: 0,
+    panStart: { x: 0, y: 0 },
+    initialPan: { x: 0, y: 0 },
+    tapStart: { x: 0, y: 0 },
+    hasMoved: false
+  });
+
   // Tracking refs for verified continuous playback
   const lastPlaybackTimeRef = useRef(0);
   const lastPlaybackWallClockRef = useRef(Date.now());
   const isSeekingRef = useRef(false);
   const maxWatchedRef = useRef(0);
   const controlsTimeoutRef = useRef(null);
+
+  // Expose onBack to window for Telegram native BackButton
+  useEffect(() => {
+    window.__rb_exit_video = onBack;
+    return () => {
+      window.__rb_exit_video = null;
+    };
+  }, [onBack]);
 
   // Keep maxWatchedRef in sync
   useEffect(() => {
@@ -71,7 +113,6 @@ export default function VideoPlayer({
           setMaxWatchedSeconds(initSec);
           maxWatchedRef.current = initSec;
 
-          // If student had progress, optionally restore position safely within frontier
           if (saved.lastPosition && saved.lastPosition <= initSec && videoRef.current) {
             videoRef.current.currentTime = saved.lastPosition;
             setCurrentTime(saved.lastPosition);
@@ -89,15 +130,28 @@ export default function VideoPlayer({
     return () => { mounted = false; };
   }, [userId, lessonId]);
 
-  // Auto-hide controls after inactivity
+  // Auto-hide controls timer
   const resetControlsTimeout = useCallback(() => {
-    setShowControls(true);
     if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
     if (isPlaying && !isGlossaryOpen) {
       controlsTimeoutRef.current = setTimeout(() => {
         setShowControls(false);
       }, 4000);
     }
+  }, [isPlaying, isGlossaryOpen]);
+
+  // Single tap toggles controls visibility
+  const handleToggleControls = useCallback(() => {
+    setShowControls(prev => {
+      const next = !prev;
+      if (next && isPlaying && !isGlossaryOpen) {
+        if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+        controlsTimeoutRef.current = setTimeout(() => {
+          setShowControls(false);
+        }, 4000);
+      }
+      return next;
+    });
   }, [isPlaying, isGlossaryOpen]);
 
   // Show friendly seek toast
@@ -136,7 +190,7 @@ export default function VideoPlayer({
     };
   }, []);
 
-  // Keyboard controls (Space to toggle play, ArrowLeft/Right to seek)
+  // Keyboard controls
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.code === 'Space') {
@@ -154,45 +208,104 @@ export default function VideoPlayer({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isPlaying, maxWatchedSeconds, duration]);
 
-  // Handle right-edge swipe gesture to open glossary
-  useEffect(() => {
-    let startX = 0;
-    let startY = 0;
+  // ── PINCH-TO-ZOOM TOUCH LISTENERS ──
+  const handleTouchStart = (e) => {
+    const now = Date.now();
+    touchStateRef.current.hasMoved = false;
 
-    const handleTouchStart = (e) => {
-      if (e.touches.length === 1) {
-        startX = e.touches[0].clientX;
-        startY = e.touches[0].clientY;
+    if (e.touches.length === 2) {
+      // 2 Fingers: Start Pinch-to-zoom
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      touchStateRef.current.initialDist = dist;
+      touchStateRef.current.initialScale = zoomScale;
+      touchStateRef.current.isPinching = true;
+    } else if (e.touches.length === 1) {
+      // 1 Finger: Record position for double-tap or panning
+      const t = e.touches[0];
+      touchStateRef.current.tapStart = { x: t.clientX, y: t.clientY };
+      touchStateRef.current.panStart = { x: t.clientX, y: t.clientY };
+      touchStateRef.current.initialPan = { ...panOffset };
+
+      // Double-tap detection (within 300ms)
+      if (now - touchStateRef.current.lastTapTime < 320) {
+        impactLight();
+        if (zoomScale > 1.1) {
+          // Reset zoom
+          setZoomScale(1);
+          setPanOffset({ x: 0, y: 0 });
+        } else {
+          // Zoom in to 2.0x
+          setZoomScale(2.0);
+        }
+        touchStateRef.current.lastTapTime = 0;
+        return;
       }
-    };
+      touchStateRef.current.lastTapTime = now;
+    }
+  };
 
-    const handleTouchEnd = (e) => {
-      if (e.changedTouches.length === 1) {
-        const endX = e.changedTouches[0].clientX;
-        const endY = e.changedTouches[0].clientY;
-        const deltaX = startX - endX;
-        const deltaY = Math.abs(startY - endY);
-
-        // Right edge swipe left: started within 50px of right screen edge, moved left > 40px
-        const screenW = window.innerWidth;
-        if (startX >= screenW - 55 && deltaX > 45 && deltaY < 80) {
-          impactLight();
-          setIsGlossaryOpen(true);
+  const handleTouchMove = (e) => {
+    if (e.touches.length === 2 && touchStateRef.current.isPinching) {
+      e.preventDefault();
+      touchStateRef.current.hasMoved = true;
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      if (touchStateRef.current.initialDist > 0) {
+        const factor = dist / touchStateRef.current.initialDist;
+        const newScale = Math.min(3.5, Math.max(1, touchStateRef.current.initialScale * factor));
+        setZoomScale(newScale);
+        if (newScale <= 1.02) {
+          setPanOffset({ x: 0, y: 0 });
         }
       }
-    };
+    } else if (e.touches.length === 1 && zoomScale > 1.05) {
+      // 1 finger panning when zoomed in
+      const t = e.touches[0];
+      const deltaX = t.clientX - touchStateRef.current.panStart.x;
+      const deltaY = t.clientY - touchStateRef.current.panStart.y;
+      if (Math.abs(deltaX) > 4 || Math.abs(deltaY) > 4) {
+        touchStateRef.current.hasMoved = true;
+      }
 
-    window.addEventListener('touchstart', handleTouchStart, { passive: true });
-    window.addEventListener('touchend', handleTouchEnd, { passive: true });
-    return () => {
-      window.removeEventListener('touchstart', handleTouchStart);
-      window.removeEventListener('touchend', handleTouchEnd);
-    };
-  }, [impactLight]);
+      const maxPanX = (zoomScale - 1) * 160;
+      const maxPanY = (zoomScale - 1) * 110;
+
+      setPanOffset({
+        x: Math.max(-maxPanX, Math.min(maxPanX, touchStateRef.current.initialPan.x + deltaX)),
+        y: Math.max(-maxPanY, Math.min(maxPanY, touchStateRef.current.initialPan.y + deltaY))
+      });
+    }
+  };
+
+  const handleTouchEnd = (e) => {
+    if (e.touches.length < 2) {
+      touchStateRef.current.isPinching = false;
+    }
+    // If it was a quick single tap without moving and not a double-tap:
+    if (!touchStateRef.current.hasMoved && e.changedTouches.length === 1 && !touchStateRef.current.isPinching) {
+      const now = Date.now();
+      // Slight delay to distinguish single tap from double tap
+      setTimeout(() => {
+        if (Date.now() - touchStateRef.current.lastTapTime >= 280) {
+          handleToggleControls();
+        }
+      }, 290);
+    }
+  };
+
+  const resetZoom = () => {
+    impactLight();
+    setZoomScale(1);
+    setPanOffset({ x: 0, y: 0 });
+  };
 
   /**
-   * VERIFIED CONTINUOUS PLAYBACK ADVANCEMENT:
-   * Frontier advances ONLY when actual real-time video playback progresses.
+   * VERIFIED CONTINUOUS PLAYBACK ADVANCEMENT
    */
   const handleTimeUpdate = () => {
     if (!videoRef.current) return;
@@ -206,7 +319,6 @@ export default function VideoPlayer({
     lastPlaybackWallClockRef.current = now;
     lastPlaybackTimeRef.current = time;
 
-    // Do NOT advance if seeking, paused, or unnatural time leap occurred
     if (!isSeekingRef.current && isPlaying) {
       const rate = videoRef.current.playbackRate || 1;
       const maxAllowedDelta = Math.max(0.6, wallElapsed * rate * 1.6 + 0.6);
@@ -216,7 +328,6 @@ export default function VideoPlayer({
           const newFrontier = time;
           setMaxWatchedSeconds(newFrontier);
           maxWatchedRef.current = newFrontier;
-          // Non-blocking local persistence
           saveWatchProgress(userId, lessonId, time, newFrontier);
         }
       }
@@ -237,15 +348,13 @@ export default function VideoPlayer({
   };
 
   /**
-   * SEEK ENFORCEMENT:
-   * Clamps targetTime to maxWatchedSeconds.
+   * SEEK ENFORCEMENT
    */
   const clampAndSeek = (targetTime) => {
     if (!videoRef.current) return;
     const frontier = maxWatchedRef.current;
 
     if (targetTime > frontier + 0.5) {
-      // Clamped
       videoRef.current.currentTime = frontier;
       setCurrentTime(frontier);
       lastPlaybackTimeRef.current = frontier;
@@ -267,10 +376,11 @@ export default function VideoPlayer({
     resetControlsTimeout();
   };
 
-  const handleSeekbarClick = (e) => {
-    if (!videoRef.current || !duration) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  // Seekbar interactive scrub handling
+  const handleSeekbarInteraction = (clientX) => {
+    if (!videoRef.current || !duration || !seekbarRef.current) return;
+    const rect = seekbarRef.current.getBoundingClientRect();
+    const percent = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
     const targetTime = percent * duration;
     clampAndSeek(targetTime);
     resetControlsTimeout();
@@ -321,7 +431,6 @@ export default function VideoPlayer({
         setIsPlaying(true);
       }
     } else {
-      // Rewind to explanation point WITHOUT decreasing maxWatchedSeconds!
       const rewindTime = activeCheckpoint.rewind_time_sec !== undefined 
         ? activeCheckpoint.rewind_time_sec 
         : Math.max(0, activeCheckpoint.trigger_time_sec - 10);
@@ -358,64 +467,96 @@ export default function VideoPlayer({
     }
   };
 
+  // Speed cycle: strictly max 1.3x [1x, 1.1x, 1.2x, 1.3x]
+  const handleCycleSpeed = () => {
+    impactLight();
+    const rates = [1, 1.1, 1.2, 1.3];
+    const currentIndex = rates.findIndex(r => Math.abs(r - playbackRate) < 0.04);
+    const nextIndex = (currentIndex + 1) % rates.length;
+    setPlaybackRate(rates[nextIndex]);
+  };
+
+  // Seekbar progress percentage
+  const currentPercent = Math.min(100, Math.max(0, (currentTime / (duration || 1)) * 100));
+  const maxWatchedPercent = Math.min(100, Math.max(0, (maxWatchedSeconds / (duration || 1)) * 100));
+
   return (
     <div 
       ref={containerRef}
       className="fixed inset-0 z-50 bg-[#000000] text-white flex flex-col justify-between overflow-hidden select-none"
-      onClick={resetControlsTimeout}
     >
-      {/* ── TOP BAR (SAFE FROM TELEGRAM CLOSE & STATUS BAR) ── */}
+      {/* ── TOP TELEGRAM-STYLE "TERMINLAR" BUTTON (Positioned below Telegram's ∨ ⋮ pill) ── */}
       <div 
-        className={`p-4 flex items-center justify-between z-20 bg-gradient-to-b from-black/90 via-black/50 to-transparent transition-opacity duration-300 ${
-          showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
-        }`}
+        className="absolute z-40 right-3 pointer-events-auto transition-opacity duration-300"
         style={{
-          paddingTop: 'calc(var(--safe-area-top, 16px) + 8px)'
+          top: 'calc(var(--safe-area-top, 44px) + 8px)'
         }}
       >
-        {/* Back Button (Safe margin from Telegram controls) */}
-        <button 
-          onClick={onBack}
-          className="w-10 h-10 rounded-full bg-[#1C1C1E]/90 border border-white/10 flex items-center justify-center text-white active:scale-95 transition-transform shadow-lg"
-          title="Orqaga"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-
-        {/* Title */}
-        <span className="text-xs font-bold text-white/95 truncate max-w-[210px] px-2 text-center">
-          {lessonTitle}
-        </span>
-
-        {/* Glossary Quick Button */}
         <button
           onClick={(e) => {
             e.stopPropagation();
             impactLight();
-            setIsGlossaryOpen(true);
+            setIsGlossaryOpen(prev => !prev);
           }}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1C1C1E]/90 border border-white/10 text-xs font-bold text-purple-300 hover:text-white active:scale-95 transition-all shadow-lg"
+          className={`h-8 px-3 rounded-full flex items-center gap-1.5 backdrop-blur-xl border shadow-lg transition-all active:scale-95 text-xs font-semibold ${
+            isGlossaryOpen
+              ? 'bg-purple-600/35 border-purple-400/60 text-white shadow-purple-500/20'
+              : 'bg-black/50 hover:bg-black/65 border-white/15 text-white/90'
+          }`}
           title="Dars terminlari"
         >
-          <BookOpen className="w-3.5 h-3.5 text-purple-400" />
-          <span className="hidden sm:inline">Terminlar</span>
+          <BookOpen className="w-3.5 h-3.5 text-purple-300" />
+          <span>Terminlar</span>
           {terms.length > 0 && (
-            <span className="bg-purple-500/30 text-purple-200 text-[10px] px-1.5 py-0.2 rounded-full font-bold">
+            <span className="bg-purple-500/40 text-purple-200 text-[10px] px-1.5 py-0.2 rounded-full font-bold ml-0.5">
               {terms.length}
             </span>
           )}
         </button>
       </div>
 
-      {/* ── VIDEO VIEWPORT AREA ── */}
+      {/* Floating Zoom Indicator & Reset Button */}
+      {zoomScale > 1.05 && (
+        <div 
+          className="absolute z-40 left-3 pointer-events-auto transition-all animate-in fade-in"
+          style={{
+            top: 'calc(var(--safe-area-top, 44px) + 8px)'
+          }}
+        >
+          <button
+            onClick={resetZoom}
+            className="h-8 px-3 rounded-full bg-black/60 hover:bg-black/80 backdrop-blur-xl border border-white/20 text-xs font-bold text-cyan-300 flex items-center gap-1.5 active:scale-95 shadow-xl"
+          >
+            <ZoomOut className="w-3.5 h-3.5 text-cyan-400" />
+            <span>{zoomScale.toFixed(1)}x • Qaytarish</span>
+          </button>
+        </div>
+      )}
+
+      {/* ── VIDEO CONTAINER (POSITIONED HIGHER UP ON MOBILE PORTRAIT & FULLSCREEN IN LANDSCAPE) ── */}
       <div 
-        className="relative w-full flex-1 flex items-center justify-center overflow-hidden cursor-pointer bg-[#0A0A0C]"
-        onClick={togglePlay}
+        className={`relative w-full overflow-hidden bg-[#0A0A0C] touch-none ${
+          isLandscape 
+            ? 'h-full flex-1 flex items-center justify-center'
+            : 'aspect-video flex items-center justify-center shrink-0 shadow-2xl'
+        }`}
+        style={{
+          marginTop: isLandscape ? '0px' : 'calc(var(--safe-area-top, 44px) + 40px)'
+        }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
       >
         <video
           ref={videoRef}
           src={videoUrl || "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"}
-          className="w-full h-full object-contain max-h-[85vh]"
+          className={`object-contain transition-transform duration-75 select-none pointer-events-auto ${
+            isLandscape ? 'w-full h-full max-h-screen' : 'w-full h-full'
+          }`}
+          style={{
+            transform: `translate3d(${panOffset.x}px, ${panOffset.y}px, 0) scale(${zoomScale})`,
+            transformOrigin: 'center center'
+          }}
           playsInline
           webkit-playsinline="true"
           x-webkit-airplay="allow"
@@ -444,7 +585,7 @@ export default function VideoPlayer({
 
         {/* Buffering Indicator */}
         {isBuffering && !hasError && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/30 pointer-events-none">
+          <div className="absolute inset-0 flex items-center justify-center bg-black/30 pointer-events-none z-10">
             <div className="w-10 h-10 border-3 border-white/20 border-t-[#007AFF] rounded-full animate-spin" />
           </div>
         )}
@@ -481,7 +622,7 @@ export default function VideoPlayer({
 
         {/* Stop-Test Checkpoint Overlay */}
         {activeCheckpoint && (
-          <div onClick={(e) => e.stopPropagation()}>
+          <div onClick={(e) => e.stopPropagation()} className="z-30">
             <CheckpointModal 
               checkpoint={activeCheckpoint} 
               onAnswer={handleAnswerCheckpoint} 
@@ -490,39 +631,46 @@ export default function VideoPlayer({
         )}
       </div>
 
-      {/* ── CONTROLS & SEEKBAR ── */}
+      {/* ── CONTROLS & ENHANCED SEEKBAR ── */}
       <div 
         onClick={(e) => e.stopPropagation()}
-        className={`p-4 max-w-xl mx-auto w-full space-y-3 z-20 bg-gradient-to-t from-black via-black/70 to-transparent transition-opacity duration-300 ${
-          showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        className={`w-full max-w-2xl mx-auto px-4 py-3 z-30 transition-all duration-300 ${
+          isLandscape 
+            ? 'absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black/80 to-transparent' 
+            : 'bg-[#121214] border-b border-white/[0.06]'
+        } ${
+          showControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'
         }`}
         style={{
-          paddingBottom: 'calc(var(--safe-area-bottom, 16px) + 12px)'
+          paddingBottom: isLandscape ? 'calc(var(--safe-area-bottom, 12px) + 8px)' : '10px'
         }}
       >
-        {/* Seekbar Container */}
+        {/* Seekbar Container with comfortable 32px touch target */}
         <div 
-          onClick={handleSeekbarClick}
-          className="relative w-full h-4 py-1.5 cursor-pointer flex items-center group"
+          ref={seekbarRef}
+          onClick={(e) => handleSeekbarInteraction(e.clientX)}
+          onTouchStart={(e) => handleSeekbarInteraction(e.touches[0].clientX)}
+          onTouchMove={(e) => handleSeekbarInteraction(e.touches[0].clientX)}
+          className="relative w-full h-8 flex items-center cursor-pointer group touch-none select-none py-2"
         >
-          {/* Track background */}
-          <div className="w-full h-1.5 bg-[#2C2C2E] rounded-full relative overflow-hidden">
+          {/* Base Track */}
+          <div className="w-full h-1.5 bg-[#2C2C2E] group-hover:h-2 transition-all rounded-full relative overflow-hidden">
             {/* Confirmed watch frontier indicator (Allowed Range) */}
             <div 
               className="absolute left-0 top-0 bottom-0 bg-white/25 rounded-full pointer-events-none"
-              style={{ width: `${(maxWatchedSeconds / (duration || 1)) * 100}%` }}
+              style={{ width: `${maxWatchedPercent}%` }}
             />
-            {/* Current playback progress */}
+            {/* Current playback progress (Neon Gradient) */}
             <div 
-              className="absolute left-0 top-0 bottom-0 bg-[#007AFF] rounded-full pointer-events-none shadow-[0_0_8px_rgba(0,122,255,0.7)]"
-              style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
+              className="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-[#00C6FF] to-[#0072FF] rounded-full pointer-events-none shadow-[0_0_8px_rgba(0,198,255,0.7)]"
+              style={{ width: `${currentPercent}%` }}
             />
           </div>
 
-          {/* Scrubber thumb */}
+          {/* Comfortable Scrubber Thumb */}
           <div 
-            className="absolute w-3.5 h-3.5 bg-white rounded-full shadow-md pointer-events-none -translate-x-1/2 transition-transform group-hover:scale-125"
-            style={{ left: `${(currentTime / (duration || 1)) * 100}%` }}
+            className="absolute w-4 h-4 bg-white rounded-full shadow-[0_2px_8px_rgba(0,0,0,0.6)] border border-white/60 pointer-events-none -translate-x-1/2 group-hover:scale-125 transition-transform"
+            style={{ left: `${currentPercent}%` }}
           />
 
           {/* Checkpoint marker dots */}
@@ -532,8 +680,8 @@ export default function VideoPlayer({
             return (
               <div
                 key={cp.id}
-                className={`absolute w-2.5 h-2.5 rounded-full border-2 border-black pointer-events-none -translate-x-1/2 ${
-                  isDone ? 'bg-emerald-400' : 'bg-amber-400'
+                className={`absolute w-2.5 h-2.5 rounded-full border border-black pointer-events-none -translate-x-1/2 ${
+                  isDone ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,199,89,0.8)]' : 'bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.8)]'
                 }`}
                 style={{ left: `${leftPct}%` }}
                 title={`Stop-test: ${formatTime(cp.trigger_time_sec)}`}
@@ -543,45 +691,40 @@ export default function VideoPlayer({
         </div>
 
         {/* Action Controls Row */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between pt-1">
           <div className="flex items-center gap-3">
             {/* Play / Pause */}
             <button
               onClick={togglePlay}
-              className="w-12 h-12 rounded-full bg-[#007AFF] flex items-center justify-center text-white active:scale-95 transition-transform shadow-lg shadow-blue-500/25"
+              className="w-10 h-10 rounded-full bg-[#007AFF] hover:bg-blue-600 flex items-center justify-center text-white active:scale-95 transition-transform shadow-lg shadow-blue-500/25"
               title={isPlaying ? "To'xtatish" : "O'ynatish"}
             >
-              {isPlaying ? <Pause className="w-5 h-5 fill-white" /> : <Play className="w-5 h-5 fill-white ml-0.5" />}
+              {isPlaying ? <Pause className="w-4 h-4 fill-white" /> : <Play className="w-4 h-4 fill-white ml-0.5" />}
             </button>
 
             {/* Rewind -10s */}
             <button
               onClick={() => seekDelta(-10)}
-              className="w-10 h-10 rounded-full bg-[#1C1C1E] border border-white/10 flex items-center justify-center text-white/90 active:scale-95 transition-transform"
+              className="w-9 h-9 rounded-full bg-[#1C1C1E] border border-white/10 flex items-center justify-center text-white/90 active:scale-95 transition-transform"
               title="-10 soniya"
             >
-              <RotateCcw className="w-4 h-4" />
+              <RotateCcw className="w-3.5 h-3.5" />
             </button>
 
             {/* Time labels */}
-            <div className="text-xs font-mono text-[#8E8E93] flex items-center gap-1">
-              <span className="text-white font-medium">{formatTime(currentTime)}</span>
+            <div className="text-xs font-mono text-[#8E8E93] flex items-center gap-1 ml-1">
+              <span className="text-white font-semibold">{formatTime(currentTime)}</span>
               <span>/</span>
               <span>{formatTime(duration)}</span>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Playback rate speed */}
+            {/* Playback rate speed (strictly max 1.3x) */}
             <button
-              onClick={() => {
-                impactLight();
-                const rates = [1, 1.25, 1.5];
-                const nextIdx = (rates.indexOf(playbackRate) + 1) % rates.length;
-                setPlaybackRate(rates[nextIdx]);
-              }}
-              className="px-2.5 py-1.5 rounded-xl bg-[#1C1C1E] border border-white/10 text-xs font-bold text-white active:scale-95 transition-transform"
-              title="Tezlik"
+              onClick={handleCycleSpeed}
+              className="px-2.5 py-1.5 rounded-xl bg-[#1C1C1E] border border-white/10 text-xs font-bold text-white hover:text-cyan-300 active:scale-95 transition-all"
+              title="Tezlik (Maksimal 1.3x)"
             >
               {playbackRate}x
             </button>
@@ -592,31 +735,31 @@ export default function VideoPlayer({
               className="w-9 h-9 rounded-xl bg-[#1C1C1E] border border-white/10 flex items-center justify-center text-white/80 hover:text-white active:scale-95 transition-transform"
               title="To'liq ekran"
             >
-              <Maximize className="w-4 h-4" />
+              <Maximize className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
 
         {/* Completion Card at End of Video */}
         {isEnded && (
-          <div className="bg-[#1C1C1E] border border-emerald-500/30 p-4 rounded-3xl space-y-3 animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-lg">
+          <div className="mt-3 bg-[#1C1C1E] border border-emerald-500/30 p-3.5 rounded-2xl space-y-2.5 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-base">
                 🎉
               </div>
               <div>
                 <h4 className="text-white font-bold text-xs">Dars muvaffaqiyatli ko‘rildi!</h4>
-                <p className="text-[11px] text-emerald-400 font-medium">Barcha qismlar tasdiqlandi</p>
+                <p className="text-[10px] text-emerald-400 font-medium">Barcha qismlar tasdiqlandi</p>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 pt-1">
+            <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => {
                   impactMedium();
                   if (onStartQuiz) onStartQuiz();
                 }}
-                className="bg-[#007AFF] hover:bg-blue-600 text-white font-bold py-3 px-3 rounded-2xl text-xs flex items-center justify-center gap-1.5 shadow-lg active:scale-95 transition-all"
+                className="bg-[#007AFF] hover:bg-blue-600 text-white font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-lg active:scale-95 transition-all"
               >
                 <span>📝 Testni boshlash</span>
               </button>
@@ -630,7 +773,7 @@ export default function VideoPlayer({
                     setIsEnded(false);
                   }
                 }}
-                className="bg-[#2C2C2E] hover:bg-[#3A3A3C] text-white font-bold py-3 px-3 rounded-2xl text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all"
+                className="bg-[#2C2C2E] hover:bg-[#3A3A3C] text-white font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all"
               >
                 <span>🔄 Qayta ko‘rish</span>
               </button>
@@ -639,19 +782,142 @@ export default function VideoPlayer({
         )}
       </div>
 
-      {/* ── GLOSSARY SLIDE DRAWER PANEL ── */}
-      <GlossaryPanel
-        isOpen={isGlossaryOpen}
-        onClose={() => setIsGlossaryOpen(false)}
-        terms={terms}
-        maxWatchedSeconds={maxWatchedSeconds}
-        onSeekToTimestamp={(time) => {
-          clampAndSeek(time);
-        }}
-        onBlockedTimestamp={() => {
-          showSeekToast("Ushbu termin video davomida tushuntiriladi. Unga o‘tish uchun darsni ko‘ring.");
-        }}
-      />
+      {/* ── PORTRAIT MODE: TERMS & LESSON DETAILS BELOW VIDEO ── */}
+      {!isLandscape && (
+        <div className="flex-1 overflow-y-auto bg-[#0E0E10] flex flex-col no-scrollbar">
+          {isGlossaryOpen ? (
+            /* Dedicated Terms List Section displayed below video */
+            <div className="p-4 space-y-3 flex-1 flex flex-col">
+              <div className="flex items-center justify-between pb-2 border-b border-white/[0.08]">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-300">
+                    <BookOpen className="w-3.5 h-3.5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-white text-xs">Dars terminlari</h3>
+                    <span className="text-[10px] text-[#8E8E93]">{terms.length} ta termin kiritilgan</span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setIsGlossaryOpen(false)}
+                  className="px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/15 text-[11px] font-bold text-white/80 flex items-center gap-1 active:scale-95"
+                >
+                  <span>Yopish</span>
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+
+              {terms.length > 0 ? (
+                <div className="space-y-2.5 flex-1 overflow-y-auto pt-1">
+                  {terms.map((term, idx) => {
+                    const hasTimestamp = term.timestamp !== undefined && term.timestamp !== null;
+                    const isUnlocked = hasTimestamp && term.timestamp <= maxWatchedSeconds;
+
+                    return (
+                      <div
+                        key={idx}
+                        onClick={() => {
+                          if (hasTimestamp) {
+                            if (isUnlocked) {
+                              clampAndSeek(term.timestamp);
+                            } else {
+                              showSeekToast("Ushbu termin video davomida tushuntiriladi");
+                            }
+                          }
+                        }}
+                        className={`p-3 rounded-2xl border transition-all ${
+                          hasTimestamp ? 'cursor-pointer active:scale-[0.98]' : ''
+                        } ${
+                          isUnlocked
+                            ? 'bg-[#1C1C1E] border-white/10 hover:border-purple-500/40'
+                            : 'bg-[#161618] border-white/5 opacity-80'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <span className="font-bold text-xs text-white leading-tight">
+                            {term.term || term.title}
+                          </span>
+                          {hasTimestamp && (
+                            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-md font-bold flex items-center gap-1 ${
+                              isUnlocked 
+                                ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' 
+                                : 'bg-white/5 text-[#8E8E93]'
+                            }`}>
+                              <Clock className="w-2.5 h-2.5" />
+                              <span>{formatTime(term.timestamp)}</span>
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-[#8E8E93] leading-relaxed">
+                          {term.definition || term.description || "Ushbu termin bo‘yicha qo‘shimcha izoh video darsda berilgan."}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="py-8 text-center text-[#8E8E93] text-xs">
+                  Ushbu dars uchun terminlar lug‘ati kiritilmagan.
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Collapsed / Normal State: Lesson Info and Quick Action */
+            <div className="p-4 space-y-4">
+              <div className="bg-[#161618] border border-white/5 p-4 rounded-2xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] uppercase tracking-wider font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full">
+                    Dars jarayoni
+                  </span>
+                  <span className="text-[10px] text-[#8E8E93]">
+                    {Math.round((maxWatchedSeconds / (duration || 1)) * 100)}% ko‘rildi
+                  </span>
+                </div>
+                <h3 className="font-bold text-white text-sm">{lessonTitle}</h3>
+                <div className="w-full bg-[#2C2C2E] h-1.5 rounded-full overflow-hidden">
+                  <div 
+                    className="bg-[#007AFF] h-full rounded-full transition-all duration-300" 
+                    style={{ width: `${Math.min(100, (maxWatchedSeconds / (duration || 1)) * 100)}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Tap to open terms button if terms exist */}
+              {terms.length > 0 && (
+                <button
+                  onClick={() => setIsGlossaryOpen(true)}
+                  className="w-full py-3 px-4 rounded-2xl bg-[#1C1C1E] hover:bg-[#242426] border border-purple-500/25 flex items-center justify-between text-xs font-bold text-purple-300 active:scale-[0.98] transition-all"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <BookOpen className="w-4 h-4 text-purple-400" />
+                    <span>Dars terminlari ro‘yxati</span>
+                  </div>
+                  <span className="bg-purple-500/20 text-purple-200 text-[10px] px-2 py-0.5 rounded-full">
+                    {terms.length} ta termin
+                  </span>
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── LANDSCAPE MODE: GLOSSARY RIGHT SIDEBAR DRAWER ── */}
+      {isLandscape && (
+        <GlossaryPanel
+          isOpen={isGlossaryOpen}
+          onClose={() => setIsGlossaryOpen(false)}
+          terms={terms}
+          maxWatchedSeconds={maxWatchedSeconds}
+          onSeekToTimestamp={(time) => {
+            clampAndSeek(time);
+          }}
+          onBlockedTimestamp={() => {
+            showSeekToast("Ushbu termin video davomida tushuntiriladi. Unga o‘tish uchun darsni ko‘ring.");
+          }}
+        />
+      )}
     </div>
   );
 }
