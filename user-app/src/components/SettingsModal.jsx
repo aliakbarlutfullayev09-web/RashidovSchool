@@ -1,12 +1,48 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  X, Moon, Sun, Monitor, Globe, Volume2, VolumeX, 
-  Smartphone, Bell, BellOff, Check, Sparkles, CheckCircle2 
+  ArrowLeft, Moon, Sun, Monitor, Volume2, VolumeX, 
+  Smartphone, Bell, BellOff, Check, Settings 
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
+
+// Authentic SVG Flag of Uzbekistan
+const UzbekFlag = ({ className = "w-6 h-4" }) => (
+  <svg className={`${className} rounded-[3px] shadow-sm shrink-0`} viewBox="0 0 640 480">
+    <path fill="#0099b5" d="M0 0h640v160H0z"/>
+    <path fill="#ce1126" d="M0 155h640v10H0z"/>
+    <path fill="#ffffff" d="M0 160h640v160H0z"/>
+    <path fill="#ce1126" d="M0 315h640v10H0z"/>
+    <path fill="#1eb53a" d="M0 320h640v160H0z"/>
+    <circle cx="80" cy="80" r="50" fill="#ffffff"/>
+    <circle cx="95" cy="80" r="42" fill="#0099b5"/>
+    <g fill="#ffffff">
+      <circle cx="150" cy="45" r="7"/>
+      <circle cx="175" cy="45" r="7"/>
+      <circle cx="200" cy="45" r="7"/>
+      <circle cx="150" cy="80" r="7"/>
+      <circle cx="175" cy="80" r="7"/>
+      <circle cx="200" cy="80" r="7"/>
+      <circle cx="125" cy="80" r="7"/>
+      <circle cx="150" cy="115" r="7"/>
+      <circle cx="175" cy="115" r="7"/>
+      <circle cx="200" cy="115" r="7"/>
+      <circle cx="125" cy="115" r="7"/>
+      <circle cx="100" cy="115" r="7"/>
+    </g>
+  </svg>
+);
+
+// Authentic SVG Flag of Russia
+const RussianFlag = ({ className = "w-6 h-4" }) => (
+  <svg className={`${className} rounded-[3px] shadow-sm shrink-0`} viewBox="0 0 640 480">
+    <path fill="#ffffff" d="M0 0h640v160H0z"/>
+    <path fill="#0039a6" d="M0 160h640v160H0z"/>
+    <path fill="#d52b1e" d="M0 320h640v160H0z"/>
+  </svg>
+);
 
 export default function SettingsModal({ isOpen, onClose }) {
   const { lang, setLang, t } = useLanguage();
@@ -30,15 +66,12 @@ export default function SettingsModal({ isOpen, onClose }) {
     return localStorage.getItem('rb_push_notifications') !== 'false';
   });
 
-  // Interactive test status indicator
-  const [testedAt, setTestedAt] = useState(false);
-
   // Native Telegram WebApp BackButton integration
   useEffect(() => {
     if (!isOpen) return;
 
     const tg = window.Telegram?.WebApp;
-    if (tg?.BackButton && tg.isVersionAtLeast && tg.isVersionAtLeast('6.1')) {
+    if (tg?.BackButton) {
       const handleTelegramBack = () => {
         onClose();
       };
@@ -53,9 +86,22 @@ export default function SettingsModal({ isOpen, onClose }) {
       return () => {
         try {
           tg.BackButton.offClick(handleTelegramBack);
+          tg.BackButton.hide();
         } catch {}
       };
     }
+  }, [isOpen, onClose]);
+
+  // Keyboard Escape listener
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
@@ -82,7 +128,6 @@ export default function SettingsModal({ isOpen, onClose }) {
     setSoundEnabled(next);
     localStorage.setItem('rb_sound', String(next));
     if (next) {
-      // Immediate feedback so user hears it's working
       setTimeout(() => {
         testFeedback();
       }, 50);
@@ -97,7 +142,6 @@ export default function SettingsModal({ isOpen, onClose }) {
     setHapticEnabled(next);
     localStorage.setItem('rb_haptic', String(next));
     if (next) {
-      // Immediate feedback so user feels it's working
       setTimeout(() => {
         impactMedium();
       }, 50);
@@ -112,390 +156,279 @@ export default function SettingsModal({ isOpen, onClose }) {
     localStorage.setItem('rb_push_notifications', String(next));
   };
 
-  // Test sound & vibration button handler
-  const handleTestFeedback = () => {
-    testFeedback();
-    setTestedAt(true);
-    setTimeout(() => {
-      setTestedAt(false);
-    }, 2000);
-  };
-
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md">
-        
-        {/* Backdrop click dismiss */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.99 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.99 }}
+        transition={{ duration: 0.18 }}
+        className={`fixed inset-0 z-[120] flex flex-col select-none ${
+          isLight 
+            ? 'bg-[#F2F2F7] text-gray-900' 
+            : 'bg-[#000000] text-white'
+        }`}
+      >
+        {/* Fullscreen Header with system back button */}
         <div 
-          onClick={onClose} 
-          className="absolute inset-0 z-0" 
-          aria-label="Backdrop"
-        />
-
-        {/* Modal Window Sheet */}
-        <motion.div
-          initial={{ opacity: 0, y: 80, scale: 0.98 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 80, scale: 0.98 }}
-          transition={{ type: 'spring', damping: 26, stiffness: 320 }}
-          className={`relative z-10 w-full max-w-lg rounded-t-[32px] sm:rounded-[32px] max-h-[92vh] flex flex-col shadow-2xl overflow-hidden border ${
-            isLight 
-              ? 'bg-[#F2F2F7] text-gray-900 border-black/10' 
-              : 'bg-[#1C1C1E] text-white border-white/10'
-          }`}
+          className={`px-4 pb-3 flex items-center justify-between border-b ${
+            isLight ? 'border-black/5 bg-white/80' : 'border-white/5 bg-[#121214]/80'
+          } backdrop-blur-xl shrink-0`}
+          style={{
+            paddingTop: 'max(calc(var(--safe-area-top, 0px) + 12px), 16px)'
+          }}
         >
-          {/* Top iOS Grabber Bar for mobile sheets */}
-          <div className="pt-3 pb-1 flex justify-center sm:hidden">
-            <div className={`w-10 h-1.5 rounded-full ${isLight ? 'bg-black/20' : 'bg-white/20'}`} />
-          </div>
-
-          {/* Mini App System Navigation Header */}
-          <div className={`px-5 py-3.5 flex items-center justify-between border-b ${
-            isLight ? 'border-black/5 bg-white/70' : 'border-white/5 bg-[#161618]/70'
-          } backdrop-blur-md`}>
-            
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-blue-500/15 border border-blue-500/25 flex items-center justify-center text-blue-500 font-bold text-lg">
-                ⚙️
-              </div>
-              <div>
-                <h3 className="font-extrabold text-base leading-tight">
-                  {t('sozlamalar')}
-                </h3>
-                <span className={`text-[11px] ${isLight ? 'text-gray-500' : 'text-[#8E8E93]'}`}>
-                  Rashidov EdTech • Telegram Mini App
-                </span>
-              </div>
-            </div>
-
-            {/* Telegram Mini App System Close Button */}
+          <div className="flex items-center gap-3">
             <button
               onClick={() => {
                 impactLight();
                 onClose();
               }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 ${
+              className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-95 ${
                 isLight 
-                  ? 'bg-black/5 hover:bg-black/10 text-gray-700' 
-                  : 'bg-white/10 hover:bg-white/15 text-white/90'
+                  ? 'bg-black/5 hover:bg-black/10 text-gray-800' 
+                  : 'bg-white/10 hover:bg-white/15 text-white'
               }`}
-              title={t('yopish')}
+              title={lang === 'ru' ? 'Назад' : 'Orqaga'}
             >
-              <span>{t('yopish')}</span>
-              <X className="w-4 h-4 ml-0.5" />
+              <ArrowLeft className="w-5 h-5" />
             </button>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-blue-500/15 border border-blue-500/25 flex items-center justify-center text-blue-400 font-bold">
+                <Settings className="w-4 h-4 text-blue-400" />
+              </div>
+              <h3 className="font-extrabold text-base leading-tight">
+                {t('sozlamalar')}
+              </h3>
+            </div>
+          </div>
+        </div>
+
+        {/* Scrollable Compact Settings Body */}
+        <div 
+          className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar"
+          style={{
+            paddingBottom: 'max(calc(var(--safe-area-bottom, 0px) + 24px), 32px)'
+          }}
+        >
+
+          {/* ── SECTION 1: THEME SELECTION (Dark / Light / System) ── */}
+          <div>
+            <span className={`text-xs font-bold uppercase tracking-wider mb-2 block px-1 ${
+              isLight ? 'text-gray-500' : 'text-[#8E8E93]'
+            }`}>
+              {t('mavzu_sarlavha')}
+            </span>
+
+            <div className="grid grid-cols-3 gap-2">
+              {/* Dark Theme (Default) */}
+              <button
+                onClick={() => handleThemeChange('dark')}
+                className={`py-3 px-2 rounded-2xl border flex flex-col items-center justify-center gap-1.5 transition-all text-center relative ${
+                  theme === 'dark'
+                    ? 'bg-[#007AFF] border-[#007AFF] text-white shadow-lg shadow-blue-500/25'
+                    : isLight
+                      ? 'bg-white border-black/5 text-gray-700 hover:border-black/15'
+                      : 'bg-[#1C1C1E] border-white/5 text-[#8E8E93] hover:text-white'
+                }`}
+              >
+                <Moon className="w-5 h-5" />
+                <span className="text-xs font-bold leading-tight">{t('mavzu_qorongu')}</span>
+                {theme === 'dark' && (
+                  <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-white shadow" />
+                )}
+              </button>
+
+              {/* Light Theme */}
+              <button
+                onClick={() => handleThemeChange('light')}
+                className={`py-3 px-2 rounded-2xl border flex flex-col items-center justify-center gap-1.5 transition-all text-center relative ${
+                  theme === 'light'
+                    ? 'bg-[#007AFF] border-[#007AFF] text-white shadow-lg shadow-blue-500/25'
+                    : isLight
+                      ? 'bg-white border-black/5 text-gray-700 hover:border-black/15'
+                      : 'bg-[#1C1C1E] border-white/5 text-[#8E8E93] hover:text-white'
+                }`}
+              >
+                <Sun className="w-5 h-5" />
+                <span className="text-xs font-bold leading-tight">{t('mavzu_yorug')}</span>
+                {theme === 'light' && (
+                  <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-white shadow" />
+                )}
+              </button>
+
+              {/* System Theme */}
+              <button
+                onClick={() => handleThemeChange('system')}
+                className={`py-3 px-2 rounded-2xl border flex flex-col items-center justify-center gap-1.5 transition-all text-center relative ${
+                  theme === 'system'
+                    ? 'bg-[#007AFF] border-[#007AFF] text-white shadow-lg shadow-blue-500/25'
+                    : isLight
+                      ? 'bg-white border-black/5 text-gray-700 hover:border-black/15'
+                      : 'bg-[#1C1C1E] border-white/5 text-[#8E8E93] hover:text-white'
+                }`}
+              >
+                <Monitor className="w-5 h-5" />
+                <span className="text-xs font-bold leading-tight">{t('mavzu_tizim')}</span>
+                {theme === 'system' && (
+                  <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-white shadow" />
+                )}
+              </button>
+            </div>
           </div>
 
-          {/* Scrollable Content Body */}
-          <div className="flex-1 overflow-y-auto p-5 space-y-5 no-scrollbar">
+          {/* ── SECTION 2: LANGUAGE (Uzbek / Russian with Real SVG Flags) ── */}
+          <div>
+            <span className={`text-xs font-bold uppercase tracking-wider mb-2 block px-1 ${
+              isLight ? 'text-gray-500' : 'text-[#8E8E93]'
+            }`}>
+              {t('til_sarlavha')}
+            </span>
 
-            {/* ── SECTION 1: THEME SELECTION (Dark / Light / System) ── */}
-            <div>
-              <div className="flex items-center justify-between mb-2 px-1">
-                <span className={`text-xs font-bold uppercase tracking-wider ${
-                  isLight ? 'text-gray-500' : 'text-[#8E8E93]'
-                }`}>
-                  {t('mavzu_sarlavha')}
-                </span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-blue-500/15 text-blue-500">
-                  {theme === 'dark' ? t('mavzu_qorongu') : theme === 'light' ? t('mavzu_yorug') : t('mavzu_tizim')}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2">
-                {/* Dark Theme (Default) */}
-                <button
-                  onClick={() => handleThemeChange('dark')}
-                  className={`p-3.5 rounded-2xl border flex flex-col items-center justify-center gap-1.5 transition-all text-center relative ${
-                    theme === 'dark'
-                      ? 'bg-[#007AFF] border-[#007AFF] text-white shadow-lg shadow-blue-500/25'
-                      : isLight
-                        ? 'bg-white border-black/5 text-gray-700 hover:border-black/15'
-                        : 'bg-[#2C2C2E] border-white/5 text-[#8E8E93] hover:text-white'
-                  }`}
-                >
-                  <Moon className="w-5 h-5 mb-0.5" />
-                  <span className="text-xs font-bold leading-tight">{t('mavzu_qorongu')}</span>
-                  <span className={`text-[9px] ${theme === 'dark' ? 'text-white/80' : 'text-[#8E8E93]'}`}>
-                    OLED Black
-                  </span>
-                  {theme === 'dark' && (
-                    <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-white shadow" />
-                  )}
-                </button>
-
-                {/* Light Theme */}
-                <button
-                  onClick={() => handleThemeChange('light')}
-                  className={`p-3.5 rounded-2xl border flex flex-col items-center justify-center gap-1.5 transition-all text-center relative ${
-                    theme === 'light'
-                      ? 'bg-[#007AFF] border-[#007AFF] text-white shadow-lg shadow-blue-500/25'
-                      : isLight
-                        ? 'bg-white border-black/5 text-gray-700 hover:border-black/15'
-                        : 'bg-[#2C2C2E] border-white/5 text-[#8E8E93] hover:text-white'
-                  }`}
-                >
-                  <Sun className="w-5 h-5 mb-0.5" />
-                  <span className="text-xs font-bold leading-tight">{t('mavzu_yorug')}</span>
-                  <span className={`text-[9px] ${theme === 'light' ? 'text-white/80' : 'text-[#8E8E93]'}`}>
-                    Silver Light
-                  </span>
-                  {theme === 'light' && (
-                    <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-white shadow" />
-                  )}
-                </button>
-
-                {/* System Theme */}
-                <button
-                  onClick={() => handleThemeChange('system')}
-                  className={`p-3.5 rounded-2xl border flex flex-col items-center justify-center gap-1.5 transition-all text-center relative ${
-                    theme === 'system'
-                      ? 'bg-[#007AFF] border-[#007AFF] text-white shadow-lg shadow-blue-500/25'
-                      : isLight
-                        ? 'bg-white border-black/5 text-gray-700 hover:border-black/15'
-                        : 'bg-[#2C2C2E] border-white/5 text-[#8E8E93] hover:text-white'
-                  }`}
-                >
-                  <Monitor className="w-5 h-5 mb-0.5" />
-                  <span className="text-xs font-bold leading-tight">{t('mavzu_tizim')}</span>
-                  <span className={`text-[9px] ${theme === 'system' ? 'text-white/80' : 'text-[#8E8E93]'}`}>
-                    Auto OS
-                  </span>
-                  {theme === 'system' && (
-                    <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-white shadow" />
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {/* ── SECTION 2: LANGUAGE (Uzbek / Russian) ── */}
-            <div>
-              <span className={`text-xs font-bold uppercase tracking-wider mb-2 block px-1 ${
-                isLight ? 'text-gray-500' : 'text-[#8E8E93]'
-              }`}>
-                {t('til_sarlavha')}
-              </span>
-
-              <div className="grid grid-cols-2 gap-2">
-                {/* Uzbek (Default) */}
-                <button
-                  onClick={() => handleLangChange('uz')}
-                  className={`p-3.5 rounded-2xl border flex items-center justify-between transition-all ${
-                    lang === 'uz'
-                      ? 'bg-[#007AFF] border-[#007AFF] text-white shadow-lg shadow-blue-500/20'
-                      : isLight
-                        ? 'bg-white border-black/5 text-gray-800 hover:border-black/15'
-                        : 'bg-[#2C2C2E] border-white/5 text-[#8E8E93] hover:text-white'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-xl">🇺🇿</span>
-                    <div className="text-left">
-                      <div className="text-xs font-bold">O'zbekcha</div>
-                      <div className={`text-[10px] ${lang === 'uz' ? 'text-white/80' : 'text-[#8E8E93]'}`}>
-                        Asosiy til
-                      </div>
-                    </div>
-                  </div>
-                  {lang === 'uz' && <Check className="w-4 h-4 text-white" />}
-                </button>
-
-                {/* Russian */}
-                <button
-                  onClick={() => handleLangChange('ru')}
-                  className={`p-3.5 rounded-2xl border flex items-center justify-between transition-all ${
-                    lang === 'ru'
-                      ? 'bg-[#007AFF] border-[#007AFF] text-white shadow-lg shadow-blue-500/20'
-                      : isLight
-                        ? 'bg-white border-black/5 text-gray-800 hover:border-black/15'
-                        : 'bg-[#2C2C2E] border-white/5 text-[#8E8E93] hover:text-white'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-xl">🇷🇺</span>
-                    <div className="text-left">
-                      <div className="text-xs font-bold">Русский</div>
-                      <div className={`text-[10px] ${lang === 'ru' ? 'text-white/80' : 'text-[#8E8E93]'}`}>
-                        Язык перевода
-                      </div>
-                    </div>
-                  </div>
-                  {lang === 'ru' && <Check className="w-4 h-4 text-white" />}
-                </button>
-              </div>
-            </div>
-
-            {/* ── SECTION 3: SOUND & VIBRATION (Fixed Audio Synthesizer + Haptic) ── */}
-            <div>
-              <span className={`text-xs font-bold uppercase tracking-wider mb-2 block px-1 ${
-                isLight ? 'text-gray-500' : 'text-[#8E8E93]'
-              }`}>
-                {t('ovoz_sarlavha')} & {t('vibratsiya_sarlavha')}
-              </span>
-
-              <div className={`rounded-2xl border overflow-hidden divide-y ${
-                isLight 
-                  ? 'bg-white border-black/5 divide-black/5' 
-                  : 'bg-[#2C2C2E] border-white/5 divide-white/5'
-              }`}>
-                {/* Sound FX Toggle */}
-                <div className="p-3.5 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
-                      soundEnabled 
-                        ? 'bg-emerald-500/20 text-emerald-500 border border-emerald-500/30' 
-                        : isLight ? 'bg-black/5 text-gray-400' : 'bg-white/5 text-white/40'
-                    }`}>
-                      {soundEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold">{t('ovoz_sarlavha')}</div>
-                      <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-[#8E8E93]'}`}>
-                        {t('ovoz_izoh')}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* iOS Style Toggle Switch */}
-                  <button
-                    onClick={toggleSound}
-                    className={`w-12 h-7 rounded-full p-0.5 transition-colors duration-200 ease-in-out focus:outline-none ${
-                      soundEnabled ? 'bg-[#34C759]' : isLight ? 'bg-gray-300' : 'bg-[#3A3A3C]'
-                    }`}
-                  >
-                    <div className={`w-6 h-6 rounded-full bg-white shadow-md transform transition-transform duration-200 ease-in-out ${
-                      soundEnabled ? 'translate-x-5' : 'translate-x-0'
-                    }`} />
-                  </button>
+            <div className="grid grid-cols-2 gap-2">
+              {/* Uzbek (Default) */}
+              <button
+                onClick={() => handleLangChange('uz')}
+                className={`p-3 rounded-2xl border flex items-center justify-between transition-all ${
+                  lang === 'uz'
+                    ? 'bg-[#007AFF] border-[#007AFF] text-white shadow-lg shadow-blue-500/20'
+                    : isLight
+                      ? 'bg-white border-black/5 text-gray-800 hover:border-black/15'
+                      : 'bg-[#1C1C1E] border-white/5 text-[#8E8E93] hover:text-white'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <UzbekFlag className="w-6 h-4" />
+                  <span className="text-xs font-bold">O'zbekcha</span>
                 </div>
+                {lang === 'uz' && <Check className="w-4 h-4 text-white shrink-0" />}
+              </button>
 
-                {/* Haptic Vibration Toggle */}
-                <div className="p-3.5 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
-                      hapticEnabled 
-                        ? 'bg-blue-500/20 text-blue-500 border border-blue-500/30' 
-                        : isLight ? 'bg-black/5 text-gray-400' : 'bg-white/5 text-white/40'
-                    }`}>
-                      <Smartphone className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold">{t('vibratsiya_sarlavha')}</div>
-                      <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-[#8E8E93]'}`}>
-                        {t('vibratsiya_izoh')}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* iOS Style Toggle Switch */}
-                  <button
-                    onClick={toggleHaptic}
-                    className={`w-12 h-7 rounded-full p-0.5 transition-colors duration-200 ease-in-out focus:outline-none ${
-                      hapticEnabled ? 'bg-[#34C759]' : isLight ? 'bg-gray-300' : 'bg-[#3A3A3C]'
-                    }`}
-                  >
-                    <div className={`w-6 h-6 rounded-full bg-white shadow-md transform transition-transform duration-200 ease-in-out ${
-                      hapticEnabled ? 'translate-x-5' : 'translate-x-0'
-                    }`} />
-                  </button>
+              {/* Russian */}
+              <button
+                onClick={() => handleLangChange('ru')}
+                className={`p-3 rounded-2xl border flex items-center justify-between transition-all ${
+                  lang === 'ru'
+                    ? 'bg-[#007AFF] border-[#007AFF] text-white shadow-lg shadow-blue-500/20'
+                    : isLight
+                      ? 'bg-white border-black/5 text-gray-800 hover:border-black/15'
+                      : 'bg-[#1C1C1E] border-white/5 text-[#8E8E93] hover:text-white'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <RussianFlag className="w-6 h-4" />
+                  <span className="text-xs font-bold">Русский</span>
                 </div>
-
-                {/* Interactive Feedback Tester Button */}
-                <div className="p-3.5">
-                  <button
-                    onClick={handleTestFeedback}
-                    className={`w-full py-2.5 px-4 rounded-xl border flex items-center justify-between text-xs font-bold transition-all active:scale-[0.98] ${
-                      testedAt
-                        ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
-                        : isLight
-                          ? 'bg-black/5 border-black/5 hover:bg-black/10 text-gray-800'
-                          : 'bg-white/5 border-white/5 hover:bg-white/10 text-white'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      {testedAt ? (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                      ) : (
-                        <Sparkles className="w-4 h-4 text-amber-400" />
-                      )}
-                      <span>
-                        {testedAt ? (lang === 'ru' ? 'Звук и вибрация работают!' : 'Ovoz va vibratsiya ishlamoqda!') : t('sinab_korish')}
-                      </span>
-                    </div>
-
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                      testedAt 
-                        ? 'bg-emerald-500 text-white' 
-                        : isLight ? 'bg-black/10 text-gray-600' : 'bg-white/10 text-white/70'
-                    }`}>
-                      {testedAt ? '✓ 100%' : (lang === 'ru' ? 'Тест' : 'Sinash')}
-                    </span>
-                  </button>
-                </div>
-              </div>
+                {lang === 'ru' && <Check className="w-4 h-4 text-white shrink-0" />}
+              </button>
             </div>
+          </div>
 
-            {/* ── SECTION 4: PUSH NOTIFICATIONS ── */}
-            <div>
-              <span className={`text-xs font-bold uppercase tracking-wider mb-2 block px-1 ${
-                isLight ? 'text-gray-500' : 'text-[#8E8E93]'
-              }`}>
-                {t('push_sarlavha')}
-              </span>
+          {/* ── SECTION 3: SOUND & VIBRATION ── */}
+          <div>
+            <span className={`text-xs font-bold uppercase tracking-wider mb-2 block px-1 ${
+              isLight ? 'text-gray-500' : 'text-[#8E8E93]'
+            }`}>
+              {t('ovoz_sarlavha')} & {t('vibratsiya_sarlavha')}
+            </span>
 
-              <div className={`rounded-2xl border p-3.5 flex items-center justify-between ${
-                isLight ? 'bg-white border-black/5' : 'bg-[#2C2C2E] border-white/5'
-              }`}>
+            <div className={`rounded-2xl border overflow-hidden divide-y ${
+              isLight 
+                ? 'bg-white border-black/5 divide-black/5' 
+                : 'bg-[#1C1C1E] border-white/5 divide-white/5 shadow-md'
+            }`}>
+              {/* Sound FX Toggle */}
+              <div className="p-3.5 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
-                    pushEnabled 
-                      ? 'bg-amber-500/20 text-amber-500 border border-amber-500/30' 
+                    soundEnabled 
+                      ? 'bg-emerald-500/20 text-emerald-500 border border-emerald-500/30' 
                       : isLight ? 'bg-black/5 text-gray-400' : 'bg-white/5 text-white/40'
                   }`}>
-                    {pushEnabled ? <Bell className="w-5 h-5" /> : <BellOff className="w-5 h-5" />}
+                    {soundEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
                   </div>
-                  <div>
-                    <div className="text-xs font-bold">{t('push_sarlavha')}</div>
-                    <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-[#8E8E93]'}`}>
-                      {t('push_izoh')}
-                    </div>
-                  </div>
+                  <span className="text-xs font-bold">{t('ovoz_sarlavha')}</span>
                 </div>
 
                 {/* iOS Style Toggle Switch */}
                 <button
-                  onClick={togglePush}
+                  onClick={toggleSound}
                   className={`w-12 h-7 rounded-full p-0.5 transition-colors duration-200 ease-in-out focus:outline-none ${
-                    pushEnabled ? 'bg-[#34C759]' : isLight ? 'bg-gray-300' : 'bg-[#3A3A3C]'
+                    soundEnabled ? 'bg-[#34C759]' : isLight ? 'bg-gray-300' : 'bg-[#3A3A3C]'
                   }`}
                 >
                   <div className={`w-6 h-6 rounded-full bg-white shadow-md transform transition-transform duration-200 ease-in-out ${
-                    pushEnabled ? 'translate-x-5' : 'translate-x-0'
+                    soundEnabled ? 'translate-x-5' : 'translate-x-0'
+                  }`} />
+                </button>
+              </div>
+
+              {/* Vibration Toggle */}
+              <div className="p-3.5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                    hapticEnabled 
+                      ? 'bg-blue-500/20 text-blue-500 border border-blue-500/30' 
+                      : isLight ? 'bg-black/5 text-gray-400' : 'bg-white/5 text-white/40'
+                  }`}>
+                    <Smartphone className="w-5 h-5" />
+                  </div>
+                  <span className="text-xs font-bold">{t('vibratsiya_sarlavha')}</span>
+                </div>
+
+                {/* iOS Style Toggle Switch */}
+                <button
+                  onClick={toggleHaptic}
+                  className={`w-12 h-7 rounded-full p-0.5 transition-colors duration-200 ease-in-out focus:outline-none ${
+                    hapticEnabled ? 'bg-[#34C759]' : isLight ? 'bg-gray-300' : 'bg-[#3A3A3C]'
+                  }`}
+                >
+                  <div className={`w-6 h-6 rounded-full bg-white shadow-md transform transition-transform duration-200 ease-in-out ${
+                    hapticEnabled ? 'translate-x-5' : 'translate-x-0'
                   }`} />
                 </button>
               </div>
             </div>
-
           </div>
 
-          {/* ── SECTION 5: SYSTEM CLOSE BUTTON FOOTER ── */}
-          <div className={`p-4 border-t ${
-            isLight ? 'border-black/5 bg-white/70' : 'border-white/5 bg-[#161618]/70'
-          } backdrop-blur-md`}>
-            <button
-              onClick={() => {
-                impactLight();
-                onClose();
-              }}
-              className="w-full py-3.5 px-4 rounded-2xl bg-[#007AFF] hover:bg-[#0062CC] active:scale-[0.98] text-white font-bold text-sm shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 transition-all"
-            >
-              <Check className="w-4 h-4" />
-              <span>{t('yopish')}</span>
-            </button>
+          {/* ── SECTION 4: PUSH NOTIFICATIONS ── */}
+          <div>
+            <span className={`text-xs font-bold uppercase tracking-wider mb-2 block px-1 ${
+              isLight ? 'text-gray-500' : 'text-[#8E8E93]'
+            }`}>
+              {t('push_sarlavha')}
+            </span>
+
+            <div className={`rounded-2xl border p-3.5 flex items-center justify-between ${
+              isLight ? 'bg-white border-black/5' : 'bg-[#1C1C1E] border-white/5 shadow-md'
+            }`}>
+              <div className="flex items-center gap-3">
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                  pushEnabled 
+                    ? 'bg-amber-500/20 text-amber-500 border border-amber-500/30' 
+                    : isLight ? 'bg-black/5 text-gray-400' : 'bg-white/5 text-white/40'
+                }`}>
+                  {pushEnabled ? <Bell className="w-5 h-5" /> : <BellOff className="w-5 h-5" />}
+                </div>
+                <span className="text-xs font-bold">{t('push_sarlavha')}</span>
+              </div>
+
+              {/* iOS Style Toggle Switch */}
+              <button
+                onClick={togglePush}
+                className={`w-12 h-7 rounded-full p-0.5 transition-colors duration-200 ease-in-out focus:outline-none ${
+                  pushEnabled ? 'bg-[#34C759]' : isLight ? 'bg-gray-300' : 'bg-[#3A3A3C]'
+                }`}
+              >
+                <div className={`w-6 h-6 rounded-full bg-white shadow-md transform transition-transform duration-200 ease-in-out ${
+                  pushEnabled ? 'translate-x-5' : 'translate-x-0'
+                }`} />
+              </button>
+            </div>
           </div>
 
-        </motion.div>
-      </div>
+        </div>
+      </motion.div>
     </AnimatePresence>
   );
 }
