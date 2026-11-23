@@ -483,13 +483,19 @@ export default function VideoPlayer({
   return (
     <div 
       ref={containerRef}
-      className="fixed inset-0 z-50 bg-[#000000] text-white flex flex-col justify-between overflow-hidden select-none"
+      className="fixed inset-0 z-50 bg-[#000000] text-white flex flex-col justify-between overflow-hidden select-none video-player-container"
     >
-      {/* ── TOP TELEGRAM-STYLE "TERMINLAR" BUTTON (Positioned below Telegram's ∨ ⋮ pill) ── */}
+      {/* ── TOP TELEGRAM-STYLE "TERMINLAR" BUTTON (Positioned below Telegram's ∨ ⋮ capsule) ── */}
       <div 
-        className="absolute z-40 right-3 pointer-events-auto transition-opacity duration-300"
+        className={`absolute z-40 pointer-events-auto transition-all duration-300 ${
+          isLandscape ? 'right-4' : 'right-3'
+        } ${
+          isLandscape && !showControls && !isGlossaryOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'
+        }`}
         style={{
-          top: 'calc(var(--safe-area-top, 44px) + 8px)'
+          top: isLandscape 
+            ? 'max(calc(var(--safe-area-top, 0px) + 36px), 56px)' 
+            : 'max(calc(var(--safe-area-top, 0px) + 54px), 80px)'
         }}
       >
         <button
@@ -498,29 +504,43 @@ export default function VideoPlayer({
             impactLight();
             setIsGlossaryOpen(prev => !prev);
           }}
-          className={`h-8 px-3 rounded-full flex items-center gap-1.5 backdrop-blur-xl border shadow-lg transition-all active:scale-95 text-xs font-semibold ${
+          className={`flex items-center backdrop-blur-xl border shadow-xl transition-all active:scale-95 ${
+            isLandscape
+              ? 'w-9 h-9 rounded-full justify-center p-0'
+              : 'h-8 px-3 rounded-full gap-1.5 text-xs font-semibold'
+          } ${
             isGlossaryOpen
-              ? 'bg-purple-600/35 border-purple-400/60 text-white shadow-purple-500/20'
-              : 'bg-black/50 hover:bg-black/65 border-white/15 text-white/90'
+              ? 'bg-purple-600/40 border-purple-400/60 text-white shadow-purple-500/25'
+              : 'bg-black/60 hover:bg-black/75 border-white/20 text-white/95'
           }`}
           title="Dars terminlari"
         >
-          <BookOpen className="w-3.5 h-3.5 text-purple-300" />
-          <span>Terminlar</span>
+          <BookOpen className="w-4 h-4 text-purple-300 shrink-0" />
+          {!isLandscape && <span>Terminlar</span>}
           {terms.length > 0 && (
-            <span className="bg-purple-500/40 text-purple-200 text-[10px] px-1.5 py-0.2 rounded-full font-bold ml-0.5">
-              {terms.length}
-            </span>
+            !isLandscape ? (
+              <span className="bg-purple-500/40 text-purple-200 text-[10px] px-1.5 py-0.2 rounded-full font-bold ml-0.5">
+                {terms.length}
+              </span>
+            ) : (
+              <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-purple-500 rounded-full border border-black shadow" />
+            )
           )}
         </button>
       </div>
 
-      {/* Floating Zoom Indicator & Reset Button */}
+      {/* Floating Zoom Indicator & Reset Button (Positioned below Telegram's ← Назад) */}
       {zoomScale > 1.05 && (
         <div 
-          className="absolute z-40 left-3 pointer-events-auto transition-all animate-in fade-in"
+          className={`absolute z-40 pointer-events-auto transition-all animate-in fade-in ${
+            isLandscape ? 'left-4' : 'left-3'
+          } ${
+            isLandscape && !showControls ? 'opacity-0 pointer-events-none' : 'opacity-100'
+          }`}
           style={{
-            top: 'calc(var(--safe-area-top, 44px) + 8px)'
+            top: isLandscape 
+              ? 'max(calc(var(--safe-area-top, 0px) + 36px), 56px)' 
+              : 'max(calc(var(--safe-area-top, 0px) + 54px), 80px)'
           }}
         >
           <button
@@ -533,29 +553,29 @@ export default function VideoPlayer({
         </div>
       )}
 
-      {/* ── VIDEO CONTAINER (POSITIONED HIGHER UP ON MOBILE PORTRAIT & FULLSCREEN IN LANDSCAPE) ── */}
+      {/* ── VIDEO CONTAINER (POSITIONED BELOW BUTTONS IN PORTRAIT & FULLSCREEN IN LANDSCAPE) ── */}
       <div 
-        className={`relative w-full overflow-hidden bg-[#0A0A0C] touch-none ${
+        className={`relative w-full overflow-hidden bg-[#0A0A0C] touch-none video-wrapper ${
           isLandscape 
             ? 'h-full flex-1 flex items-center justify-center'
             : 'aspect-video flex items-center justify-center shrink-0 shadow-2xl'
         }`}
         style={{
-          marginTop: isLandscape ? '0px' : 'calc(var(--safe-area-top, 44px) + 40px)'
+          marginTop: isLandscape ? '0px' : 'max(calc(var(--safe-area-top, 0px) + 90px), 118px)'
         }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
+        onClick={handleToggleControls}
       >
         <video
           ref={videoRef}
           src={videoUrl || "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"}
-          className={`object-contain transition-transform duration-75 select-none pointer-events-auto ${
-            isLandscape ? 'w-full h-full max-h-screen' : 'w-full h-full'
-          }`}
+          className="w-full h-full object-contain transition-transform duration-75 select-none pointer-events-auto"
           style={{
             transform: `translate3d(${panOffset.x}px, ${panOffset.y}px, 0) scale(${zoomScale})`,
-            transformOrigin: 'center center'
+            transformOrigin: 'center center',
+            maxHeight: '100%'
           }}
           playsInline
           webkit-playsinline="true"
@@ -642,7 +662,9 @@ export default function VideoPlayer({
           showControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'
         }`}
         style={{
-          paddingBottom: isLandscape ? 'calc(var(--safe-area-bottom, 12px) + 8px)' : '10px'
+          paddingBottom: isLandscape ? 'max(calc(var(--safe-area-bottom, 0px) + 12px), 16px)' : '10px',
+          paddingLeft: isLandscape ? 'max(calc(var(--safe-area-left, 0px) + 16px), 20px)' : '16px',
+          paddingRight: isLandscape ? 'max(calc(var(--safe-area-right, 0px) + 16px), 20px)' : '16px'
         }}
       >
         {/* Seekbar Container with comfortable 32px touch target */}

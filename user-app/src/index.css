@@ -535,10 +535,13 @@ body {
   border-color: rgba(52, 199, 89, 0.3);
 }
 
-/* Landscape orientation optimization for phones & tablets */
-@media (orientation: landscape) and (max-height: 540px) {
-  video {
-    max-height: 70vh !important;
+/* Landscape orientation optimization for phones & tablets: allow full height without clamping */
+@media (orientation: landscape) {
+  .video-player-container,
+  .video-player-container .video-wrapper,
+  .video-player-container video {
+    height: 100% !important;
+    max-height: 100% !important;
   }
 }
 
