@@ -1,13 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  X, Send, Phone, MessageSquare, Headphones, 
-  ExternalLink, Check, Copy, Sparkles, HelpCircle 
+  ArrowLeft, Phone, Headphones, ExternalLink 
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { getSupportContacts, DEFAULT_SUPPORT_CONTACTS } from '../api/supabase';
+
+// Telegram official paper plane SVG logo
+const TelegramIcon = ({ className = "w-4 h-4" }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/>
+  </svg>
+);
 
 export default function SupportModal({ isOpen, onClose }) {
   const { lang, t } = useLanguage();
@@ -18,7 +24,6 @@ export default function SupportModal({ isOpen, onClose }) {
 
   const [contacts, setContacts] = useState(DEFAULT_SUPPORT_CONTACTS);
   const [loading, setLoading] = useState(true);
-  const [copiedKey, setCopiedKey] = useState(null);
 
   // Fetch support contacts from Supabase
   useEffect(() => {
@@ -47,7 +52,7 @@ export default function SupportModal({ isOpen, onClose }) {
     if (!isOpen) return;
 
     const tg = window.Telegram?.WebApp;
-    if (tg?.BackButton && tg.isVersionAtLeast && tg.isVersionAtLeast('6.1')) {
+    if (tg?.BackButton) {
       const handleBack = () => {
         onClose();
       };
@@ -62,9 +67,22 @@ export default function SupportModal({ isOpen, onClose }) {
       return () => {
         try {
           tg.BackButton.offClick(handleBack);
+          tg.BackButton.hide();
         } catch {}
       };
     }
+  }, [isOpen, onClose]);
+
+  // Keyboard Escape listener
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
@@ -96,215 +114,141 @@ export default function SupportModal({ isOpen, onClose }) {
     window.location.href = `tel:${cleanNumber}`;
   };
 
-  const handleCopy = (text, key) => {
-    impactLight();
-    navigator.clipboard?.writeText(text);
-    setCopiedKey(key);
-    setTimeout(() => {
-      setCopiedKey(null);
-    }, 1800);
-  };
-
   const categories = [
     {
       id: 'bio',
       title: lang === 'ru' ? 'Вопросы по биологии' : 'Biologiya bo‘yicha savollar',
-      desc: lang === 'ru' ? 'Уроки, темы, тесты и олимпиадные задания' : 'Mavzular, darslar va biologiya testlari bo‘yicha',
       icon: '🧬',
-      badgeColor: 'text-emerald-400 bg-emerald-500/15 border-emerald-500/30',
       data: contacts.bio || DEFAULT_SUPPORT_CONTACTS.bio
     },
     {
       id: 'chem',
       title: lang === 'ru' ? 'Вопросы по химии' : 'Kimyo bo‘yicha savollar',
-      desc: lang === 'ru' ? 'Задачи, химические реакции и сложные тесты' : 'Kimyo darslari, masalalar va tushunarsiz testlar',
       icon: '🧪',
-      badgeColor: 'text-purple-400 bg-purple-500/15 border-purple-500/30',
       data: contacts.chem || DEFAULT_SUPPORT_CONTACTS.chem
     },
     {
       id: 'tech',
       title: lang === 'ru' ? 'Техническая поддержка' : 'Texnik va boshqa masalalar',
-      desc: lang === 'ru' ? 'Работа приложения, баланс, Stars и доступ' : 'Ilova ishlashi, to‘lovlar va hisob masalalari',
       icon: '⚙️',
-      badgeColor: 'text-blue-400 bg-blue-500/15 border-blue-500/30',
       data: contacts.tech || DEFAULT_SUPPORT_CONTACTS.tech
     }
   ];
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md">
-        
-        {/* Backdrop dismiss */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.99 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.99 }}
+        transition={{ duration: 0.18 }}
+        className={`fixed inset-0 z-[120] flex flex-col select-none ${
+          isLight 
+            ? 'bg-[#F2F2F7] text-gray-900' 
+            : 'bg-[#000000] text-white'
+        }`}
+      >
+        {/* Fullscreen Header with system back button */}
         <div 
-          onClick={onClose} 
-          className="absolute inset-0 z-0" 
-          aria-label="Backdrop"
-        />
-
-        {/* Modal Sheet Container */}
-        <motion.div
-          initial={{ opacity: 0, y: 80, scale: 0.98 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 80, scale: 0.98 }}
-          transition={{ type: 'spring', damping: 26, stiffness: 320 }}
-          className={`relative z-10 w-full max-w-lg rounded-t-[32px] sm:rounded-[32px] max-h-[92vh] flex flex-col shadow-2xl overflow-hidden border ${
-            isLight 
-              ? 'bg-[#F2F2F7] text-gray-900 border-black/10' 
-              : 'bg-[#1C1C1E] text-white border-white/10'
-          }`}
+          className={`px-4 pb-3 flex items-center justify-between border-b ${
+            isLight ? 'border-black/5 bg-white/80' : 'border-white/5 bg-[#121214]/80'
+          } backdrop-blur-xl shrink-0`}
+          style={{
+            paddingTop: 'max(calc(var(--safe-area-top, 0px) + 12px), 16px)'
+          }}
         >
-          {/* Top iOS Grabber Bar */}
-          <div className="pt-3 pb-1 flex justify-center sm:hidden">
-            <div className={`w-10 h-1.5 rounded-full ${isLight ? 'bg-black/20' : 'bg-white/20'}`} />
-          </div>
-
-          {/* Mini App System Navigation Header */}
-          <div className={`px-5 py-3.5 flex items-center justify-between border-b ${
-            isLight ? 'border-black/5 bg-white/70' : 'border-white/5 bg-[#161618]/70'
-          } backdrop-blur-md`}>
-            
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center text-emerald-400 font-bold text-lg">
-                <Headphones className="w-5 h-5 text-emerald-400" />
-              </div>
-              <div>
-                <h3 className="font-extrabold text-base leading-tight">
-                  {lang === 'ru' ? 'Связь и помощь' : 'Aloqa va yordam'}
-                </h3>
-                <span className={`text-[11px] ${isLight ? 'text-gray-500' : 'text-[#8E8E93]'}`}>
-                  Rashidov EdTech • Mentorlar va texnik xizmat
-                </span>
-              </div>
-            </div>
-
-            {/* Telegram Mini App System Close Button */}
+          <div className="flex items-center gap-3">
             <button
               onClick={() => {
                 impactLight();
                 onClose();
               }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 ${
+              className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-95 ${
                 isLight 
-                  ? 'bg-black/5 hover:bg-black/10 text-gray-700' 
-                  : 'bg-white/10 hover:bg-white/15 text-white/90'
+                  ? 'bg-black/5 hover:bg-black/10 text-gray-800' 
+                  : 'bg-white/10 hover:bg-white/15 text-white'
               }`}
-              title={t('yopish')}
+              title={lang === 'ru' ? 'Назад' : 'Orqaga'}
             >
-              <span>{t('yopish')}</span>
-              <X className="w-4 h-4 ml-0.5" />
+              <ArrowLeft className="w-5 h-5" />
             </button>
-          </div>
-
-          {/* Scrollable Content */}
-          <div className="flex-1 overflow-y-auto p-5 space-y-4 no-scrollbar">
-            
-            <p className={`text-xs px-1 ${isLight ? 'text-gray-600' : 'text-[#8E8E93]'}`}>
-              {lang === 'ru'
-                ? 'Выберите подходящую категорию для связи с профильным преподавателем или технической поддержкой:'
-                : 'Savolingiz mavzusiga mos bo‘limni tanlang va to‘g‘ridan-to‘g‘ri mentor yoki texnik xizmatga murojaat qiling:'}
-            </p>
-
-            {categories.map((cat) => {
-              const tgHandle = cat.data?.telegram || '@rashidov_support';
-              const phoneNum = cat.data?.phone || '+998 71 200 00 00';
-              const isTgCopied = copiedKey === `${cat.id}-tg`;
-              const isPhoneCopied = copiedKey === `${cat.id}-phone`;
-
-              return (
-                <div
-                  key={cat.id}
-                  className={`p-4 rounded-2xl border transition-all ${
-                    isLight 
-                      ? 'bg-white border-black/5 shadow-sm' 
-                      : 'bg-[#2C2C2E] border-white/5'
-                  }`}
-                >
-                  {/* Category Header */}
-                  <div className="flex items-start gap-3 mb-3.5">
-                    <div className="text-2xl p-2 rounded-xl bg-black/10 flex items-center justify-center">
-                      {cat.icon}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-bold text-sm leading-tight flex items-center gap-2">
-                        <span>{cat.title}</span>
-                      </h4>
-                      <p className={`text-[11px] mt-0.5 leading-snug ${isLight ? 'text-gray-500' : 'text-[#8E8E93]'}`}>
-                        {cat.desc}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Action Buttons Grid: Telegram + Phone */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                    
-                    {/* Telegram Button */}
-                    <button
-                      onClick={() => handleOpenTelegram(tgHandle)}
-                      className="py-2.5 px-3 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 flex items-center justify-between text-sky-400 font-bold text-xs active:scale-[0.98] transition-all group"
-                    >
-                      <div className="flex items-center gap-2 truncate">
-                        <Send className="w-4 h-4 flex-shrink-0" />
-                        <span className="truncate">{tgHandle}</span>
-                      </div>
-                      <ExternalLink className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100 flex-shrink-0 ml-1" />
-                    </button>
-
-                    {/* Phone Call Button */}
-                    <button
-                      onClick={() => handleCallPhone(phoneNum)}
-                      className="py-2.5 px-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 flex items-center justify-between text-emerald-400 font-bold text-xs active:scale-[0.98] transition-all group"
-                    >
-                      <div className="flex items-center gap-2 truncate">
-                        <Phone className="w-4 h-4 flex-shrink-0" />
-                        <span className="truncate">{phoneNum}</span>
-                      </div>
-                      <span className="text-[10px] uppercase tracking-wide opacity-80 flex-shrink-0 ml-1">
-                        {lang === 'ru' ? 'Вызов' : 'Qo‘ng‘iroq'}
-                      </span>
-                    </button>
-
-                  </div>
-                </div>
-              );
-            })}
-
-            {/* Note banner */}
-            <div className={`p-3.5 rounded-2xl border text-center ${
-              isLight ? 'bg-blue-500/5 border-blue-500/15' : 'bg-blue-500/10 border-blue-500/20'
-            }`}>
-              <div className="flex items-center justify-center gap-1.5 text-blue-400 font-bold text-xs mb-0.5">
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>{lang === 'ru' ? 'Режим работы поддержки' : 'Yordam xizmati tartibi'}</span>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center text-emerald-400 font-bold">
+                <Headphones className="w-4 h-4 text-emerald-400" />
               </div>
-              <p className={`text-[11px] ${isLight ? 'text-gray-500' : 'text-[#8E8E93]'}`}>
-                {lang === 'ru' 
-                  ? 'Преподаватели и операторы отвечают ежедневно с 09:00 до 21:00' 
-                  : 'Ustozlar va operatorlar har kuni soat 09:00 dan 21:00 gacha xizmatda'}
-              </p>
+              <h3 className="font-extrabold text-base leading-tight">
+                {lang === 'ru' ? 'Связь и помощь' : 'Aloqa va yordam'}
+              </h3>
             </div>
-
           </div>
+        </div>
 
-          {/* Mini App System Close Button Footer */}
-          <div className={`p-4 border-t ${
-            isLight ? 'border-black/5 bg-white/70' : 'border-white/5 bg-[#161618]/70'
-          } backdrop-blur-md`}>
-            <button
-              onClick={() => {
-                impactLight();
-                onClose();
-              }}
-              className="w-full py-3.5 px-4 rounded-2xl bg-[#007AFF] hover:bg-[#0062CC] active:scale-[0.98] text-white font-bold text-sm shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 transition-all"
-            >
-              <Check className="w-4 h-4" />
-              <span>{t('yopish')}</span>
-            </button>
-          </div>
+        {/* Scrollable Compact Cards Content */}
+        <div 
+          className="flex-1 overflow-y-auto p-4 space-y-3 no-scrollbar"
+          style={{
+            paddingBottom: 'max(calc(var(--safe-area-bottom, 0px) + 24px), 32px)'
+          }}
+        >
+          {categories.map((cat) => {
+            const tgHandle = cat.data?.telegram || '@rashidov_support';
+            const phoneNum = cat.data?.phone || '+998 71 200 00 00';
 
-        </motion.div>
-      </div>
+            return (
+              <div
+                key={cat.id}
+                className={`p-3.5 rounded-2xl border transition-all ${
+                  isLight 
+                    ? 'bg-white border-black/5 shadow-sm' 
+                    : 'bg-[#1C1C1E] border-white/5 shadow-md'
+                }`}
+              >
+                {/* Compact Header: Icon + Title */}
+                <div className="flex items-center gap-2.5 mb-2.5">
+                  <div className="text-xl w-8 h-8 rounded-xl bg-white/5 flex items-center justify-center shrink-0">
+                    {cat.icon}
+                  </div>
+                  <h4 className="font-bold text-sm leading-tight text-white/95">
+                    {cat.title}
+                  </h4>
+                </div>
+
+                {/* Action Buttons Row: Telegram (with logo & text) + Qo'ng'iroq (compact) */}
+                <div className="flex items-center gap-2">
+                  
+                  {/* Telegram Button with TG Logo and "Telegram" */}
+                  <button
+                    onClick={() => handleOpenTelegram(tgHandle)}
+                    className="flex-1 py-2.5 px-3 rounded-xl bg-[#229ED9]/15 hover:bg-[#229ED9]/25 border border-[#229ED9]/30 flex items-center justify-between text-[#229ED9] active:scale-[0.98] transition-all group min-w-0"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <TelegramIcon className="w-4 h-4 shrink-0 text-[#229ED9]" />
+                      <span className="font-bold text-xs shrink-0">Telegram</span>
+                      {tgHandle && (
+                        <span className="text-[11px] opacity-75 font-mono truncate">
+                          {tgHandle}
+                        </span>
+                      )}
+                    </div>
+                    <ExternalLink className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100 shrink-0 ml-1" />
+                  </button>
+
+                  {/* Phone Call Button (Slightly reduced / compact) */}
+                  <button
+                    onClick={() => handleCallPhone(phoneNum)}
+                    className="py-2.5 px-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 flex items-center gap-1.5 text-emerald-400 font-bold text-xs active:scale-[0.98] transition-all shrink-0"
+                    title={phoneNum}
+                  >
+                    <Phone className="w-3.5 h-3.5 shrink-0" />
+                    <span>{lang === 'ru' ? 'Вызов' : 'Qo‘ng‘iroq'}</span>
+                  </button>
+
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </motion.div>
     </AnimatePresence>
   );
 }
