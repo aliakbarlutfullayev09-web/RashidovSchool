@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   ChevronRight, CreditCard, Send, Settings, 
-  Sparkles, Flame, User, Edit3, ShieldCheck, Headphones 
+  Sparkles, Flame, User, Edit3, ShieldCheck, Headphones, Globe 
 } from 'lucide-react';
 import Profile from '../components/Profile';
 import TopUpModal from '../components/TopUpModal';
@@ -10,6 +10,7 @@ import SupportModal from '../components/SupportModal';
 import { formatCompactNeyron } from '../utils/formatters';
 import { useHaptic } from '../hooks/useHaptic';
 import { useLanguage } from '../context/LanguageContext';
+import { getSupportContacts } from '../api/supabase';
 
 export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }) {
   const { t, lang } = useLanguage();
@@ -20,6 +21,19 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
   const [isTopUpOpen, setIsTopUpOpen] = useState(false);
   const [isSupportOpen, setIsSupportOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  // Official website state (configurable via admin-app)
+  const [officialWebsite, setOfficialWebsite] = useState('https://rashidovschool.uz');
+
+  useEffect(() => {
+    let mounted = true;
+    getSupportContacts().then(data => {
+      if (mounted && data?.website) {
+        setOfficialWebsite(data.website);
+      }
+    }).catch(() => {});
+    return () => { mounted = false; };
+  }, []);
 
   // Synchronize modal state with Telegram Mini App BackButton
   useEffect(() => {
@@ -48,6 +62,19 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
     const url = 'https://t.me/rashidov_biologiya';
     if (window.Telegram?.WebApp?.openTelegramLink) {
       window.Telegram.WebApp.openTelegramLink(url);
+    } else {
+      window.open(url, '_blank');
+    }
+  };
+
+  const handleOpenWebsite = () => {
+    impactMedium();
+    let url = officialWebsite || 'https://rashidovschool.uz';
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = `https://${url}`;
+    }
+    if (window.Telegram?.WebApp?.openLink) {
+      window.Telegram.WebApp.openLink(url);
     } else {
       window.open(url, '_blank');
     }
@@ -150,7 +177,26 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
           <ChevronRight className="w-5 h-5 text-[#8E8E93]" />
         </div>
 
-        {/* Row 2: Aloqa va yordam (Emerald Squircle) */}
+        {/* Row 2: Sozlamalar (Blue Squircle) */}
+        <div
+          onClick={() => {
+            impactLight();
+            setIsSettingsOpen(true);
+          }}
+          className="card-row flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.03] transition-colors border-b border-white/[0.04]"
+        >
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-2xl bg-blue-500/15 border border-blue-500/25 flex items-center justify-center text-blue-400">
+              <Settings className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="font-bold text-white text-sm block">{t('sozlamalar')}</span>
+            </div>
+          </div>
+          <ChevronRight className="w-5 h-5 text-[#8E8E93]" />
+        </div>
+
+        {/* Row 3: Aloqa va yordam (Teal Squircle) */}
         <div
           onClick={() => {
             impactLight();
@@ -171,7 +217,7 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
           <ChevronRight className="w-5 h-5 text-[#8E8E93]" />
         </div>
 
-        {/* Row 3: Telegram Kanal (Blue Squircle) */}
+        {/* Row 4: Telegram Kanal (Sky Blue Squircle) */}
         <div
           onClick={handleOpenChannel}
           className="card-row flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.03] transition-colors border-b border-white/[0.04]"
@@ -187,23 +233,27 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
           <ChevronRight className="w-5 h-5 text-[#8E8E93]" />
         </div>
 
-        {/* Row 4: Sozlamalar (Slate Squircle) */}
+        {/* Row 5: Rasmiy sayt (Purple Squircle) */}
         <div
-          onClick={() => {
-            impactLight();
-            setIsSettingsOpen(true);
-          }}
+          onClick={handleOpenWebsite}
           className="card-row flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.03] transition-colors"
         >
           <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-2xl bg-blue-500/15 border border-blue-500/25 flex items-center justify-center text-blue-400">
-              <Settings className="w-5 h-5" />
+            <div className="w-10 h-10 rounded-2xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400">
+              <Globe className="w-5 h-5" />
             </div>
             <div>
-              <span className="font-bold text-white text-sm block">{t('sozlamalar')}</span>
+              <span className="font-bold text-white text-sm block">
+                {lang === 'ru' ? 'Официальный сайт' : 'Rasmiy sayt'}
+              </span>
             </div>
           </div>
-          <ChevronRight className="w-5 h-5 text-[#8E8E93]" />
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-[#8E8E93] font-mono hidden sm:inline">
+              {officialWebsite.replace(/^https?:\/\//, '')}
+            </span>
+            <ChevronRight className="w-5 h-5 text-[#8E8E93]" />
+          </div>
         </div>
 
       </div>

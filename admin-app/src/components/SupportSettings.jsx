@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Headphones, Send, Phone, Save, CheckCircle2, 
-  Sparkles, RefreshCw, AlertCircle, ShieldAlert 
+  Sparkles, RefreshCw, AlertCircle, ShieldAlert, Globe, ExternalLink 
 } from 'lucide-react';
 import { api } from '../api/supabase';
 
@@ -25,7 +25,8 @@ export default function SupportSettings({ user }) {
     tech: {
       telegram: '@rashidov_support',
       phone: '+998 71 200 00 00'
-    }
+    },
+    website: 'https://rashidovschool.uz'
   });
 
   useEffect(() => {
@@ -46,7 +47,8 @@ export default function SupportSettings({ user }) {
             tech: {
               telegram: data.tech?.telegram || '@rashidov_support',
               phone: data.tech?.phone || '+998 71 200 00 00'
-            }
+            },
+            website: data.website || 'https://rashidovschool.uz'
           });
         }
       } catch (e) {
@@ -292,6 +294,59 @@ export default function SupportSettings({ user }) {
 
           <div className="mt-4 pt-3 border-t border-white/5 text-[10px] text-blue-400/80 font-medium">
             ✓ Texnik qo‘llab-quvvatlash uchun ajratilgan
+          </div>
+        </div>
+
+        {/* Card 4: Rasmiy veb-sayt (Official Website) */}
+        <div className="bg-[#1C1C1E] border border-white/5 rounded-3xl p-5 shadow-xl flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400 font-bold">
+                  <Globe className="w-5 h-5 text-purple-400" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-white">Rasmiy veb-sayt</h4>
+                  <span className="text-[11px] text-[#8E8E93]">Profil bo‘limidagi «Rasmiy sayt» havolasi</span>
+                </div>
+              </div>
+              <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-400 border border-purple-500/20">
+                Web
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-[11px] font-bold text-[#8E8E93] mb-1.5 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Globe className="w-3.5 h-3.5 text-purple-400" />
+                    <span>Sayt manzili (URL):</span>
+                  </span>
+                  {contacts.website && (
+                    <a
+                      href={contacts.website.startsWith('http') ? contacts.website : `https://${contacts.website}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[10px] text-purple-400 hover:text-purple-300 flex items-center gap-1"
+                    >
+                      <span>Saytni ochish</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
+                </label>
+                <input
+                  type="url"
+                  value={contacts.website || ''}
+                  onChange={(e) => setContacts(prev => ({ ...prev, website: e.target.value }))}
+                  placeholder="https://rashidovschool.uz"
+                  className="w-full bg-[#202023] border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-[#636366] focus:border-[#007AFF] outline-none"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-white/5 text-[10px] text-purple-400/80 font-medium">
+            ✓ O‘quvchilar profilida «Rasmiy sayt» tugmasi bosilganda ushbu manzil ochiladi
           </div>
         </div>
 

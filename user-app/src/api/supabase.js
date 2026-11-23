@@ -613,7 +613,8 @@ export const DEFAULT_SUPPORT_CONTACTS = {
     label_ru: 'Технические и другие вопросы',
     desc_uz: 'Ilova ishlashi, to‘lovlar va hisob masalalari',
     desc_ru: 'Работа приложения, оплата и вопросы аккаунта'
-  }
+  },
+  website: 'https://rashidovschool.uz'
 };
 
 export const getSupportContacts = async () => {
@@ -631,7 +632,8 @@ export const getSupportContacts = async () => {
           return {
             bio: { ...DEFAULT_SUPPORT_CONTACTS.bio, ...(parsed.bio || {}) },
             chem: { ...DEFAULT_SUPPORT_CONTACTS.chem, ...(parsed.chem || {}) },
-            tech: { ...DEFAULT_SUPPORT_CONTACTS.tech, ...(parsed.tech || {}) }
+            tech: { ...DEFAULT_SUPPORT_CONTACTS.tech, ...(parsed.tech || {}) },
+            website: parsed.website || DEFAULT_SUPPORT_CONTACTS.website
           };
         }
       } catch {}
@@ -642,7 +644,14 @@ export const getSupportContacts = async () => {
 
   try {
     const cached = localStorage.getItem('rb_support_contacts');
-    if (cached) return JSON.parse(cached);
+    if (cached) {
+      const parsedCached = JSON.parse(cached);
+      return {
+        ...DEFAULT_SUPPORT_CONTACTS,
+        ...parsedCached,
+        website: parsedCached.website || DEFAULT_SUPPORT_CONTACTS.website
+      };
+    }
   } catch {}
 
   return DEFAULT_SUPPORT_CONTACTS;

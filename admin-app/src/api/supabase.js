@@ -509,7 +509,12 @@ export const api = {
         try {
           const parsed = JSON.parse(data.description);
           if (parsed && typeof parsed === 'object') {
-            return parsed;
+            return {
+              bio: parsed.bio || { telegram: '@rashidov_bio_mentor', phone: '+998 90 123 45 67' },
+              chem: parsed.chem || { telegram: '@rashidov_chem_mentor', phone: '+998 90 765 43 21' },
+              tech: parsed.tech || { telegram: '@rashidov_support', phone: '+998 71 200 00 00' },
+              website: parsed.website || 'https://rashidovschool.uz'
+            };
           }
         } catch {}
       }
@@ -525,7 +530,8 @@ export const api = {
     return {
       bio: { telegram: '@rashidov_bio_mentor', phone: '+998 90 123 45 67' },
       chem: { telegram: '@rashidov_chem_mentor', phone: '+998 90 765 43 21' },
-      tech: { telegram: '@rashidov_support', phone: '+998 71 200 00 00' }
+      tech: { telegram: '@rashidov_support', phone: '+998 71 200 00 00' },
+      website: 'https://rashidovschool.uz'
     };
   },
 
