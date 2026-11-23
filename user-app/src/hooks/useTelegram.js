@@ -28,17 +28,25 @@ export function useTelegram() {
       const safeArea = tg.safeAreaInset || {};
       // contentSafeAreaInset (Telegram 8.0+): Telegram header + controls area
       const contentSafeArea = tg.contentSafeAreaInset || {};
+      const isFullscreen = Boolean(tg.isFullscreen);
 
-      // Real geometry: contentSafeArea already encompasses the Telegram header and status bar.
-      // Use Math.max so we never count an inset twice.
-      topInset = Math.max(
-        Number(contentSafeArea.top) || 0,
-        Number(safeArea.top) || 0
-      );
-      bottomInset = Math.max(
-        Number(contentSafeArea.bottom) || 0,
-        Number(safeArea.bottom) || 0
-      );
+      if (isFullscreen) {
+        // In fullscreen mode, the app renders edge-to-edge under device status/nav bars
+        topInset = Math.max(
+          Number(safeArea.top) || 0,
+          Number(contentSafeArea.top) || 0
+        );
+        bottomInset = Math.max(
+          Number(safeArea.bottom) || 0,
+          Number(contentSafeArea.bottom) || 0
+        );
+      } else {
+        // In standard mode, the webview is already framed below Telegram's header and above any chat controls.
+        // We only respect device safeArea (notch / home indicator), preventing double padding.
+        topInset = Number(safeArea.top) || 0;
+        bottomInset = Number(safeArea.bottom) || 0;
+      }
+
       leftInset = Math.max(
         Number(contentSafeArea.left) || 0,
         Number(safeArea.left) || 0
@@ -53,9 +61,9 @@ export function useTelegram() {
       }
     }
 
-    // Fallback: If in Telegram and topInset is 0 (older Telegram client), provide comfortable breathing room
-    if (isTelegram && topInset === 0) {
-      topInset = 44; // Standard Telegram mobile top header offset
+    // Fallback: If in Telegram and topInset is 0 in fullscreen, provide comfortable status bar breathing room
+    if (isTelegram && topInset === 0 && Boolean(tg?.isFullscreen)) {
+      topInset = 40;
     } else if (!isTelegram && topInset === 0) {
       topInset = 16; // Standard non-Telegram viewport breathing room
     }
@@ -78,6 +86,15 @@ export function useTelegram() {
     try {
       tg.ready();
       tg.expand();
+
+      // Unified Telegram 8.0+ Fullscreen request
+      if (
+        tg.isVersionAtLeast &&
+        tg.isVersionAtLeast('8.0') &&
+        typeof tg.requestFullscreen === 'function'
+      ) {
+        tg.requestFullscreen().catch(() => {});
+      }
 
       if (tg.initDataUnsafe?.user) {
         setUser(tg.initDataUnsafe.user);
@@ -102,11 +119,13 @@ export function useTelegram() {
 
       updateGeometry();
 
-      // Subscribe to Telegram geometry events
+      // Subscribe to Telegram geometry and fullscreen events
       if (typeof tg.onEvent === 'function') {
         tg.onEvent('safeAreaChanged', updateGeometry);
         tg.onEvent('contentSafeAreaChanged', updateGeometry);
         tg.onEvent('viewportChanged', updateGeometry);
+        tg.onEvent('fullscreenChanged', updateGeometry);
+        tg.onEvent('fullscreenFailed', updateGeometry);
       }
 
       window.addEventListener('resize', updateGeometry);
@@ -117,6 +136,8 @@ export function useTelegram() {
           tg.offEvent('safeAreaChanged', updateGeometry);
           tg.offEvent('contentSafeAreaChanged', updateGeometry);
           tg.offEvent('viewportChanged', updateGeometry);
+          tg.offEvent('fullscreenChanged', updateGeometry);
+          tg.offEvent('fullscreenFailed', updateGeometry);
         }
         window.removeEventListener('resize', updateGeometry);
         window.removeEventListener('orientationchange', updateGeometry);

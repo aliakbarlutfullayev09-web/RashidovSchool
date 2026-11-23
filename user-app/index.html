@@ -8,6 +8,25 @@
     <meta property="og:title" content="Rashidov Biologiya LMS" />
     <meta property="og:description" content="Biologiya fanidan interaktiv video darslar, testlar, kundalik topshiriqlar va o'quvchilar reytingi platformasi." />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script>
+      (function() {
+        try {
+          const webApp = window.Telegram?.WebApp;
+          webApp?.ready();
+          webApp?.expand();
+
+          if (
+            webApp &&
+            webApp.isVersionAtLeast?.('8.0') &&
+            typeof webApp.requestFullscreen === 'function'
+          ) {
+            webApp.requestFullscreen().catch(function() {});
+          }
+        } catch (e) {
+          console.warn('Early Telegram WebApp bootstrap error:', e);
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
