@@ -10,10 +10,13 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { useIsDesktop } from '../hooks/useIsDesktop';
+import DesktopSubjectCarousel from '../components/DesktopSubjectCarousel';
 
 export default function LessonsPage({ user, onPlayingChange, onRegisterBackAction }) {
   const { t } = useLanguage();
   const { selectionChanged, impactLight, impactMedium } = useHaptic();
+  const isDesktop = useIsDesktop();
 
   // Telegram client & BackButton support detection
   const tg = typeof window !== 'undefined' ? window.Telegram?.WebApp : null;
@@ -365,18 +368,18 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
   const isMatem = normKey.includes('mat') || normKey.includes('мат') || activeSubject?.id === 3;
 
   const currentSubjectKey = isBio ? 'biologiya' : isKimyo ? 'kimyo' : isMatem ? 'matematika' : (activeSubject?.key || 'subject');
-  const currentSubjectTitle = (activeSubject?.name || (isBio ? 'BIOLOGIYA' : isKimyo ? 'KIMYO' : isMatem ? 'MATEMATIKA' : 'FAN')).toUpperCase();
+  const currentSubjectTitle = isBio ? 'BIOLOGIYA' : isKimyo ? 'KIMYO' : isMatem ? 'MATEMATIKA' : (activeSubject?.name || 'FAN').toUpperCase();
 
   // Distinct custom high-res background & video per subject
   let subjectImage = activeSubject?.image_url;
-  if (!subjectImage || subjectImage.includes('unsplash.com/photo-1530026405186') || subjectImage.includes('photo-1635070041078')) {
-    subjectImage = isBio 
-      ? '/banners/biologiya_banner.jpg'
-      : isKimyo
-      ? '/banners/kimyo_banner.jpg'
-      : isMatem
-      ? 'https://images.unsplash.com/photo-1633424974203-6c91b2a651ee?auto=format&fit=crop&w=1200&q=85'
-      : 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1200&q=85';
+  if (isBio) {
+    subjectImage = '/banners/biologiya_banner.jpg';
+  } else if (isKimyo) {
+    subjectImage = '/banners/kimyo_banner.jpg';
+  } else if (isMatem) {
+    subjectImage = 'https://images.unsplash.com/photo-1633424974203-6c91b2a651ee?auto=format&fit=crop&w=1200&q=85';
+  } else if (!subjectImage || subjectImage.includes('unsplash.com/photo-1530026405186') || subjectImage.includes('photo-1635070041078') || subjectImage.includes('photo-1451187580459')) {
+    subjectImage = '/banners/biologiya_banner.jpg';
   }
 
   const subjectVideo = isBio 
@@ -422,15 +425,33 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
         currentView === 'carousel' ? 'h-full flex-1 overflow-hidden' : 'min-h-full'
       }`}
       style={{
-        paddingBottom: currentView === 'carousel' 
-          ? 'calc(var(--safe-area-bottom, 0px) + 74px)' 
-          : 'calc(var(--safe-area-bottom, 0px) + 88px)'
+        paddingBottom: isDesktop
+          ? '0px'
+          : (currentView === 'carousel' 
+              ? 'calc(var(--safe-area-bottom, 0px) + 74px)' 
+              : 'calc(var(--safe-area-bottom, 0px) + 88px)')
       }}
     >
       {/* ──────────────────────────────────────────────────────────
           SCREEN 1: HERO SUBJECT CAROUSEL BANNER (STRETCHED & THEMED)
       ────────────────────────────────────────────────────────── */}
       {currentView === 'carousel' && (
+        isDesktop ? (
+          <div className="w-full max-w-7xl mx-auto pl-16 pr-4 py-2 flex flex-col items-center justify-center h-screen overflow-hidden animate-in fade-in duration-300">
+            <DesktopSubjectCarousel
+              subjects={subjects}
+              activeSubjectIndex={activeSubjectIndex}
+              onSubjectChange={(idx) => setActiveSubjectIndex(idx)}
+              onStartSubject={(sub) => {
+                if (sub) {
+                  const idx = subjects.findIndex(s => s.id === sub.id);
+                  if (idx !== -1) setActiveSubjectIndex(idx);
+                }
+                setCurrentView('subject_hub');
+              }}
+            />
+          </div>
+        ) : (
         <div 
           className="h-full flex-1 flex flex-col justify-between items-center px-4 pt-1 pb-1 w-full max-w-md mx-auto overflow-hidden select-none"
           onTouchStart={(e) => {
@@ -567,13 +588,14 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
             ))}
           </div>
         </div>
+        )
       )}
 
       {/* ──────────────────────────────────────────────────────────
           SCREEN 2: SUBJECT HUB (2x2 CATEGORIES & RECENT LESSON)
       ────────────────────────────────────────────────────────── */}
       {currentView === 'subject_hub' && (
-        <div className="w-full max-w-md mx-auto px-4 pt-3 pb-8 animate-in fade-in duration-300">
+        <div className="w-full max-w-md desktop:max-w-3xl mx-auto px-4 pt-3 pb-8 animate-in fade-in duration-300">
           {/* Search Input Bar with glass styling */}
           <div className="relative mb-3">
             <Search className="w-4 h-4 text-[#8E8E93] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -721,7 +743,7 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
           SCREEN 3: LESSON LIST & SEARCH RESULTS
       ────────────────────────────────────────────────────────── */}
       {currentView === 'lesson_list' && (
-        <div className="w-full max-w-md mx-auto px-4 pt-3 pb-8 animate-in fade-in duration-300">
+        <div className="w-full max-w-md desktop:max-w-3xl mx-auto px-4 pt-3 pb-8 animate-in fade-in duration-300">
           {/* Search Input Bar with Clear button and glass styling */}
           <div className="relative mb-3">
             <Search className="w-4 h-4 text-[#8E8E93] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />

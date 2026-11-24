@@ -6,6 +6,9 @@ export default {
   ],
   theme: {
     extend: {
+      screens: {
+        'desktop': { 'raw': '(min-width: 1024px) and (hover: hover) and (pointer: fine)' },
+      },
       colors: {
         oled: '#000000',
         graphite: {

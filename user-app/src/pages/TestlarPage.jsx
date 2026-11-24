@@ -11,6 +11,8 @@ import { isUzbekMatch } from '../utils/uzbekFuzzy';
 import { useHaptic } from '../hooks/useHaptic';
 import { useLanguage } from '../context/LanguageContext';
 import { useTelegram } from '../hooks/useTelegram';
+import { useIsDesktop } from '../hooks/useIsDesktop';
+import DesktopSubjectCarousel from '../components/DesktopSubjectCarousel';
 
 // ──────────────────────────────────────────────────────────────
 // TEACHER-CURATED TESTS DATABASE PER SUBJECT & MODE
@@ -446,12 +448,14 @@ export default function TestlarPage({ user, onRegisterBackAction }) {
   const [selectedTest, setSelectedTest] = useState(null);
 
   // Exam Runner State (Screen 4)
+  const isDesktop = useIsDesktop();
   const [examActive, setExamActive] = useState(false);
   const [currentQIndex, setCurrentQIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState({});
   const [timeLeft, setTimeLeft] = useState(1800);
   const [cheatWarnings, setCheatWarnings] = useState(0);
   const [showWarningModal, setShowWarningModal] = useState(false);
+  const [visitedQuestions, setVisitedQuestions] = useState(new Set([0]));
 
   // Results & Tahlil State
   const [examFinished, setExamFinished] = useState(false);
@@ -489,7 +493,7 @@ export default function TestlarPage({ user, onRegisterBackAction }) {
   const isMatem = normKey.includes('mat') || normKey.includes('мат') || activeSubject?.id === 3;
 
   const currentSubjectKey = isBio ? 'biologiya' : isKimyo ? 'kimyo' : isMatem ? 'matematika' : (activeSubject?.key || 'biologiya');
-  const currentSubjectTitle = (activeSubject?.name || (isBio ? 'BIOLOGIYA' : isKimyo ? 'KIMYO' : isMatem ? 'MATEMATIKA' : 'FAN')).toUpperCase();
+  const currentSubjectTitle = isBio ? 'BIOLOGIYA' : isKimyo ? 'KIMYO' : isMatem ? 'MATEMATIKA' : (activeSubject?.name || 'FAN').toUpperCase();
 
   // Distinct custom high-res background & video per subject
   let subjectImage = activeSubject?.image_url;
@@ -566,6 +570,7 @@ export default function TestlarPage({ user, onRegisterBackAction }) {
     setCheatWarnings(0);
     setShowWarningModal(false);
     setShowTahlil(false);
+    setVisitedQuestions(new Set([0]));
     setExamActive(true);
     setExamFinished(false);
   };
@@ -634,6 +639,17 @@ export default function TestlarPage({ user, onRegisterBackAction }) {
       onRegisterBackAction(null);
     }
   }, [examActive, examFinished, currentView, onRegisterBackAction]);
+
+  // Track visited questions for CAT navigation grid
+  useEffect(() => {
+    if (examActive) {
+      setVisitedQuestions(prev => {
+        const next = new Set(prev);
+        next.add(currentQIndex);
+        return next;
+      });
+    }
+  }, [examActive, currentQIndex]);
 
   // Anti-cheat detector during active exam
   useEffect(() => {
@@ -717,6 +733,285 @@ export default function TestlarPage({ user, onRegisterBackAction }) {
     const currentQ = activeQuestions[currentQIndex] || activeQuestions[0];
     const minutes = Math.floor(timeLeft / 60);
     const seconds = timeLeft % 60;
+
+    // Desktop CAT exam layout (>= 1024px with hover/fine pointer)
+    if (isDesktop) {
+      return (
+        <div className="w-full min-h-screen bg-[#000000] text-white p-6 pb-20 select-none animate-in fade-in duration-300">
+          {/* Top CAT Header Bar */}
+          <div className="max-w-7xl mx-auto flex items-center justify-between py-3 px-6 mb-6 rounded-2xl bg-[#091012] border border-teal-500/20 shadow-lg">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={handleExitExam}
+                className="w-10 h-10 rounded-xl bg-[#152327] hover:bg-[#1d3137] border border-teal-500/20 flex items-center justify-center text-teal-300 active:scale-95 transition-all cursor-pointer"
+                title="Chiqish"
+                aria-label="Testdan chiqish"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-teal-500/20 text-teal-300 border border-teal-500/30">
+                    {selectedMode === 'dtm' ? 'DTM Mock Exam' : 'Milliy Sertifikat'}
+                  </span>
+                  <span className="text-xs text-[#8E8E93]">
+                    {activeSubject.name || 'Biologiya'}
+                  </span>
+                </div>
+                <h2 className="text-white font-bold text-sm sm:text-base mt-0.5">
+                  {selectedTest?.title || 'Diagnostik Test'}
+                </h2>
+              </div>
+            </div>
+
+            {/* Timer Capsule & Finish Button */}
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 bg-[#152327] border border-amber-500/40 px-4 py-2 rounded-2xl text-sm font-mono font-bold text-amber-300 shadow-md">
+                <Clock className="w-4 h-4 text-amber-400 animate-pulse" />
+                <span>{minutes.toString().padStart(2, '0')}:{seconds.toString().padStart(2, '0')}</span>
+              </div>
+
+              <button
+                onClick={() => {
+                  if (window.confirm("Testni yakunlaysizmi?")) {
+                    handleFinishExam();
+                  }
+                }}
+                className="bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-300 hover:text-white px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer"
+              >
+                Testni yakunlash
+              </button>
+            </div>
+          </div>
+
+          {/* Main 2-Column CAT Container */}
+          <div className="max-w-7xl mx-auto flex flex-row gap-6 items-start">
+            
+            {/* Left Column: Question area and Options */}
+            <div className="flex-1 min-w-0 flex flex-col justify-between bg-[#091012] border border-teal-500/20 rounded-3xl p-8 shadow-2xl relative min-h-[580px]">
+              
+              <div>
+                {/* Question Info Bar */}
+                <div className="flex items-center justify-between text-xs text-[#8E8E93] pb-4 mb-4 border-b border-white/5">
+                  <div className="flex items-center gap-2">
+                    <span className="font-extrabold text-white text-base">
+                      {currentQIndex + 1}-Savol
+                    </span>
+                    <span className="text-xs text-[#8E8E93]">
+                      / {activeQuestions.length}
+                    </span>
+                  </div>
+                  <span className="text-teal-400 font-bold text-xs px-2.5 py-1 rounded-lg bg-teal-500/10 border border-teal-500/20">
+                    +{selectedMode === 'dtm' ? '3.1 ball' : `${(100 / activeQuestions.length).toFixed(1)} ball`}
+                  </span>
+                </div>
+
+                {/* Optional Illustration centered */}
+                {currentQ?.imageUrl && (
+                  <div className="w-full max-h-72 rounded-2xl overflow-hidden bg-black/50 border border-teal-500/20 mb-6 flex items-center justify-center p-2">
+                    <img 
+                      src={currentQ.imageUrl} 
+                      alt="Savol rasmi" 
+                      className="max-h-68 max-w-full object-contain rounded-xl" 
+                    />
+                  </div>
+                )}
+
+                {/* Question Text */}
+                <h3 className="text-white font-bold text-lg sm:text-xl leading-relaxed mb-6">
+                  {currentQ?.text}
+                </h3>
+
+                {/* Options List in Single Column */}
+                {currentQ?.type === 'input' ? (
+                  <div className="pt-2">
+                    <label className="text-xs text-teal-300 font-medium block mb-2">
+                      Javobingizni yozing:
+                    </label>
+                    <input
+                      type="text"
+                      value={userAnswers[currentQIndex] || ''}
+                      onChange={(e) => handleSelectAnswer(currentQIndex, e.target.value)}
+                      placeholder="Javobni kiriting..."
+                      className="w-full bg-[#152327] border border-teal-500/30 rounded-2xl p-4 text-white text-base font-bold outline-none focus:border-teal-400 transition-colors"
+                    />
+                  </div>
+                ) : (
+                  <div className="space-y-3 pt-2">
+                    {(currentQ?.options || []).map((opt, oIdx) => {
+                      const isSelected = userAnswers[currentQIndex] === oIdx;
+                      const letter = ['A', 'B', 'C', 'D'][oIdx] || String(oIdx + 1);
+
+                      return (
+                        <button
+                          key={oIdx}
+                          type="button"
+                          onClick={() => handleSelectAnswer(currentQIndex, oIdx)}
+                          className={`w-full p-4 rounded-2xl border text-left text-sm font-semibold flex items-center justify-between transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 ${
+                            isSelected
+                              ? 'bg-teal-500/20 border-teal-400 text-white shadow-lg shadow-teal-500/20'
+                              : 'bg-[#152327]/80 hover:bg-[#1c3035] border-white/5 text-white/90 hover:border-teal-500/30'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3.5 min-w-0 pr-3">
+                            <span className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 transition-colors ${
+                              isSelected
+                                ? 'bg-teal-400 text-black font-black'
+                                : 'bg-black/40 text-teal-300/80 border border-white/10'
+                            }`}>
+                              {letter}
+                            </span>
+                            <span className="leading-snug">{opt}</span>
+                          </div>
+
+                          <div className={`w-6 h-6 rounded-full border flex items-center justify-center shrink-0 transition-all ${
+                            isSelected
+                              ? 'border-teal-400 bg-teal-400 text-black'
+                              : 'border-white/20'
+                          }`}>
+                            {isSelected && <Check className="w-4 h-4 stroke-[3]" />}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Pinned Bottom Actions Bar */}
+              <div className="flex items-center justify-between gap-4 pt-8 mt-8 border-t border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setCurrentQIndex(prev => Math.max(0, prev - 1))}
+                  disabled={currentQIndex === 0}
+                  className="px-6 py-3.5 rounded-2xl bg-[#152327] hover:bg-[#1c3035] disabled:opacity-30 border border-white/5 text-white font-bold text-xs transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed"
+                >
+                  ← Oldingi
+                </button>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (currentQIndex < activeQuestions.length - 1) {
+                        setCurrentQIndex(prev => prev + 1);
+                      } else {
+                        if (window.confirm("Barcha savollar ko'rib chiqildi. Testni yakunlaysizmi?")) {
+                          handleFinishExam();
+                        }
+                      }
+                    }}
+                    className="px-8 py-3.5 rounded-2xl bg-teal-500 hover:bg-teal-400 text-black font-extrabold text-xs transition-all active:scale-95 shadow-lg shadow-teal-500/25 cursor-pointer"
+                  >
+                    {currentQIndex === activeQuestions.length - 1 ? 'Testni yakunlash ✓' : 'Keyingi →'}
+                  </button>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Right Sticky Sidebar: Timer, Grid, Legend */}
+            <div className="w-80 shrink-0 sticky top-4 flex flex-col gap-4">
+              
+              {/* Question Map Card */}
+              <div className="bg-[#091012] border border-teal-500/20 rounded-3xl p-5 shadow-2xl flex flex-col">
+                <div className="flex items-center justify-between mb-3 pb-2 border-b border-white/5">
+                  <span className="text-xs font-bold uppercase tracking-wider text-teal-300">
+                    Savollar xaritasi
+                  </span>
+                  <span className="text-[11px] font-mono text-[#8E8E93]">
+                    {Object.keys(userAnswers).length} / {activeQuestions.length}
+                  </span>
+                </div>
+
+                {/* 5-Column Question Grid */}
+                <div className="grid grid-cols-5 gap-2 max-h-[360px] overflow-y-auto no-scrollbar py-1">
+                  {activeQuestions.map((_, idx) => {
+                    const isAnswered = userAnswers[idx] !== undefined;
+                    const isCurrent = idx === currentQIndex;
+                    const isVisited = visitedQuestions.has(idx);
+                    const isSkipped = isVisited && !isAnswered && !isCurrent;
+
+                    let statusClass = 'bg-[#152327]/60 border border-white/5 text-[#8E8E93] hover:border-white/20'; // unvisited
+                    let icon = null;
+
+                    if (isCurrent) {
+                      statusClass = 'bg-teal-500/25 text-white ring-2 ring-teal-400 border-teal-400 font-black shadow-[0_0_12px_rgba(45,212,191,0.4)] scale-105 z-10';
+                    } else if (isAnswered) {
+                      statusClass = 'bg-emerald-500/25 text-emerald-300 border border-emerald-400/40 font-bold';
+                      icon = <Check className="w-2.5 h-2.5 stroke-[3] inline ml-0.5" />;
+                    } else if (isSkipped) {
+                      statusClass = 'bg-amber-500/15 text-amber-300 border border-amber-400/50 border-dashed font-bold';
+                    }
+
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setCurrentQIndex(idx)}
+                        title={`Savol ${idx + 1}`}
+                        aria-label={`Savol ${idx + 1}`}
+                        className={`h-10 rounded-xl flex items-center justify-center font-mono text-xs transition-all cursor-pointer ${statusClass}`}
+                      >
+                        <span>{idx + 1}</span>
+                        {icon}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Status Legend */}
+                <div className="mt-4 pt-4 border-t border-white/5 grid grid-cols-2 gap-2 text-[11px] text-[#8E8E93]">
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-md ring-2 ring-teal-400 bg-teal-500/30 shrink-0" />
+                    <span>Hozirgi</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-md bg-emerald-500/30 border border-emerald-400/50 flex items-center justify-center text-emerald-300 shrink-0">
+                      <Check className="w-2 h-2 stroke-[3]" />
+                    </span>
+                    <span>Javob berilgan</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-md bg-amber-500/15 border border-amber-400/50 border-dashed shrink-0" />
+                    <span>O'tkazilgan</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-md bg-[#152327] border border-white/10 shrink-0" />
+                    <span>Ochilmagan</span>
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
+
+          {/* Anti-cheat Warning Modal */}
+          {showWarningModal && (
+            <div className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-md flex items-center justify-center p-6 text-center">
+              <div className="bg-[#1C1C1E] border border-red-500/30 p-6 rounded-3xl max-w-xs w-full space-y-3 shadow-2xl">
+                <div className="w-12 h-12 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center mx-auto text-2xl">
+                  ⚠️
+                </div>
+                <h4 className="text-white font-bold text-base">Ogohlantirish!</h4>
+                <p className="text-xs text-[#8E8E93] leading-relaxed">
+                  Ilovadan chiqish yoki oynani almashtirish qat'iyan man etiladi! Yana bir marta takrorlansa, test avtomatik yakunlanadi.
+                </p>
+                <button
+                  onClick={() => setShowWarningModal(false)}
+                  className="w-full bg-[#007AFF] text-white py-3 rounded-xl font-bold text-xs cursor-pointer hover:bg-blue-600"
+                >
+                  Tushundim, davom etaman
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
 
     return (
       <div className="w-full min-h-screen bg-[#000000] text-white p-4 pb-28 max-w-lg mx-auto select-none">
@@ -997,6 +1292,31 @@ export default function TestlarPage({ user, onRegisterBackAction }) {
   // SCREEN 1: HERO SUBJECT CAROUSEL BANNER (EXACTLY LIKE DARSLAR)
   // ──────────────────────────────────────────────────────────
   if (currentView === 'carousel') {
+    if (isDesktop) {
+      return (
+        <div className="w-full max-w-7xl mx-auto pl-16 pr-4 py-2 flex flex-col items-center justify-center h-screen overflow-hidden animate-in fade-in duration-300">
+          <DesktopSubjectCarousel
+            subjects={subjects}
+            activeSubjectIndex={activeSubjectIndex}
+            onSubjectChange={(idx) => {
+              setActiveSubjectIndex(idx);
+              const sub = subjects[idx];
+              if (sub) {
+                const norm = (sub.key || sub.name || '').toLowerCase();
+                const key = norm.includes('kim') ? 'kimyo' : norm.includes('mat') ? 'matematika' : 'biologiya';
+                setSelectedSubjectKey(key);
+              }
+            }}
+            onStartSubject={(sub) => {
+              const norm = (sub?.key || sub?.name || '').toLowerCase();
+              const key = norm.includes('kim') ? 'kimyo' : norm.includes('mat') ? 'matematika' : 'biologiya';
+              handleSelectSubject(key);
+            }}
+          />
+        </div>
+      );
+    }
+
     return (
       <div 
         className="w-full text-white select-none flex flex-col h-full flex-1 overflow-hidden"
@@ -1156,7 +1476,7 @@ export default function TestlarPage({ user, onRegisterBackAction }) {
 
     return (
       <div 
-        className="w-full text-white select-none flex flex-col min-h-full px-4 pt-2 space-y-4 max-w-md mx-auto"
+        className="w-full text-white select-none flex flex-col min-h-full px-4 pt-2 space-y-4 max-w-md desktop:max-w-3xl mx-auto"
         style={{
           paddingBottom: 'calc(var(--safe-area-bottom, 0px) + 88px)'
         }}
@@ -1338,7 +1658,7 @@ export default function TestlarPage({ user, onRegisterBackAction }) {
 
   return (
     <div 
-      className="w-full text-white select-none flex flex-col min-h-full px-4 pt-2 space-y-4 max-w-md mx-auto"
+      className="w-full text-white select-none flex flex-col min-h-full px-4 pt-2 space-y-4 max-w-md desktop:max-w-3xl mx-auto"
       style={{
         paddingBottom: 'calc(var(--safe-area-bottom, 0px) + 88px)'
       }}

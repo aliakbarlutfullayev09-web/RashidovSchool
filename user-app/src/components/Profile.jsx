@@ -3,8 +3,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, User, School, Globe, Check } from 'lucide-react';
 import { updateUserProfile } from '../api/supabase';
 import { useHaptic } from '../hooks/useHaptic';
+import { useIsDesktop } from '../hooks/useIsDesktop';
 
-export default function Profile({ user, isOpen, onClose, onUpdateUser }) {
+export default function Profile({ user, isOpen, onClose, onUpdateUser, inlineDesktop = false }) {
+  const isDesktop = useIsDesktop();
   const [fullName, setFullName] = useState('');
   const [classGroup, setClassGroup] = useState('');
   const [lang, setLang] = useState('uz');
@@ -19,6 +21,16 @@ export default function Profile({ user, isOpen, onClose, onUpdateUser }) {
       setLang(user.language || 'uz');
     }
   }, [user, isOpen]);
+
+  // Escape key listener for desktop
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -54,15 +66,19 @@ export default function Profile({ user, isOpen, onClose, onUpdateUser }) {
     }
   };
 
-  return (
-    <AnimatePresence>
-      <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-        <motion.div
-          initial={{ scale: 0.95, y: 20, opacity: 0 }}
-          animate={{ scale: 1, y: 0, opacity: 1 }}
-          exit={{ scale: 0.95, y: 20, opacity: 0 }}
-          className="bg-[#1C1C1E] rounded-[28px] p-6 w-full max-w-sm border border-white/10 shadow-2xl relative"
-        >
+  const modalContent = (
+    <motion.div
+      initial={{ scale: 0.95, y: 20, opacity: 0 }}
+      animate={{ scale: 1, y: 0, opacity: 1 }}
+      exit={{ scale: 0.95, y: 20, opacity: 0 }}
+      className={`bg-[#1C1C1E] border border-white/10 shadow-2xl relative pointer-events-auto ${
+        isDesktop && inlineDesktop
+          ? 'w-[420px] max-w-[420px] rounded-[32px] p-6'
+          : isDesktop
+          ? 'fixed right-10 top-1/2 -translate-y-1/2 w-[420px] max-w-[420px] rounded-[32px] p-6'
+          : 'rounded-[28px] p-6 w-full max-w-sm'
+      }`}
+    >
           <button
             onClick={onClose}
             className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/70"
@@ -160,6 +176,24 @@ export default function Profile({ user, isOpen, onClose, onUpdateUser }) {
             </button>
           </div>
         </motion.div>
+  );
+
+  if (isDesktop && inlineDesktop) {
+    return modalContent;
+  }
+
+  return (
+    <AnimatePresence>
+      <div className={`fixed inset-0 z-[120] flex items-center justify-center p-4 ${
+        isDesktop ? 'bg-transparent pointer-events-none' : 'bg-black/80 backdrop-blur-md'
+      }`}>
+        {isDesktop && (
+          <div 
+            onClick={onClose} 
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm pointer-events-auto transition-opacity" 
+          />
+        )}
+        {modalContent}
       </div>
     </AnimatePresence>
   );

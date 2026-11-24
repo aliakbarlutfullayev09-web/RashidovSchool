@@ -12,7 +12,7 @@ export const mockSubjects = [
   { 
     id: 1, 
     key: 'biologiya',
-    name: 'Biologiya', 
+    name: 'BIOLOGIYA', 
     emoji: '🧬', 
     image_url: '/banners/biologiya_banner.jpg',
     video_url: '/banners/biologiya_banner.mp4',
@@ -25,7 +25,7 @@ export const mockSubjects = [
   { 
     id: 2, 
     key: 'kimyo',
-    name: 'Kimyo', 
+    name: 'KIMYO', 
     emoji: '🧪', 
     image_url: '/banners/kimyo_banner.jpg',
     video_url: '/banners/kimyo_banner.mp4',
@@ -38,7 +38,7 @@ export const mockSubjects = [
   { 
     id: 3, 
     key: 'matematika',
-    name: 'Matematika', 
+    name: 'MATEMATIKA', 
     emoji: '📐', 
     image_url: 'https://images.unsplash.com/photo-1633424974203-6c91b2a651ee?auto=format&fit=crop&w=1200&q=85',
     accent_color: '#007AFF',

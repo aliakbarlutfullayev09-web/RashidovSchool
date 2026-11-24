@@ -584,4 +584,13 @@ body {
   background: rgba(0, 0, 0, 0.03) !important;
 }
 
+/* ═══════════════════════════════════════════
+   TELEGRAM DESKTOP (>=1024px with fine pointer)
+   ═══════════════════════════════════════════ */
+@media (min-width: 1024px) and (hover: hover) and (pointer: fine) {
+  .desktop-hidden {
+    display: none !important;
+  }
+}
+
 

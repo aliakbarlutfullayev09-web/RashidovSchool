@@ -177,50 +177,61 @@ export const getSubjects = async () => {
   try {
     const { data, error } = await supabase.from('subjects').select('*').order('id');
     if (!error && data && data.length > 0) {
-      return data.map((d, idx) => {
+      const mapped = data.map((d, idx) => {
         const rawName = (d.name || '').trim();
         const norm = rawName.toLowerCase();
         
         let key = 'biologiya';
-        let latinName = rawName;
+        let latinName = 'BIOLOGIYA';
         let bgGradient = 'from-[#031B13] via-[#020E0A] to-[#000000]';
         let borderClass = 'border-emerald-500/35';
         let shadowClass = 'shadow-[0_8px_32px_rgba(16,185,129,0.22)]';
         let imageUrl = '/banners/biologiya_banner.jpg';
         let videoUrl = '/banners/biologiya_banner.mp4';
         let icon = '🧬';
+        let order = 99;
 
-        if (norm.includes('xim') || norm.includes('kim')) {
+        if (norm.includes('bio') || norm.includes('био') || d.id === 1) {
+          key = 'biologiya';
+          latinName = 'BIOLOGIYA';
+          bgGradient = 'from-[#031B13] via-[#020E0A] to-[#000000]';
+          borderClass = 'border-emerald-500/35';
+          shadowClass = 'shadow-[0_8px_32px_rgba(16,185,129,0.22)]';
+          imageUrl = '/banners/biologiya_banner.jpg';
+          videoUrl = '/banners/biologiya_banner.mp4';
+          icon = '🧬';
+          order = 1;
+        } else if (norm.includes('xim') || norm.includes('kim') || norm.includes('хим') || d.id === 2) {
           key = 'kimyo';
-          latinName = 'Kimyo';
+          latinName = 'KIMYO';
           bgGradient = 'from-[#19092B] via-[#0D0417] to-[#000000]';
           borderClass = 'border-purple-500/35';
           shadowClass = 'shadow-[0_8px_32px_rgba(168,85,247,0.22)]';
           imageUrl = '/banners/kimyo_banner.jpg';
           videoUrl = '/banners/kimyo_banner.mp4';
           icon = '🧪';
-        } else if (norm.includes('mat')) {
+          order = 2;
+        } else if (norm.includes('mat') || norm.includes('мат') || d.id === 3) {
           key = 'matematika';
-          latinName = 'Matematika';
+          latinName = 'MATEMATIKA';
           bgGradient = 'from-[#05142B] via-[#020A17] to-[#000000]';
           borderClass = 'border-blue-500/35';
           shadowClass = 'shadow-[0_8px_32px_rgba(0,122,255,0.22)]';
           imageUrl = 'https://images.unsplash.com/photo-1633424974203-6c91b2a651ee?auto=format&fit=crop&w=1200&q=85';
           videoUrl = null;
           icon = '📐';
-        } else if (norm.includes('bio')) {
-          key = 'biologiya';
-          latinName = 'Biologiya';
+          order = 3;
         } else {
           // Dynamic Custom Subject Added in Admin App
           key = norm.replace(/[^a-z0-9]/gi, '_');
-          latinName = rawName;
+          latinName = rawName.toUpperCase();
           bgGradient = 'from-[#1A102F] via-[#0B061A] to-[#000000]';
           borderClass = 'border-cyan-500/35';
           shadowClass = 'shadow-[0_8px_32px_rgba(6,182,212,0.22)]';
           imageUrl = 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1200&q=85';
           videoUrl = null;
           icon = d.icon || '📚';
+          order = idx + 10;
         }
 
         let desc = d.description;
@@ -232,6 +243,7 @@ export const getSubjects = async () => {
           id: d.id,
           key,
           name: latinName,
+          order,
           original_name: d.name,
           description: desc || `${latinName} kursi bo'yicha video darslar va testlar`,
           bg_gradient: bgGradient,
@@ -242,6 +254,10 @@ export const getSubjects = async () => {
           icon
         };
       });
+
+      // Always guarantee Biologiya -> Kimyo -> Matematika order
+      mapped.sort((a, b) => a.order - b.order);
+      return mapped;
     }
   } catch (e) {
     console.warn('Supabase getSubjects fallback to mock:', e);

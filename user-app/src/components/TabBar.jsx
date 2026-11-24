@@ -3,10 +3,12 @@ import { motion } from 'framer-motion';
 import { BookOpen, FileCheck2, Trophy, User } from 'lucide-react';
 import { useHaptic } from '../hooks/useHaptic';
 import { useLanguage } from '../context/LanguageContext';
+import { useIsDesktop } from '../hooks/useIsDesktop';
 
 export default function TabBar({ activeTab, onTabChange }) {
   const { selectionChanged } = useHaptic();
   const { t } = useLanguage();
+  const isDesktop = useIsDesktop();
 
   const handleTabClick = (tabIndex) => {
     if (activeTab !== tabIndex) {
@@ -24,12 +26,22 @@ export default function TabBar({ activeTab, onTabChange }) {
 
   return (
     <nav 
-      className="fixed left-1/2 -translate-x-1/2 w-[92%] max-w-[420px] z-40 transition-all duration-200"
+      className={`fixed z-40 transition-all duration-200 ${
+        isDesktop
+          ? 'left-6 top-1/2 -translate-y-1/2 w-auto'
+          : 'left-1/2 -translate-x-1/2 w-[92%] max-w-[420px]'
+      }`}
       style={{
-        bottom: 'calc(var(--safe-area-bottom, 0px) + 12px)'
+        bottom: isDesktop ? 'auto' : 'calc(var(--safe-area-bottom, 0px) + 12px)',
+        top: isDesktop ? '50%' : 'auto',
+        transform: isDesktop ? 'translateY(-50%)' : 'translateX(-50%)'
       }}
     >
-      <div className="glass-dock rounded-full px-2 py-1.5 flex items-center justify-around relative">
+      <div className={`glass-dock flex items-center relative ${
+        isDesktop
+          ? 'flex-col rounded-full p-2 gap-2 shadow-2xl border border-white/10'
+          : 'rounded-full px-2 py-1.5 justify-around'
+      }`}>
         {tabs.map((tab) => {
           const isActive = activeTab === tab.id;
           const Icon = tab.icon;
@@ -38,7 +50,12 @@ export default function TabBar({ activeTab, onTabChange }) {
             <button
               key={tab.id}
               onClick={() => handleTabClick(tab.id)}
-              className="relative flex flex-col items-center justify-center flex-1 py-1.5 px-2 rounded-full cursor-pointer select-none transition-transform active:scale-95"
+              className={`relative flex flex-col items-center justify-center cursor-pointer select-none transition-transform active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF] ${
+                isDesktop
+                  ? 'flex-none w-14 h-14 p-1.5 rounded-full'
+                  : 'flex-1 py-1.5 px-2 rounded-full'
+              }`}
+              aria-label={tab.label}
             >
               {/* Active Tab Sliding Pill Indicator */}
               {isActive && (

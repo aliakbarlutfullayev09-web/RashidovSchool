@@ -7,6 +7,7 @@ import TestlarPage from './pages/TestlarPage';
 import LeaderboardPage from './pages/LeaderboardPage';
 import ProfilePage from './pages/ProfilePage';
 import { useTelegram } from './hooks/useTelegram';
+import { useIsDesktop } from './hooks/useIsDesktop';
 import { getUserData, syncUserSession } from './api/supabase';
 import { LanguageProvider } from './context/LanguageContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
@@ -51,18 +52,20 @@ function MainApp() {
     setProfileBackAction(() => action);
   }, []);
 
-  // Viewport / Orientation Detection
-  const [isLandscapeDesktop, setIsLandscapeDesktop] = useState(
-    typeof window !== 'undefined' && window.innerWidth > window.innerHeight && window.innerWidth >= 768
-  );
+  // Desktop environment detection (>= 1024px with fine pointer and hover)
+  const isDesktop = useIsDesktop();
 
-  useEffect(() => {
-    const handleResize = () => {
-      setIsLandscapeDesktop(window.innerWidth > window.innerHeight && window.innerWidth >= 768);
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  // Tab change handler respecting active exam restrictions
+  const handleTabChange = useCallback((newTab) => {
+    if (activeTab === 1 && typeof testlarBackAction === 'function' && newTab !== 1) {
+      if (window.confirm("Test jarayonidan chiqmoqchimisiz? Natijalar saqlanmaydi.")) {
+        testlarBackAction();
+        setActiveTab(newTab);
+      }
+      return;
+    }
+    setActiveTab(newTab);
+  }, [activeTab, testlarBackAction]);
 
   // Coordinated Navigation-Level BackButton Handler (Telegram WebApp 6.1+)
   useEffect(() => {
@@ -198,7 +201,7 @@ function MainApp() {
   return (
     <div 
       className={`${isLight ? 'bg-[#F2F2F7] text-[#1C1C1E]' : 'bg-[#000000] text-white'} relative flex flex-col ${
-        isLandscapeDesktop ? 'max-w-5xl mx-auto' : 'w-full max-w-[480px] mx-auto'
+        isDesktop ? 'w-full h-full min-h-screen pl-28 pr-6' : 'w-full max-w-[480px] mx-auto'
       }`}
       style={{
         height: 'var(--app-viewport-stable-height, 100dvh)',
@@ -208,9 +211,9 @@ function MainApp() {
       {/* 
         Top Pinned Glass Header:
         Unified across ALL tabs (Darslar, Testlar, Reyting, Profil) with strictly centered Rashidov SCHOOL logo.
-        Hidden during fullscreen video playback.
+        Hidden on Desktop (desktop Mini App has native Telegram header) and during fullscreen video playback.
       */}
-      {!isVideoPlaying && (
+      {!isVideoPlaying && !isDesktop && (
         <Header 
           showBackButton={!isTelegramWithBack && (
             (activeTab === 0 && typeof lessonsBackAction === 'function') ||
@@ -245,7 +248,7 @@ function MainApp() {
       {!isVideoPlaying && (
         <TabBar 
           activeTab={activeTab} 
-          onTabChange={setActiveTab} 
+          onTabChange={handleTabChange} 
         />
       )}
 

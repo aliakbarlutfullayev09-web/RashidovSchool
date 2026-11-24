@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Check, Copy, Sparkles, Star, CreditCard, Ticket, Gift, ExternalLink } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { useIsDesktop } from '../hooks/useIsDesktop';
 import { applyPromoCode } from '../api/supabase';
 
 const STARS_PACKAGES = [
@@ -20,15 +21,26 @@ const DAILY_QUESTS = [
   { id: 'quest_3', title: "Do'stni taklif qilish", reward: 300, icon: "👥", progress: "0/1", done: false, action: "share" }
 ];
 
-export default function TopUpModal({ isOpen, onClose, user, onUpdateUser }) {
+export default function TopUpModal({ isOpen, onClose, user, onUpdateUser, inlineDesktop = false }) {
   const { t, lang } = useLanguage();
   const { selectionChanged, notificationSuccess, notificationError, impactMedium } = useHaptic();
+  const isDesktop = useIsDesktop();
   const [activeTab, setActiveTab] = useState('stars'); // 'stars' | 'promo' | 'quests'
 
   // Promo state
   const [promoInput, setPromoInput] = useState('');
   const [promoLoading, setPromoLoading] = useState(false);
   const [promoMessage, setPromoMessage] = useState(null);
+
+  // Escape key listener for desktop
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -93,16 +105,20 @@ export default function TopUpModal({ isOpen, onClose, user, onUpdateUser }) {
     }
   };
 
-  return (
-    <AnimatePresence>
-      <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md">
-        <motion.div
-          initial={{ opacity: 0, y: '100%' }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: '100%' }}
-          transition={{ type: "spring", damping: 26, stiffness: 320 }}
-          className="w-full max-w-lg bg-[#161618] border border-white/10 rounded-t-[32px] sm:rounded-[32px] overflow-hidden flex flex-col max-h-[90vh] shadow-2xl relative"
-        >
+  const modalContent = (
+    <motion.div
+      initial={{ opacity: 0, y: isDesktop ? 10 : '100%' }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: isDesktop ? 10 : '100%' }}
+      transition={{ type: "spring", damping: 26, stiffness: 320 }}
+      className={`bg-[#161618] border border-white/10 overflow-hidden flex flex-col shadow-2xl relative pointer-events-auto ${
+        isDesktop && inlineDesktop
+          ? 'w-[420px] max-w-[420px] h-[min(720px,calc(100vh-60px))] rounded-[32px]'
+          : isDesktop
+          ? 'fixed right-10 top-1/2 -translate-y-1/2 w-[420px] max-w-[420px] h-[min(720px,calc(100vh-60px))] rounded-[32px]'
+          : 'w-full max-w-lg rounded-t-[32px] sm:rounded-[32px] max-h-[90vh]'
+      }`}
+    >
           {/* Header with 3D Glowing Brain */}
           <div className="relative pt-6 pb-4 px-6 flex flex-col items-center bg-gradient-to-b from-[#1C1C1E] to-[#161618] border-b border-white/5">
             <button
@@ -278,6 +294,24 @@ export default function TopUpModal({ isOpen, onClose, user, onUpdateUser }) {
             )}
           </div>
         </motion.div>
+  );
+
+  if (isDesktop && inlineDesktop) {
+    return modalContent;
+  }
+
+  return (
+    <AnimatePresence>
+      <div className={`fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 ${
+        isDesktop ? 'bg-transparent pointer-events-none' : 'bg-black/80 backdrop-blur-md'
+      }`}>
+        {isDesktop && (
+          <div 
+            onClick={onClose} 
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm pointer-events-auto transition-opacity" 
+          />
+        )}
+        {modalContent}
       </div>
     </AnimatePresence>
   );

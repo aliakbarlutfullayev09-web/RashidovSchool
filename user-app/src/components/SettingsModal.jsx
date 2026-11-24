@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Moon, Sun, Monitor, Volume2, VolumeX, 
-  Smartphone, Bell, BellOff, Check, Settings 
+  Smartphone, Bell, BellOff, Check, Settings, X 
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { useIsDesktop } from '../hooks/useIsDesktop';
 
 // Authentic SVG Flag of Uzbekistan
 const UzbekFlag = ({ className = "w-6 h-4" }) => (
@@ -44,10 +45,11 @@ const RussianFlag = ({ className = "w-6 h-4" }) => (
   </svg>
 );
 
-export default function SettingsModal({ isOpen, onClose }) {
+export default function SettingsModal({ isOpen, onClose, inlineDesktop = false }) {
   const { lang, setLang, t } = useLanguage();
   const { theme, setTheme, resolvedTheme } = useTheme();
   const { selectionChanged, impactLight, impactMedium, testFeedback } = useHaptic();
+  const isDesktop = useIsDesktop();
 
   const isLight = resolvedTheme === 'light';
 
@@ -165,37 +167,54 @@ export default function SettingsModal({ isOpen, onClose }) {
     localStorage.setItem('rb_push_notifications', String(next));
   };
 
-  return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0, scale: 0.99 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.99 }}
-        transition={{ duration: 0.18 }}
-        className={`fixed inset-0 z-[120] flex flex-col select-none ${
-          isLight 
-            ? 'bg-[#F2F2F7] text-gray-900' 
-            : 'bg-[#000000] text-white'
-        }`}
-      >
-        {/* Fullscreen Header with centered title between Telegram's back and menu controls */}
-        <div 
-          className={`px-4 pb-3 flex items-center justify-center border-b ${
-            isLight ? 'border-black/5 bg-white/80' : 'border-white/5 bg-[#121214]/80'
-          } backdrop-blur-xl shrink-0`}
-          style={{
-            paddingTop: 'max(calc(var(--safe-area-top, 0px) + 6px), 12px)'
-          }}
-        >
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-blue-500/15 border border-blue-500/25 flex items-center justify-center text-blue-400 font-bold shrink-0">
-              <Settings className="w-4 h-4 text-blue-400" />
+  const modalContent = (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.98, x: isDesktop ? 15 : 0 }}
+      animate={{ opacity: 1, scale: 1, x: 0 }}
+      exit={{ opacity: 0, scale: 0.98, x: isDesktop ? 15 : 0 }}
+      transition={{ duration: 0.2 }}
+      className={`${
+        isDesktop && inlineDesktop
+          ? 'w-[420px] max-w-[420px] h-[min(720px,calc(100vh-60px))] rounded-[32px] border border-white/10 shadow-2xl overflow-hidden flex flex-col select-none'
+          : isDesktop
+          ? 'fixed z-10 flex flex-col select-none pointer-events-auto right-10 top-1/2 -translate-y-1/2 w-[420px] max-w-[420px] h-[min(720px,calc(100vh-60px))] rounded-[32px] border border-white/10 shadow-2xl overflow-hidden'
+          : 'fixed inset-0 z-10 flex flex-col select-none pointer-events-auto'
+      } ${
+        isLight 
+          ? 'bg-[#F2F2F7] text-gray-900' 
+          : 'bg-[#121214] text-white'
+      }`}
+    >
+          {/* Header with centered title between Telegram's back and menu controls */}
+          <div 
+            className={`relative px-4 pb-3 flex items-center justify-center border-b ${
+              isLight ? 'border-black/5 bg-white/80' : 'border-white/5 bg-[#121214]/80'
+            } backdrop-blur-xl shrink-0`}
+            style={{
+              paddingTop: isDesktop ? '16px' : 'max(calc(var(--safe-area-top, 0px) + 6px), 12px)'
+            }}
+          >
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-blue-500/15 border border-blue-500/25 flex items-center justify-center text-blue-400 font-bold shrink-0">
+                <Settings className="w-4 h-4 text-blue-400" />
+              </div>
+              <h3 className="font-extrabold text-base leading-tight text-center">
+                {t('sozlamalar')}
+              </h3>
             </div>
-            <h3 className="font-extrabold text-base leading-tight text-center">
-              {t('sozlamalar')}
-            </h3>
+
+            {/* Desktop Close Button */}
+            {isDesktop && (
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Yopish"
+                className="absolute right-4 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/80 hover:text-white transition-all cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
-        </div>
 
         {/* Scrollable Compact Settings Body */}
         <div 
@@ -422,6 +441,23 @@ export default function SettingsModal({ isOpen, onClose }) {
 
         </div>
       </motion.div>
+  );
+
+  if (isDesktop && inlineDesktop) {
+    return modalContent;
+  }
+
+  return (
+    <AnimatePresence>
+      <div className={`fixed inset-0 z-[120] ${isDesktop ? 'pointer-events-auto' : 'pointer-events-none'}`}>
+        {isDesktop && (
+          <div 
+            onClick={onClose} 
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm pointer-events-auto transition-opacity" 
+          />
+        )}
+        {modalContent}
+      </div>
     </AnimatePresence>
   );
 }

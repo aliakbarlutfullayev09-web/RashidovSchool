@@ -1,15 +1,20 @@
 import React from 'react';
 import { ArrowLeft } from 'lucide-react';
 import RashidovLogo from './RashidovLogo';
+import { useIsDesktop } from '../hooks/useIsDesktop';
 
 /**
  * Unified OLED Glassmorphism Header with strictly horizontally centered Rashidov SCHOOL logo.
  * Applied uniformly across all sections (Darslar, Testlar, Reyting, Profil).
+ * Completely hidden on Desktop (Telegram Desktop already provides native window header).
  */
 export default function Header({ onBack, showBackButton = false }) {
+  const isDesktop = useIsDesktop();
+  if (isDesktop) return null;
+
   return (
     <header 
-      className="sticky top-0 z-30 w-full glass-header pointer-events-auto"
+      className="sticky top-0 z-30 w-full glass-header pointer-events-auto desktop-hidden"
       style={{
         paddingTop: 'calc(var(--safe-area-top, 16px) + 4px)',
         paddingBottom: '8px'

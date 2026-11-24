@@ -10,6 +10,7 @@ import SupportModal from '../components/SupportModal';
 import { formatCompactNeyron } from '../utils/formatters';
 import { useHaptic } from '../hooks/useHaptic';
 import { useLanguage } from '../context/LanguageContext';
+import { useIsDesktop } from '../hooks/useIsDesktop';
 import { getSupportContacts } from '../api/supabase';
 
 // Telegram official SVG logo
@@ -22,12 +23,40 @@ const TelegramIcon = ({ className = "w-5 h-5" }) => (
 export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }) {
   const { t, lang } = useLanguage();
   const { impactLight, impactMedium } = useHaptic();
+  const isDesktop = useIsDesktop();
 
   // Modal triggers
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
   const [isTopUpOpen, setIsTopUpOpen] = useState(false);
   const [isSupportOpen, setIsSupportOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  const isAnyModalOpen = isEditProfileOpen || isTopUpOpen || isSupportOpen || isSettingsOpen;
+
+  const toggleModal = (modalName) => {
+    impactLight();
+    if (modalName === 'settings') {
+      setIsSupportOpen(false);
+      setIsTopUpOpen(false);
+      setIsEditProfileOpen(false);
+      setIsSettingsOpen(prev => isDesktop ? !prev : true);
+    } else if (modalName === 'support') {
+      setIsSettingsOpen(false);
+      setIsTopUpOpen(false);
+      setIsEditProfileOpen(false);
+      setIsSupportOpen(prev => isDesktop ? !prev : true);
+    } else if (modalName === 'topup') {
+      setIsSettingsOpen(false);
+      setIsSupportOpen(false);
+      setIsEditProfileOpen(false);
+      setIsTopUpOpen(prev => isDesktop ? !prev : true);
+    } else if (modalName === 'profile') {
+      setIsSettingsOpen(false);
+      setIsSupportOpen(false);
+      setIsTopUpOpen(false);
+      setIsEditProfileOpen(prev => isDesktop ? !prev : true);
+    }
+  };
 
   // Official website state (configurable via admin-app)
   const [officialWebsite, setOfficialWebsite] = useState('https://rashidovschool.uz');
@@ -39,6 +68,7 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
         setOfficialWebsite(data.website);
       }
     }).catch(() => {});
+
     return () => { mounted = false; };
   }, []);
 
@@ -88,20 +118,31 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
   };
 
   return (
-    <div className="w-full pb-32 pt-2 px-4 max-w-5xl mx-auto space-y-5">
-      
-      {/* Profile Header Card */}
+    <div className={`w-full pb-32 pt-2 px-4 transition-all duration-300 ${
+      isDesktop 
+        ? isAnyModalOpen
+          ? 'max-w-6xl mx-auto flex flex-row items-start justify-center gap-8' 
+          : 'max-w-3xl mx-auto flex flex-col items-center justify-center'
+        : 'max-w-5xl mx-auto space-y-5'
+    }`}>
+      {/* Profile Column (compresses to 400px when modal opens, stretches to full max-w-3xl otherwise) */}
+      <div className={`space-y-5 transition-all duration-300 ease-out ${
+        isDesktop 
+          ? isAnyModalOpen ? 'w-[400px] max-w-[400px] shrink-0' : 'w-full'
+          : 'w-full'
+      }`}>
+        {/* Profile Header Card */}
       <div className="bg-[#1C1C1E] border border-white/5 rounded-3xl p-6 shadow-2xl relative overflow-hidden flex flex-col items-center text-center">
         {/* Ambient Top Glow */}
         <div className="absolute top-0 w-64 h-32 bg-blue-500/10 blur-3xl pointer-events-none" />
 
         {/* Edit Button Top-Right */}
         <button
-          onClick={() => {
-            impactLight();
-            setIsEditProfileOpen(true);
-          }}
-          className="absolute top-4 right-4 w-9 h-9 rounded-full bg-[#2C2C2E] border border-blue-500/20 hover:bg-[#343438] flex items-center justify-center text-blue-500 active:scale-95 transition-all"
+          onClick={() => toggleModal('profile')}
+          className={`absolute top-4 right-4 w-9 h-9 rounded-full bg-[#2C2C2E] border flex items-center justify-center text-blue-500 active:scale-95 transition-all ${
+            isDesktop && isEditProfileOpen ? 'border-blue-500 ring-2 ring-blue-500/50 bg-[#343438]' : 'border-blue-500/20 hover:bg-[#343438]'
+          }`}
+          title="Tahrirlash"
         >
           <Edit3 className="w-4 h-4" />
         </button>
@@ -144,11 +185,10 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
           </div>
 
           <button
-            onClick={() => {
-              impactLight();
-              setIsTopUpOpen(true);
-            }}
-            className="bg-[#2C2C2E] border border-blue-500/20 hover:border-blue-500/40 p-3 rounded-2xl flex flex-col items-center active:scale-95 transition-all"
+            onClick={() => toggleModal('topup')}
+            className={`bg-[#2C2C2E] border p-3 rounded-2xl flex flex-col items-center active:scale-95 transition-all ${
+              isDesktop && isTopUpOpen ? 'border-blue-500 ring-2 ring-blue-500/50 bg-[#343438]' : 'border-blue-500/20 hover:border-blue-500/40'
+            }`}
           >
             <span className="text-lg mb-0.5">🧠</span>
             <span className="text-[10px] text-[#8E8E93] leading-none mb-1">Balans</span>
@@ -165,11 +205,10 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
         
         {/* Row 1: Balansni to'ldirish (Dark Blue Squircle) */}
         <div
-          onClick={() => {
-            impactLight();
-            setIsTopUpOpen(true);
-          }}
-          className="card-row flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.03] transition-colors border-b border-white/[0.04]"
+          onClick={() => toggleModal('topup')}
+          className={`card-row flex items-center justify-between p-4 cursor-pointer transition-colors border-b border-white/[0.04] ${
+            isDesktop && isTopUpOpen ? 'bg-white/[0.08] ring-1 ring-blue-500/50' : 'hover:bg-white/[0.03]'
+          }`}
         >
           <div className="flex items-center gap-3.5">
             <div className="w-10 h-10 rounded-2xl bg-blue-600/15 border border-blue-500/30 flex items-center justify-center text-blue-500">
@@ -181,16 +220,15 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
               </span>
             </div>
           </div>
-          <ChevronRight className="w-5 h-5 text-[#8E8E93]" />
+          <ChevronRight className={`w-5 h-5 transition-transform ${isDesktop && isTopUpOpen ? 'text-blue-400 translate-x-1' : 'text-[#8E8E93]'}`} />
         </div>
 
         {/* Row 2: Sozlamalar (Dark Blue Squircle) */}
         <div
-          onClick={() => {
-            impactLight();
-            setIsSettingsOpen(true);
-          }}
-          className="card-row flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.03] transition-colors border-b border-white/[0.04]"
+          onClick={() => toggleModal('settings')}
+          className={`card-row flex items-center justify-between p-4 cursor-pointer transition-colors border-b border-white/[0.04] ${
+            isDesktop && isSettingsOpen ? 'bg-white/[0.08] ring-1 ring-blue-500/50' : 'hover:bg-white/[0.03]'
+          }`}
         >
           <div className="flex items-center gap-3.5">
             <div className="w-10 h-10 rounded-2xl bg-blue-600/15 border border-blue-500/30 flex items-center justify-center text-blue-500">
@@ -200,16 +238,15 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
               <span className="font-bold text-white text-sm block">{t('sozlamalar')}</span>
             </div>
           </div>
-          <ChevronRight className="w-5 h-5 text-[#8E8E93]" />
+          <ChevronRight className={`w-5 h-5 transition-transform ${isDesktop && isSettingsOpen ? 'text-blue-400 translate-x-1' : 'text-[#8E8E93]'}`} />
         </div>
 
         {/* Row 3: Aloqa va yordam (Dark Blue Squircle) */}
         <div
-          onClick={() => {
-            impactLight();
-            setIsSupportOpen(true);
-          }}
-          className="card-row flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.03] transition-colors border-b border-white/[0.04]"
+          onClick={() => toggleModal('support')}
+          className={`card-row flex items-center justify-between p-4 cursor-pointer transition-colors border-b border-white/[0.04] ${
+            isDesktop && isSupportOpen ? 'bg-white/[0.08] ring-1 ring-emerald-500/50' : 'hover:bg-white/[0.03]'
+          }`}
         >
           <div className="flex items-center gap-3.5">
             <div className="w-10 h-10 rounded-2xl bg-blue-600/15 border border-blue-500/30 flex items-center justify-center text-blue-500">
@@ -221,7 +258,7 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
               </span>
             </div>
           </div>
-          <ChevronRight className="w-5 h-5 text-[#8E8E93]" />
+          <ChevronRight className={`w-5 h-5 transition-transform ${isDesktop && isSupportOpen ? 'text-emerald-400 translate-x-1' : 'text-[#8E8E93]'}`} />
         </div>
 
         {/* Row 4: Telegram Kanal (Dark Blue Squircle + Official Telegram Logo) */}
@@ -272,30 +309,74 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
         Rashidov School &nbsp;&bull;&nbsp; since 2023
       </p>
 
-      {/* Modals */}
-      <Profile
-        user={user}
-        isOpen={isEditProfileOpen}
-        onClose={() => setIsEditProfileOpen(false)}
-        onUpdateUser={onUpdateUser}
-      />
+      </div>
 
-      <TopUpModal
-        isOpen={isTopUpOpen}
-        onClose={() => setIsTopUpOpen(false)}
-        user={user}
-        onUpdateUser={onUpdateUser}
-      />
+      {/* Desktop In-Flow Detail Panel (Opens on the Right side when item is clicked) */}
+      {isDesktop && isAnyModalOpen && (
+        <div className="w-[420px] max-w-[420px] shrink-0 sticky top-4 animate-in fade-in slide-in-from-right-4 duration-300">
+          {isSettingsOpen && (
+            <SettingsModal
+              isOpen={isSettingsOpen}
+              onClose={() => setIsSettingsOpen(false)}
+              inlineDesktop={true}
+            />
+          )}
+          {isSupportOpen && (
+            <SupportModal
+              isOpen={isSupportOpen}
+              onClose={() => setIsSupportOpen(false)}
+              inlineDesktop={true}
+            />
+          )}
+          {isTopUpOpen && (
+            <TopUpModal
+              isOpen={isTopUpOpen}
+              onClose={() => setIsTopUpOpen(false)}
+              user={user}
+              onUpdateUser={onUpdateUser}
+              inlineDesktop={true}
+            />
+          )}
+          {isEditProfileOpen && (
+            <Profile
+              user={user}
+              isOpen={isEditProfileOpen}
+              onClose={() => setIsEditProfileOpen(false)}
+              onUpdateUser={onUpdateUser}
+              inlineDesktop={true}
+            />
+          )}
+        </div>
+      )}
 
-      <SupportModal
-        isOpen={isSupportOpen}
-        onClose={() => setIsSupportOpen(false)}
-      />
+      {/* Mobile Modals (Fullscreen overlay on mobile) */}
+      {!isDesktop && (
+        <>
+          <Profile
+            user={user}
+            isOpen={isEditProfileOpen}
+            onClose={() => setIsEditProfileOpen(false)}
+            onUpdateUser={onUpdateUser}
+          />
 
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-      />
+          <TopUpModal
+            isOpen={isTopUpOpen}
+            onClose={() => setIsTopUpOpen(false)}
+            user={user}
+            onUpdateUser={onUpdateUser}
+          />
+
+          <SupportModal
+            isOpen={isSupportOpen}
+            onClose={() => setIsSupportOpen(false)}
+          />
+
+          <SettingsModal
+            isOpen={isSettingsOpen}
+            onClose={() => setIsSettingsOpen(false)}
+          />
+        </>
+      )}
 
     </div>
   );
