@@ -7,7 +7,7 @@ export default {
   theme: {
     extend: {
       screens: {
-        'desktop': { 'raw': '(min-width: 1024px) and (hover: hover) and (pointer: fine)' },
+        'desktop': { 'raw': '(min-width: 1024px) and (hover: hover) and (pointer: fine), (orientation: landscape) and (min-width: 560px)' },
       },
       colors: {
         oled: '#000000',

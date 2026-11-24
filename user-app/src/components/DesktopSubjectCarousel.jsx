@@ -197,9 +197,26 @@ export default function DesktopSubjectCarousel({
     });
   };
 
-  // Card dimensions: full vertical screen coverage (golden 9:16 mobile ratio)
-  const cardWidth = compact ? 280 : 360;
-  const cardGap = compact ? 20 : 28;
+  // Dynamically adapt card dimensions for Desktop vs Landscape Phone / Tablet
+  const [windowHeight, setWindowHeight] = useState(() => (typeof window !== 'undefined' ? window.innerHeight : 800));
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const updateHeight = () => setWindowHeight(window.innerHeight);
+    window.addEventListener('resize', updateHeight);
+    window.addEventListener('orientationchange', updateHeight);
+    return () => {
+      window.removeEventListener('resize', updateHeight);
+      window.removeEventListener('orientationchange', updateHeight);
+    };
+  }, []);
+
+  const isShortLandscape = windowHeight < 550;
+  const cardHeightNum = isShortLandscape 
+    ? Math.max(220, windowHeight - 68) 
+    : Math.min(640, Math.max(380, windowHeight - 150));
+  const cardWidth = Math.round(cardHeightNum * 0.58);
+  const cardGap = isShortLandscape ? 16 : 28;
 
   return (
     <div 
@@ -219,7 +236,7 @@ export default function DesktopSubjectCarousel({
       <div 
         className="w-full flex items-center justify-center py-1"
         style={{
-          minHeight: compact ? '480px' : 'min(680px, calc(100vh - 120px))'
+          minHeight: `${cardHeightNum + 10}px`
         }}
       >
         <div 
@@ -293,7 +310,7 @@ export default function DesktopSubjectCarousel({
                 }`}
                 style={{
                   width: `${cardWidth}px`,
-                  height: compact ? 'min(460px, calc(100vh - 180px))' : 'min(640px, calc(100vh - 150px))',
+                  height: `${cardHeightNum}px`,
                   transform: prefersReducedMotion ? 'none' : (isActive ? 'scale(1.02)' : 'scale(0.92)'),
                   transition: prefersReducedMotion ? 'none' : 'transform 450ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 350ms ease, box-shadow 400ms ease',
                   backgroundColor: '#0a0a0c'
@@ -331,8 +348,12 @@ export default function DesktopSubjectCarousel({
                 )}
 
                 {/* Card Content at Bottom */}
-                <div className="absolute inset-x-0 bottom-0 p-8 z-20 flex flex-col justify-end">
-                  <h3 className="text-white font-black text-3xl tracking-wider uppercase mb-4 drop-shadow-md">
+                <div className={`absolute inset-x-0 bottom-0 z-20 flex flex-col justify-end ${
+                  isShortLandscape ? 'p-3.5' : 'p-6 sm:p-8'
+                }`}>
+                  <h3 className={`text-white font-black tracking-wider uppercase drop-shadow-md ${
+                    isShortLandscape ? 'text-lg mb-2' : 'text-2xl sm:text-3xl mb-4'
+                  }`}>
                     {title}
                   </h3>
 
@@ -346,13 +367,17 @@ export default function DesktopSubjectCarousel({
                           onStartSubject(subject);
                         }
                       }}
-                      className={`w-full py-3.5 px-6 rounded-full font-bold text-white text-base bg-gradient-to-r ${buttonGradient} hover:brightness-110 active:scale-95 transition-all shadow-xl flex items-center justify-center gap-2 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white`}
+                      className={`w-full rounded-full font-bold text-white bg-gradient-to-r ${buttonGradient} hover:brightness-110 active:scale-95 transition-all shadow-xl flex items-center justify-center gap-2 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${
+                        isShortLandscape ? 'py-2 px-3 text-xs' : 'py-3.5 px-6 text-base'
+                      }`}
                     >
-                      <Play className="w-5 h-5 fill-current" />
+                      <Play className={isShortLandscape ? 'w-3.5 h-3.5 fill-current' : 'w-5 h-5 fill-current'} />
                       <span>Boshlash</span>
                     </button>
                   ) : (
-                    <div className="text-sm text-white/60 font-semibold tracking-wide">
+                    <div className={`text-white/60 font-semibold tracking-wide ${
+                      isShortLandscape ? 'text-[10px]' : 'text-sm'
+                    }`}>
                       Tanlash uchun bosing
                     </div>
                   )}
@@ -364,7 +389,9 @@ export default function DesktopSubjectCarousel({
       </div>
 
       {/* Pagination dots below carousel */}
-      <div className="flex items-center justify-center gap-2 mt-4 z-20">
+      <div className={`flex items-center justify-center gap-2 z-20 ${
+        isShortLandscape ? 'mt-2' : 'mt-4'
+      }`}>
         {sortedSubjects.map((s, idx) => {
           const isDotActive = activeCanonical === idx;
           const norm = (s.key || s.name || '').toLowerCase();

@@ -437,7 +437,12 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
       ────────────────────────────────────────────────────────── */}
       {currentView === 'carousel' && (
         isDesktop ? (
-          <div className="w-full max-w-7xl mx-auto pl-16 pr-4 py-2 flex flex-col items-center justify-center h-screen overflow-hidden animate-in fade-in duration-300">
+          <div 
+            className="w-full max-w-7xl mx-auto pr-4 py-1 flex flex-col items-center justify-center h-screen overflow-hidden animate-in fade-in duration-300"
+            style={{
+              paddingLeft: 'calc(var(--safe-area-left, 0px) + 72px)'
+            }}
+          >
             <DesktopSubjectCarousel
               subjects={subjects}
               activeSubjectIndex={activeSubjectIndex}

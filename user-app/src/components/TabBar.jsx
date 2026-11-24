@@ -28,18 +28,19 @@ export default function TabBar({ activeTab, onTabChange }) {
     <nav 
       className={`fixed z-40 transition-all duration-200 ${
         isDesktop
-          ? 'left-6 top-1/2 -translate-y-1/2 w-auto'
+          ? 'top-1/2 -translate-y-1/2 w-auto'
           : 'left-1/2 -translate-x-1/2 w-[92%] max-w-[420px]'
       }`}
       style={{
         bottom: isDesktop ? 'auto' : 'calc(var(--safe-area-bottom, 0px) + 12px)',
         top: isDesktop ? '50%' : 'auto',
-        transform: isDesktop ? 'translateY(-50%)' : 'translateX(-50%)'
+        transform: isDesktop ? 'translateY(-50%)' : 'translateX(-50%)',
+        left: isDesktop ? 'calc(var(--safe-area-left, 0px) + 14px)' : '50%'
       }}
     >
       <div className={`glass-dock flex items-center relative ${
         isDesktop
-          ? 'flex-col rounded-full p-2 gap-2 shadow-2xl border border-white/10'
+          ? 'flex-col rounded-full p-1.5 sm:p-2 gap-1.5 sm:gap-2 shadow-2xl border border-white/10'
           : 'rounded-full px-2 py-1.5 justify-around'
       }`}>
         {tabs.map((tab) => {
@@ -52,7 +53,7 @@ export default function TabBar({ activeTab, onTabChange }) {
               onClick={() => handleTabClick(tab.id)}
               className={`relative flex flex-col items-center justify-center cursor-pointer select-none transition-transform active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF] ${
                 isDesktop
-                  ? 'flex-none w-14 h-14 p-1.5 rounded-full'
+                  ? 'flex-none w-12 h-12 sm:w-14 sm:h-14 p-1 sm:p-1.5 rounded-full'
                   : 'flex-1 py-1.5 px-2 rounded-full'
               }`}
               aria-label={tab.label}
