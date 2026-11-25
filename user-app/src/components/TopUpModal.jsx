@@ -306,7 +306,7 @@ export default function TopUpModal({ isOpen, onClose, user, onUpdateUser, inline
             {lang === 'ru' ? 'Пополнение нейронов' : 'Neyronlarni xarid qilish'}
           </h4>
           <p className={`text-xs text-center mt-0.5 ${isLight ? 'text-gray-500' : 'text-[#8E8E93]'}`}>
-            {lang === 'ru' ? 'Текущий баланс: ' : 'Joriy balans: '}
+            {lang === 'ru' ? 'Баланс: ' : 'Balans: '}
             <span className="text-blue-500 font-bold">
               {user?.balance?.toLocaleString('ru-RU') || 0} {lang === 'ru' ? 'Нейронов' : 'Neyron'}
             </span>

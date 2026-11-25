@@ -525,7 +525,7 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
           </div>
         ) : (
         <div 
-          className="h-full flex-1 flex flex-col justify-between items-center px-4 pt-1 pb-1 w-full max-w-md mx-auto overflow-hidden select-none"
+          className="h-full flex-1 flex flex-col items-center px-4 pt-2 pb-2 w-full max-w-md mx-auto overflow-hidden select-none gap-3"
           onTouchStart={(e) => {
             touchStartXRef.current = e.touches[0].clientX;
             touchStartYRef.current = e.touches[0].clientY;
@@ -539,9 +539,9 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
             }
           }}
         >
-          {/* Stretched Vertical Card Container: flex-1 min-h-0 fills exact screen height with zero overflow */}
-          <div className="relative w-full flex-1 min-h-0 my-1 overflow-hidden">
-            <AnimatePresence initial={false} custom={slideDirection}>
+          {/* Card Container — explicit height leaves room for dots below */}
+          <div className="relative w-full flex-1 min-h-0 overflow-hidden rounded-[28px]">
+            <AnimatePresence initial={false} custom={slideDirection} mode="sync">
               <motion.div 
                 key={activeSubjectIndex}
                 custom={slideDirection}
@@ -549,23 +549,21 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
                   enter: (dir) => ({
                     x: dir > 0 ? '100%' : '-100%',
                     opacity: 1,
-                    scale: 1,
                   }),
                   center: {
                     x: 0,
                     opacity: 1,
-                    scale: 1,
                     transition: {
-                      x: { type: "spring", stiffness: 320, damping: 32, mass: 0.8 },
+                      x: { type: "tween", ease: [0.32, 0.72, 0, 1], duration: 0.38 },
+                      opacity: { duration: 0 },
                     }
                   },
                   exit: (dir) => ({
                     x: dir > 0 ? '-100%' : '100%',
-                    opacity: 0.9,
-                    scale: 0.98,
+                    opacity: 1,
                     transition: {
-                      x: { type: "spring", stiffness: 320, damping: 32, mass: 0.8 },
-                      opacity: { duration: 0.28 }
+                      x: { type: "tween", ease: [0.32, 0.72, 0, 1], duration: 0.38 },
+                      opacity: { duration: 0 },
                     }
                   })
                 }}
@@ -581,7 +579,7 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
                   isolation: 'isolate',
                   WebkitMaskImage: '-webkit-radial-gradient(white, black)'
                 }}
-                className={`absolute inset-0 w-full h-full rounded-[28px] overflow-hidden border ${cardBorderClass} ${cardShadowClass} bg-gradient-to-b ${cardBgGradient} cursor-pointer group active:scale-[0.99] transition-transform duration-200 flex flex-col justify-between p-5 sm:p-6 select-none`}
+                className={`absolute inset-0 w-full h-full rounded-[28px] overflow-hidden border ${cardBorderClass} ${cardShadowClass} bg-gradient-to-b ${cardBgGradient} cursor-pointer group active:scale-[0.99] transition-transform duration-150 flex flex-col justify-between p-5 sm:p-6 select-none`}
               >
                 {/* Background Subject Artwork */}
                 <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -640,8 +638,8 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
             </AnimatePresence>
           </div>
 
-          {/* Carousel Pagination Dots */}
-          <div className="flex items-center justify-center gap-2 pt-1 pb-1 flex-shrink-0">
+          {/* Carousel Pagination Dots — always below card, never overlapping */}
+          <div className="relative z-10 flex items-center justify-center gap-2 py-0.5 flex-shrink-0 w-full">
             {subjects.map((s, idx) => (
               <button
                 key={s.id || idx}
