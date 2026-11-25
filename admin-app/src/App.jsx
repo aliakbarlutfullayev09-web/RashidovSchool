@@ -4,6 +4,7 @@ import { mockSuperadminUser, mockTeacherUser } from './mock/data';
 import Sidebar from './components/Sidebar';
 import DashboardPage from './pages/DashboardPage';
 import ContentPage from './pages/ContentPage';
+import TestsPage from './pages/TestsPage';
 import StaffPage from './pages/StaffPage';
 import UserList from './components/UserList';
 import PromoGenerator from './components/PromoGenerator';
@@ -85,6 +86,7 @@ function App() {
     switch (effectiveSection) {
       case 'dashboard': return <DashboardPage user={dbUser} />;
       case 'content': return <ContentPage user={dbUser} />;
+      case 'tests': return <TestsPage user={dbUser} />;
       case 'promo': return <PromoGenerator user={dbUser} />;
       case 'users': return <UserList />;
       case 'staff': return <StaffPage />;

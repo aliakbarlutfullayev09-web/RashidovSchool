@@ -1,6 +1,6 @@
 import React from 'react';
 import { 
-  BarChart3, BookOpen, Ticket, Users, GraduationCap, ShieldCheck, Headphones 
+  BarChart3, BookOpen, ClipboardList, Ticket, Users, GraduationCap, ShieldCheck, Headphones 
 } from 'lucide-react';
 
 export default function Sidebar({ user, activeSection, onSectionChange }) {
@@ -10,6 +10,7 @@ export default function Sidebar({ user, activeSection, onSectionChange }) {
   const navItems = [
     { id: 'dashboard', label: 'Статистика', icon: BarChart3, roles: ['superadmin', 'teacher'] },
     { id: 'content', label: 'Контент', icon: BookOpen, roles: ['superadmin', 'teacher'] },
+    { id: 'tests', label: 'Testlar', icon: ClipboardList, roles: ['superadmin', 'teacher'] },
     { id: 'promo', label: 'Промокоды', icon: Ticket, roles: ['superadmin', 'teacher'], condition: user?.permissions?.can_promo },
     { id: 'users', label: 'Ученики', icon: Users, roles: ['superadmin', 'teacher'], condition: user?.permissions?.can_gift },
     { id: 'staff', label: 'Персонал', icon: GraduationCap, roles: ['superadmin'] },
@@ -82,8 +83,8 @@ export default function Sidebar({ user, activeSection, onSectionChange }) {
       </aside>
 
       {/* ── MOBILE & TABLET PORTRAIT FLOATING BOTTOM DOCK ── */}
-      <nav className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 w-[92%] max-w-[440px] z-40 select-none">
-        <div className="bg-[#121214]/95 backdrop-blur-xl border border-[#333336] rounded-full px-2 py-1.5 flex items-center justify-around shadow-2xl">
+      <nav className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 w-[94%] max-w-[520px] z-40 select-none">
+        <div className="bg-[#121214]/95 backdrop-blur-xl border border-[#333336] rounded-full px-2 py-1.5 flex items-center justify-around gap-0.5 overflow-x-auto no-scrollbar shadow-2xl">
           {visibleItems.map(item => {
             const Icon = item.icon;
             const isActive = activeSection === item.id;
@@ -91,7 +92,7 @@ export default function Sidebar({ user, activeSection, onSectionChange }) {
               <button
                 key={item.id}
                 onClick={() => onSectionChange(item.id)}
-                className={`flex flex-col items-center justify-center flex-1 py-1.5 px-2 rounded-full cursor-pointer transition-all active:scale-95 ${
+                className={`flex flex-col items-center justify-center flex-1 min-w-[52px] py-1.5 px-1.5 rounded-full cursor-pointer transition-all active:scale-95 whitespace-nowrap ${
                   isActive ? 'text-[#007AFF]' : 'text-[#8E8E93]'
                 }`}
               >

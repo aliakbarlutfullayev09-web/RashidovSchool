@@ -317,7 +317,7 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
     };
 
     return (
-      <div className="fixed inset-0 z-50 bg-black/95 text-white flex flex-col p-4 max-w-md mx-auto">
+      <div className="fixed inset-0 z-50 bg-black/95 text-white flex flex-col p-4 max-w-md sm:max-w-2xl desktop:max-w-4xl mx-auto">
         <div className="flex items-center justify-between py-3 border-b border-white/10">
           <button 
             onClick={() => setLessonQuiz(null)}
@@ -744,22 +744,6 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
               </div>
             </div>
           )}
-
-          {/* Shortcut: "Biologiyaning barcha mavzulari" */}
-          <div
-            onClick={() => {
-              impactLight();
-              setSelectedCourse(null);
-              setCurrentView('lesson_list');
-            }}
-            className="bg-[#1C1C1E] border border-white/5 hover:border-white/10 rounded-2xl p-3 flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all mb-4"
-          >
-            <div className="flex items-center gap-2.5 text-xs font-semibold text-white/90">
-              <Search className="w-4 h-4 text-[#8E8E93]" />
-              <span>Biologiyaning barcha mavzulari</span>
-            </div>
-            <ChevronRight className="w-4 h-4 text-[#8E8E93]" />
-          </div>
 
         </div>
       )}

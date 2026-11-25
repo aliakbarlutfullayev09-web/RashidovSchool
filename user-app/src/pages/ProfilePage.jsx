@@ -275,14 +275,13 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
           <button
             type="button"
             onClick={handleRankTap}
-            className={`relative overflow-visible border p-3 rounded-2xl flex flex-col items-center cursor-pointer select-none transition-all duration-150 ${
+            className={`relative overflow-visible border p-3 rounded-2xl flex flex-col items-center justify-center cursor-pointer select-none transition-all duration-150 ${
               isRankGrayed
                 ? 'bg-[#3A3A3C]/70 border-white/10 grayscale opacity-60 scale-[0.98]'
                 : 'bg-[#2C2C2E] border-white/5 hover:border-white/10 active:scale-95'
             }`}
           >
-            <span className="text-lg mb-0.5">🌳</span>
-            <span className="text-[10px] text-[#8E8E93] leading-none mb-1">-</span>
+            <span className="text-xl font-bold text-white/80 leading-none mb-1.5">-</span>
             <span className={`text-xs font-bold transition-colors ${isRankGrayed ? 'text-[#8E8E93]' : 'text-emerald-400'}`}>
               O'rin
             </span>

@@ -3,431 +3,23 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Trophy, Clock, AlertTriangle, CheckCircle2, XCircle, ArrowLeft, 
   RotateCcw, BookOpen, Search, Sparkles, ChevronRight, Check,
-  Award, Zap, UserCheck, FileText, CheckCircle
+  Award, Zap, UserCheck, FileText, CheckCircle,
+  Dna, FlaskConical, Calculator
 } from 'lucide-react';
 import SubjectBannerEffects from '../components/SubjectBannerEffects';
-import { getSubjects, saveExamProgress } from '../api/supabase';
+import { getSubjects, getExamPortalData, saveExamProgress } from '../api/supabase';
+import {
+  DEFAULT_EXAM_PORTAL_DATA,
+  createSubjectSkeleton,
+  formatDurationLabel,
+  normalizeSubjectKey
+} from '../api/examDefaults';
 import { isUzbekMatch } from '../utils/uzbekFuzzy';
 import { useHaptic } from '../hooks/useHaptic';
 import { useLanguage } from '../context/LanguageContext';
 import { useTelegram } from '../hooks/useTelegram';
 import { useIsDesktop } from '../hooks/useIsDesktop';
 import DesktopSubjectCarousel from '../components/DesktopSubjectCarousel';
-
-// ──────────────────────────────────────────────────────────────
-// TEACHER-CURATED TESTS DATABASE PER SUBJECT & MODE
-// Added and verified by "Ustoz Rashidov" for each discipline
-// ──────────────────────────────────────────────────────────────
-const SUBJECT_TESTS_DATA = {
-  biologiya: {
-    teacher: {
-      name: "Ustoz Rashidov",
-      subjectTitle: "Biologiya",
-      role: "Biologiya fani bosh o'qituvchisi",
-      experience: "8 yillik pedagogik tajriba",
-      avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80",
-      badge: "DTM & Milliy Sertifikat eksperti",
-      note: "Ushbu bo'limdagi barcha variantlar va savollar DTM va Milliy sertifikat dasturi talablari asosida shaxsan tuzilgan va tekshirilgan."
-    },
-    dtm: [
-      {
-        id: 'bio-dtm-1',
-        title: "1-Variant: Rasmiy DTM Diagnostika (Standart 2024)",
-        badge: "Boshlang'ich",
-        badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-        questionCount: 30,
-        durationMinutes: 60,
-        maxScore: 93.0,
-        difficulty: "O'rta",
-        difficultyColor: "text-emerald-400 bg-emerald-400/10 border-emerald-400/20",
-        description: "Sitologiya, botanika, fiziologiya va asosiy biologik qonuniyatlar bo'yicha DTM imtihoni savollari.",
-        questions: [
-          {
-            id: 1,
-            type: 'choice',
-            text: "Qaysi organoid eukariot hujayralarda ATF sintezlovchi asosiy energiya stansiyasi hisoblanadi?",
-            options: ["Ribosoma", "Mitoxondriya", "Lizosoma", "Golji majmuasi"],
-            correctIndex: 1,
-            textbookRef: "9-sinf Biologiya, 2-bob, §9, 36-bet"
-          },
-          {
-            id: 2,
-            type: 'image',
-            text: "Rasmda tasvirlangan mitoz fazasini aniqlang (xromosomalar ekvator tekisligida joylashgan):",
-            imageUrl: "https://images.unsplash.com/photo-1530026405186-ed1f139313f8?auto=format&fit=crop&w=600&q=80",
-            options: ["Profaza", "Metafaza", "Anafaza", "Telofaza"],
-            correctIndex: 1,
-            textbookRef: "10-sinf Biologiya, 3-bob, §11, 48-bet"
-          },
-          {
-            id: 3,
-            type: 'input',
-            text: "Odam tana hujayrasidagi (somatik) xromosomalar sonini yozing:",
-            correctAnswer: "46",
-            textbookRef: "9-sinf Biologiya, 4-bob, §15, 62-bet"
-          },
-          {
-            id: 4,
-            type: 'choice',
-            text: "Fotosintez jarayonining yorug'lik fazasida suvning fotolizidan qanday gaz ajralib chiqadi?",
-            options: ["Kislorod (O2)", "Karbonat angidrid (CO2)", "Vodorod (H2)", "Azot (N2)"],
-            correctIndex: 0,
-            textbookRef: "10-sinf Biologiya, 2-bob, §7, 29-bet"
-          },
-          {
-            id: 5,
-            type: 'choice',
-            text: "Odamda katta qon aylanish doirasi yurakning qaysi kamerasidan boshlanadi?",
-            options: ["O'ng bo'lmacha", "O'ng qorincha", "Chap bo'lmacha", "Chap qorincha"],
-            correctIndex: 3,
-            textbookRef: "8-sinf Odam va uning salomatligi, §22, 85-bet"
-          }
-        ]
-      },
-      {
-        id: 'bio-dtm-2',
-        title: "2-Variant: DTM Saralash & Chuqurlashtirilgan",
-        badge: "Grant darajasi",
-        badgeColor: "bg-purple-500/15 text-purple-400 border-purple-500/30",
-        questionCount: 30,
-        durationMinutes: 60,
-        maxScore: 93.0,
-        difficulty: "Yuqori",
-        difficultyColor: "text-purple-400 bg-purple-400/10 border-purple-400/20",
-        description: "Mantiqiy savollar, genetik masalalar va to'qimalar tahlili.",
-        questions: [
-          {
-            id: 1,
-            type: 'choice',
-            text: "Diduragay chatishtirishda F2 avlodda fenotip bo'yicha ajralish nisbati qanday bo'ladi?",
-            options: ["3:1", "9:3:3:1", "1:2:1", "1:1:1:1"],
-            correctIndex: 1,
-            textbookRef: "10-sinf Biologiya, Genetika asoslari, §12, 54-bet"
-          },
-          {
-            id: 2,
-            type: 'input',
-            text: "DNK fragmentidagi adenin (A) soni 300 ta bo'lsa, timin (T) soni nechta bo'ladi?",
-            correctAnswer: "300",
-            textbookRef: "9-sinf Biologiya, Nuklein kislotalar, §10, 42-bet"
-          },
-          {
-            id: 3,
-            type: 'choice',
-            text: "O'simliklarda suv va mineral moddalarni ildizdan barglarga o'tkazuvchi to'qima qaysi?",
-            options: ["Floema (elaksimon naylar)", "Ksilema (naylar)", "Kambiy", "Periderma"],
-            correctIndex: 1,
-            textbookRef: "6-sinf Botanika, O'tkazuvchi to'qimalar, §8, 31-bet"
-          }
-        ]
-      },
-      {
-        id: 'bio-dtm-3',
-        title: "3-Variant: Genetika va Molekulyar biologiya fokus",
-        badge: "Ekspert",
-        badgeColor: "bg-blue-500/15 text-blue-400 border-blue-500/30",
-        questionCount: 30,
-        durationMinutes: 60,
-        maxScore: 93.0,
-        difficulty: "Murakkab",
-        difficultyColor: "text-blue-400 bg-blue-400/10 border-blue-400/20",
-        description: "Yangi DTM standarti asosidagi transkripsiya, translatsiya va genetik hisob-kitoblar.",
-        questions: [
-          {
-            id: 1,
-            type: 'choice',
-            text: "Translatsiya jarayoni hujayraning qaysi qismida amalga oshadi?",
-            options: ["Lizosomada", "Ribosomada", "Vakuolada", "Sentrosomada"],
-            correctIndex: 1,
-            textbookRef: "10-sinf Biologiya, Oqsil biosintezi, §14, 58-bet"
-          },
-          {
-            id: 2,
-            type: 'input',
-            text: "Gomologik xromosomalarning o'zaro qismlari bilan almashinish jarayoni nima deb ataladi?",
-            correctAnswer: "Krossingover",
-            textbookRef: "10-sinf Biologiya, Meyoz va irsiyat, §16, 68-bet"
-          }
-        ]
-      }
-    ],
-    sertifikat: [
-      {
-        id: 'bio-cert-1',
-        title: "Milliy Sertifikat: 1-Bosqich Diagnostika (A+ / A)",
-        badge: "A+ Daraja",
-        badgeColor: "bg-amber-500/15 text-amber-400 border-amber-500/30",
-        questionCount: 45,
-        durationMinutes: 90,
-        maxScore: 100,
-        difficulty: "Yuqori",
-        difficultyColor: "text-amber-400 bg-amber-400/10 border-amber-400/20",
-        description: "Rasmiy Milliy sertifikat standarti bo'yicha 3 ta qism: Nazariy, Moslashtirish va Masalalar.",
-        questions: [
-          {
-            id: 1,
-            type: 'choice',
-            text: "Odamning qon guruhlari qaysi genetik hodisaga misol bo'ladi?",
-            options: ["Noto'liq dominantlik", "Kodominantlik", "Polimeriya", "Komplementarlik"],
-            correctIndex: 1,
-            textbookRef: "10-sinf Biologiya, Genlarning o'zaro ta'siri, §18, 76-bet"
-          },
-          {
-            id: 2,
-            type: 'input',
-            text: "Tinch holatda odamda 1 minutda yurak o'rtacha necha marta uradi (puls normasi)?",
-            correctAnswer: "70",
-            textbookRef: "8-sinf Fiziologiya, Qon aylanish, §23, 90-bet"
-          },
-          {
-            id: 3,
-            type: 'choice',
-            text: "Fotosintezning qorong'ulik bosqichida qaysi biokimyoviy sikl amalga oshadi?",
-            options: ["Krebs sikli", "Kalvin sikli", "Glikoliz", "Kori sikli"],
-            correctIndex: 1,
-            textbookRef: "10-sinf Biologiya, Plastik almashinuv, §8, 33-bet"
-          }
-        ]
-      },
-      {
-        id: 'bio-cert-2',
-        title: "Milliy Sertifikat: Mantiqiy va Masalali Variant",
-        badge: "Olimpiada / A+",
-        badgeColor: "bg-purple-500/15 text-purple-400 border-purple-500/30",
-        questionCount: 45,
-        durationMinutes: 90,
-        maxScore: 100,
-        difficulty: "Ekspert",
-        difficultyColor: "text-purple-400 bg-purple-400/10 border-purple-400/20",
-        description: "Murakkab genetik va sitologik hisob-kitoblar, ochiq turdagi savollar to'plami.",
-        questions: [
-          {
-            id: 1,
-            type: 'choice',
-            text: "Mitoxondriya kristalarida qaysi jarayon kechadi?",
-            options: ["Oksidlanishli fosforillanish", "Glikoliz", "Transkripsiya", "Replikatsiya"],
-            correctIndex: 0,
-            textbookRef: "9-sinf Biologiya, Hujayraning energetik almashinuvi, §10, 39-bet"
-          }
-        ]
-      }
-    ]
-  },
-  kimyo: {
-    teacher: {
-      name: "Ustoz Rashidov",
-      subjectTitle: "Kimyo",
-      role: "Kimyo fani bosh mutaxassisi",
-      experience: "7 yillik amaliy tajriba",
-      avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&q=80",
-      badge: "Olimpiada va DTM yetakchi murabbiyi",
-      note: "Kimyo fanidan barcha DTM va Sertifikat testlari yangilangan milliy ta'lim dasturi asosida reaksiyalar va hisoblash masalalari bilan to'ldirilgan."
-    },
-    dtm: [
-      {
-        id: 'chem-dtm-1',
-        title: "1-Variant: Rasmiy DTM Kimyo (Anorganik va Organik)",
-        badge: "Standart DTM",
-        badgeColor: "bg-purple-500/15 text-purple-400 border-purple-500/30",
-        questionCount: 30,
-        durationMinutes: 60,
-        maxScore: 93.0,
-        difficulty: "O'rta",
-        difficultyColor: "text-purple-400 bg-purple-400/10 border-purple-400/20",
-        description: "Davriy sistema, kimyoviy bog'lanish, oksidlanish-qaytarilish va organik sinflar.",
-        questions: [
-          {
-            id: 1,
-            type: 'choice',
-            text: "Davriy sistemada atom radiusi bir davr bo'yicha chapdan o'ngga qanday o'zgaradi?",
-            options: ["Kattalashadi", "Kichiklashadi", "O'zgarmaydi", "Avval ortadi, so'ng kamayadi"],
-            correctIndex: 1,
-            textbookRef: "8-sinf Kimyo, Davriy qonun va sistema, §7, 28-bet"
-          },
-          {
-            id: 2,
-            type: 'input',
-            text: "Suv (H2O) molekulasining nisbiy molekulyar massasini (Mr) toping:",
-            correctAnswer: "18",
-            textbookRef: "7-sinf Kimyo, Molekulyar massa hisoblash, §12, 45-bet"
-          },
-          {
-            id: 3,
-            type: 'choice',
-            text: "Normal sharoitda 1 mol har qanday gaz qanday hajmni egallaydi?",
-            options: ["11.2 l", "22.4 l", "44.8 l", "2.24 l"],
-            correctIndex: 1,
-            textbookRef: "8-sinf Kimyo, Avogadro qonuni va gazlar molar hajmi, §15, 60-bet"
-          },
-          {
-            id: 4,
-            type: 'choice',
-            text: "KMnO4 birikmasida marganes (Mn) ning oksidlanish darajasini aniqlang:",
-            options: ["+2", "+4", "+6", "+7"],
-            correctIndex: 3,
-            textbookRef: "8-sinf Kimyo, Oksidlanish darajalari, §25, 96-bet"
-          }
-        ]
-      },
-      {
-        id: 'chem-dtm-2',
-        title: "2-Variant: DTM Kimyo Masalalar & Reaksiyalar",
-        badge: "Grant darajasi",
-        badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-        questionCount: 30,
-        durationMinutes: 60,
-        maxScore: 93.0,
-        difficulty: "Yuqori",
-        difficultyColor: "text-emerald-400 bg-emerald-400/10 border-emerald-400/20",
-        description: "Eritmalar konsentratsiyasi va organik reaksiyalarga oid chuqurlashtirilgan masalalar.",
-        questions: [
-          {
-            id: 1,
-            type: 'choice',
-            text: "Qaysi modda kuchli elektrolit hisoblanadi?",
-            options: ["H2SO4", "H2CO3", "H2S", "CH3COOH"],
-            correctIndex: 0,
-            textbookRef: "9-sinf Kimyo, Elektrolitik dissotsiatsiya, §11, 44-bet"
-          },
-          {
-            id: 2,
-            type: 'input',
-            text: "Osh tuzi (NaCl) ning nisbiy molekulyar massasini butun son sifatida yozing (Na=23, Cl=35.5):",
-            correctAnswer: "58.5",
-            textbookRef: "7-sinf Kimyo, Kimyoviy formulalar, §14, 52-bet"
-          }
-        ]
-      }
-    ],
-    sertifikat: [
-      {
-        id: 'chem-cert-1',
-        title: "Milliy Sertifikat: Kimyo Nazariya va Amaliyot",
-        badge: "A+ Daraja",
-        badgeColor: "bg-amber-500/15 text-amber-400 border-amber-500/30",
-        questionCount: 45,
-        durationMinutes: 90,
-        maxScore: 100,
-        difficulty: "Yuqori",
-        difficultyColor: "text-amber-400 bg-amber-400/10 border-amber-400/20",
-        description: "Kimyoviy kinetika, muvozanat va murakkab hisob-kitoblar testi.",
-        questions: [
-          {
-            id: 1,
-            type: 'choice',
-            text: "Ekzotermik reaksiyalarda harorat oshirilganda kimyoviy muvozanat qaysi tomonga siljiydi?",
-            options: ["O'ng tomonga", "Chap tomonga", "Siljimaydi", "Tezlik pasayadi"],
-            correctIndex: 1,
-            textbookRef: "9-sinf Kimyo, Kimyoviy muvozanat va Le Shatelye prinsipi, §19, 74-bet"
-          }
-        ]
-      }
-    ]
-  },
-  matematika: {
-    teacher: {
-      name: "Ustoz Rashidov",
-      subjectTitle: "Matematika",
-      role: "Matematika fani bosh mutaxassisi",
-      experience: "9 yillik pedagogik tajriba",
-      avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=300&q=80",
-      badge: "DTM va Milliy Sertifikat masteri",
-      note: "Matematika bo'limida har bir savol DTM va Milliy sertifikat qoliplariga to'liq mos keladi. Nazariya va tezkor hisoblash texnikalari jamlangan."
-    },
-    dtm: [
-      {
-        id: 'math-dtm-1',
-        title: "1-Variant: Rasmiy DTM Matematika (Algebra & Geometriya)",
-        badge: "Standart DTM",
-        badgeColor: "bg-blue-500/15 text-blue-400 border-blue-500/30",
-        questionCount: 30,
-        durationMinutes: 60,
-        maxScore: 93.0,
-        difficulty: "O'rta",
-        difficultyColor: "text-blue-400 bg-blue-400/10 border-blue-400/20",
-        description: "Funksiyalar, kvadrat tenglamalar, trigonometriya va planimetriya masalalari.",
-        questions: [
-          {
-            id: 1,
-            type: 'choice',
-            text: "Agar kvadrat tenglamada diskriminant D > 0 bo'lsa, tenglama nechta haqiqiy ildizga ega?",
-            options: ["Ildizi yo'q", "1 ta ildiz", "2 ta turli ildiz", "Cheksiz ko'p"],
-            correctIndex: 2,
-            textbookRef: "8-sinf Algebra, Kvadrat tenglamalar va diskriminant, §14, 56-bet"
-          },
-          {
-            id: 2,
-            type: 'input',
-            text: "To'g'ri burchakli uchburchakning katetlari 3 va 4 bo'lsa, gipotenuzasini toping:",
-            correctAnswer: "5",
-            textbookRef: "8-sinf Geometriya, Pifagor teoremasi, §18, 72-bet"
-          },
-          {
-            id: 3,
-            type: 'choice',
-            text: "y = x^3 funksiyaning hosilasi y' nimaga teng?",
-            options: ["3x", "3x^2", "x^2", "3x^3"],
-            correctIndex: 1,
-            textbookRef: "11-sinf Algebra, Hosila va uning tatbiqlari, §5, 24-bet"
-          },
-          {
-            id: 4,
-            type: 'choice',
-            text: "sin^2(a) + cos^2(a) ifodaning qiymati nimaga teng?",
-            options: ["0", "1", "2", "tg(a)"],
-            correctIndex: 1,
-            textbookRef: "9-sinf Geometriya / 10-sinf Algebra, Asosiy trigonometrik ayniyat, §9, 38-bet"
-          }
-        ]
-      },
-      {
-        id: 'math-dtm-2',
-        title: "2-Variant: Matematika Kombinatorika va Parametrlar",
-        badge: "Grant darajasi",
-        badgeColor: "bg-purple-500/15 text-purple-400 border-purple-500/30",
-        questionCount: 30,
-        durationMinutes: 60,
-        maxScore: 93.0,
-        difficulty: "Yuqori",
-        difficultyColor: "text-purple-400 bg-purple-400/10 border-purple-400/20",
-        description: "Murakkab parametrli tenglamalar, logarifmlar va integrallar.",
-        questions: [
-          {
-            id: 1,
-            type: 'input',
-            text: "log2(16) ifodaning qiymatini toping:",
-            correctAnswer: "4",
-            textbookRef: "10-sinf Algebra, Logarifm tushunchasi va xossalari, §22, 92-bet"
-          }
-        ]
-      }
-    ],
-    sertifikat: [
-      {
-        id: 'math-cert-1',
-        title: "Milliy Sertifikat: Matematika Chuqurlashtirilgan",
-        badge: "A+ Daraja",
-        badgeColor: "bg-amber-500/15 text-amber-400 border-amber-500/30",
-        questionCount: 45,
-        durationMinutes: 90,
-        maxScore: 100,
-        difficulty: "Yuqori",
-        difficultyColor: "text-amber-400 bg-amber-400/10 border-amber-400/20",
-        description: "Milliy sertifikat standarti bo'yicha nazariy va amaliy murakkab masalalar.",
-        questions: [
-          {
-            id: 1,
-            type: 'choice',
-            text: "Arifmetik progressiyada a1 = 2 va ayirmasi d = 3 bo'lsa, a5 ning qiymati qancha bo'ladi?",
-            options: ["11", "14", "17", "20"],
-            correctIndex: 1,
-            textbookRef: "9-sinf Algebra, Arifmetik progressiya n-hadi formulasi, §16, 64-bet"
-          }
-        ]
-      }
-    ]
-  }
-};
 
 export default function TestlarPage({ user, onRegisterBackAction }) {
   const { t } = useLanguage();
@@ -439,12 +31,13 @@ export default function TestlarPage({ user, onRegisterBackAction }) {
 
   // Subjects & Carousel state
   const [subjects, setSubjects] = useState([]);
+  const [examPortalData, setExamPortalData] = useState(DEFAULT_EXAM_PORTAL_DATA);
   const [activeSubjectIndex, setActiveSubjectIndex] = useState(0);
   const [slideDirection, setSlideDirection] = useState(1);
 
   // Selected state
   const [selectedSubjectKey, setSelectedSubjectKey] = useState('biologiya');
-  const [selectedMode, setSelectedMode] = useState('dtm'); // 'dtm' | 'sertifikat'
+  const [selectedMode, setSelectedMode] = useState('sertifikat'); // 'sertifikat' | 'dtm'
   const [selectedTest, setSelectedTest] = useState(null);
 
   // Exam Runner State (Screen 4)
@@ -452,7 +45,7 @@ export default function TestlarPage({ user, onRegisterBackAction }) {
   const [examActive, setExamActive] = useState(false);
   const [currentQIndex, setCurrentQIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState({});
-  const [timeLeft, setTimeLeft] = useState(1800);
+  const [timeLeft, setTimeLeft] = useState(3840);
   const [cheatWarnings, setCheatWarnings] = useState(0);
   const [showWarningModal, setShowWarningModal] = useState(false);
   const [visitedQuestions, setVisitedQuestions] = useState(new Set([0]));
@@ -465,16 +58,21 @@ export default function TestlarPage({ user, onRegisterBackAction }) {
   const touchStartXRef = useRef(0);
   const touchStartYRef = useRef(0);
 
-  // Load subjects on mount
+  // Load subjects and admin-configured exam portal data on mount
   useEffect(() => {
     async function load() {
       try {
         const dbSubjects = await getSubjects();
-        if (dbSubjects && dbSubjects.length > 0) {
-          setSubjects(dbSubjects);
+        const rows = dbSubjects && dbSubjects.length > 0 ? dbSubjects : [];
+        if (rows.length > 0) {
+          setSubjects(rows);
+        }
+        const portal = await getExamPortalData(rows);
+        if (portal) {
+          setExamPortalData(portal);
         }
       } catch (e) {
-        console.warn("Error loading subjects in Testlar:", e);
+        console.warn("Error loading subjects/tests in Testlar:", e);
       }
     }
     load();
@@ -549,7 +147,12 @@ export default function TestlarPage({ user, onRegisterBackAction }) {
   // Enter Mode Selection (Screen 2)
   const handleSelectSubject = (key) => {
     impactMedium();
-    setSelectedSubjectKey(key || currentSubjectKey);
+    const resolvedKey = normalizeSubjectKey(key || currentSubjectKey);
+    setSelectedSubjectKey(resolvedKey);
+    const subBundle = examPortalData?.subjects?.[resolvedKey] || DEFAULT_EXAM_PORTAL_DATA.subjects[resolvedKey];
+    const sertEnabled = subBundle?.modes?.sertifikat?.enabled ?? true;
+    const dtmEnabled = subBundle?.modes?.dtm?.enabled ?? true;
+    setSelectedMode(dtmEnabled ? 'dtm' : sertEnabled ? 'sertifikat' : 'dtm');
     setCurrentView('mode_select');
   };
 
@@ -562,11 +165,15 @@ export default function TestlarPage({ user, onRegisterBackAction }) {
 
   // Launch Exam Runner (Screen 4)
   const handleStartExam = (test) => {
+    if (!test?.questions || test.questions.length === 0) {
+      alert("Ushbu variantda hozircha savollar kiritilmagan.");
+      return;
+    }
     impactMedium();
     setSelectedTest(test);
     setCurrentQIndex(0);
     setUserAnswers({});
-    setTimeLeft((test?.durationMinutes || 60) * 60);
+    setTimeLeft((test?.durationMinutes || activeModeConfig?.durationMinutes || 64) * 60);
     setCheatWarnings(0);
     setShowWarningModal(false);
     setShowTahlil(false);
@@ -595,7 +202,8 @@ export default function TestlarPage({ user, onRegisterBackAction }) {
 
     const uid = user?.telegram_id || user?.id;
     if (uid) {
-      const qWeight = selectedMode === 'dtm' ? 3.1 : (100 / (activeQuestions.length || 1));
+      const targetMaxScore = selectedTest?.maxScore || activeModeConfig?.maxScore || (selectedMode === 'dtm' ? 93 : 75);
+      const qWeight = selectedMode === 'dtm' ? 3.1 : (targetMaxScore / (activeQuestions.length || 1));
       let cCount = 0;
       activeQuestions.forEach((q, idx) => {
         const userAns = userAnswers[idx];
@@ -690,10 +298,15 @@ export default function TestlarPage({ user, onRegisterBackAction }) {
     return () => clearInterval(timer);
   }, [examActive, examFinished]);
 
-  // Active Subject Data Bundle
-  const activeSubjectData = SUBJECT_TESTS_DATA[selectedSubjectKey] || SUBJECT_TESTS_DATA.biologiya;
-  const activeModeTests = activeSubjectData[selectedMode] || activeSubjectData.dtm;
+  // Active Subject Data Bundle (Synced with admin-app)
+  const activeSubjectData = examPortalData?.subjects?.[selectedSubjectKey]
+    || examPortalData?.subjects?.biologiya
+    || createSubjectSkeleton(selectedSubjectKey);
+  const activeModeConfig = activeSubjectData?.modes?.[selectedMode]
+    || createSubjectSkeleton(selectedSubjectKey).modes[selectedMode];
+  const activeModeTests = activeSubjectData?.[selectedMode] || [];
   const activeQuestions = selectedTest?.questions || activeModeTests[0]?.questions || [];
+  const examMaxScore = selectedTest?.maxScore || activeModeConfig?.maxScore || (selectedMode === 'dtm' ? 93 : 75);
 
   // Answering
   const handleSelectAnswer = (qIndex, ans) => {
@@ -716,7 +329,7 @@ export default function TestlarPage({ user, onRegisterBackAction }) {
     }
   });
 
-  const questionWeight = selectedMode === 'dtm' ? 3.1 : (100 / (activeQuestions.length || 1));
+  const questionWeight = selectedMode === 'dtm' ? 3.1 : (examMaxScore / (activeQuestions.length || 1));
   const totalScore = (correctCount * questionWeight).toFixed(1);
   const grantProb = Math.min(100, Math.round((correctCount / (activeQuestions.length || 1)) * 100));
 
@@ -803,7 +416,7 @@ export default function TestlarPage({ user, onRegisterBackAction }) {
                     </span>
                   </div>
                   <span className="text-teal-400 font-bold text-xs px-2.5 py-1 rounded-lg bg-teal-500/10 border border-teal-500/20">
-                    +{selectedMode === 'dtm' ? '3.1 ball' : `${(100 / activeQuestions.length).toFixed(1)} ball`}
+                    +{questionWeight.toFixed(1)} ball
                   </span>
                 </div>
 
@@ -1014,7 +627,7 @@ export default function TestlarPage({ user, onRegisterBackAction }) {
     }
 
     return (
-      <div className="w-full min-h-screen bg-[#000000] text-white p-4 pb-28 max-w-lg mx-auto select-none">
+      <div className="w-full min-h-screen bg-[#000000] text-white p-4 sm:px-6 pb-28 max-w-lg sm:max-w-3xl mx-auto select-none">
         
         {/* Top Header */}
         <div className="flex items-center justify-between py-2 border-b border-white/5 mb-4">
@@ -1070,7 +683,7 @@ export default function TestlarPage({ user, onRegisterBackAction }) {
           <div className="flex items-center justify-between text-xs text-[#8E8E93]">
             <span>Savol {currentQIndex + 1} / {activeQuestions.length}</span>
             <span className="text-blue-400 font-bold">
-              +{selectedMode === 'dtm' ? '3.1 ball' : `${(100 / activeQuestions.length).toFixed(1)} ball`}
+              +{questionWeight.toFixed(1)} ball
             </span>
           </div>
 
@@ -1173,12 +786,12 @@ export default function TestlarPage({ user, onRegisterBackAction }) {
   // ──────────────────────────────────────────────────────────
   if (examFinished) {
     return (
-      <div className="w-full min-h-screen bg-[#000000] text-white p-4 pb-28 max-w-lg mx-auto space-y-5 select-none">
+      <div className="w-full min-h-screen bg-[#000000] text-white p-4 sm:px-6 pb-28 max-w-lg sm:max-w-3xl desktop:max-w-5xl mx-auto space-y-5 select-none">
         
         {/* Results Card */}
-        <div className="bg-[#1C1C1E] border border-white/5 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
-          <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 text-black flex items-center justify-center text-3xl mx-auto shadow-lg shadow-emerald-500/30">
-            🏆
+        <div className="bg-[#1C1C1E] border border-white/5 rounded-3xl p-6 sm:p-8 text-center space-y-5 shadow-2xl">
+          <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 text-black flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/30">
+            <Trophy className="w-8 h-8" />
           </div>
 
           <div>
@@ -1188,41 +801,34 @@ export default function TestlarPage({ user, onRegisterBackAction }) {
             </p>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 pt-2">
-            <div className="bg-[#2C2C2E] p-3 rounded-2xl">
+          <div className="grid grid-cols-3 gap-2 sm:gap-4 pt-2 max-w-2xl mx-auto">
+            <div className="bg-[#2C2C2E] p-3 sm:p-4 rounded-2xl">
               <span className="text-[10px] text-[#8E8E93] block">To'g'ri:</span>
               <span className="text-emerald-400 font-bold text-lg">{correctCount} / {activeQuestions.length}</span>
             </div>
-            <div className="bg-[#2C2C2E] p-3 rounded-2xl">
+            <div className="bg-[#2C2C2E] p-3 sm:p-4 rounded-2xl">
               <span className="text-[10px] text-[#8E8E93] block">To'plangan ball:</span>
-              <span className="text-blue-400 font-bold text-lg">{totalScore}</span>
+              <span className="text-blue-400 font-bold text-lg">{totalScore} / {examMaxScore}</span>
             </div>
-            <div className="bg-[#2C2C2E] p-3 rounded-2xl">
+            <div className="bg-[#2C2C2E] p-3 sm:p-4 rounded-2xl">
               <span className="text-[10px] text-[#8E8E93] block">{selectedMode === 'dtm' ? 'Maksimal:' : 'Sertifikat:'}</span>
-              <span className="text-amber-400 font-bold text-lg">{selectedMode === 'dtm' ? '93.0' : certGrade}</span>
+              <span className="text-amber-400 font-bold text-lg">{selectedMode === 'dtm' ? examMaxScore : certGrade}</span>
             </div>
           </div>
 
-          <div className="bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-2xl text-xs text-emerald-300 font-semibold flex items-center justify-center gap-2">
-            <Sparkles className="w-4 h-4" />
-            <span>
-              {selectedMode === 'dtm' 
-                ? `Davlat granti ehtimoli: ${grantProb}%` 
-                : `Sertifikat darajasi: ${certGrade} (${grantProb}%)`}
-            </span>
-          </div>
+          {selectedMode !== 'dtm' && (
+            <div className="bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-2xl text-xs text-emerald-300 font-semibold flex items-center justify-center gap-2 max-w-xl mx-auto">
+              <Sparkles className="w-4 h-4" />
+              <span>
+                {`Sertifikat darajasi: ${certGrade} (${grantProb}%)`}
+              </span>
+            </div>
+          )}
 
-          <div className="grid grid-cols-2 gap-2 pt-2">
-            <button
-              onClick={() => setShowTahlil(prev => !prev)}
-              className="bg-[#2C2C2E] hover:bg-[#343438] text-white font-bold py-3.5 px-3 rounded-2xl text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95"
-            >
-              <Search className="w-4 h-4 text-purple-400" />
-              <span>Xatolar tahlili</span>
-            </button>
+          <div className="pt-2 max-w-xl mx-auto">
             <button
               onClick={() => handleStartExam(selectedTest)}
-              className="bg-[#007AFF] hover:bg-blue-600 text-white font-bold py-3.5 px-3 rounded-2xl text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95"
+              className="w-full bg-[#007AFF] hover:bg-blue-600 text-white font-bold py-3.5 px-3 rounded-2xl text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95"
             >
               <RotateCcw className="w-4 h-4" />
               <span>Qayta topshirish</span>
@@ -1234,56 +840,11 @@ export default function TestlarPage({ user, onRegisterBackAction }) {
               setExamFinished(false);
               setCurrentView('test_list');
             }}
-            className="w-full bg-[#1C1C1E] border border-white/10 hover:bg-[#2C2C2E] text-white/80 font-bold py-3 px-3 rounded-2xl text-xs flex items-center justify-center gap-1.5 transition-all"
+            className="w-full max-w-xl mx-auto bg-[#1C1C1E] border border-white/10 hover:bg-[#2C2C2E] text-white/80 font-bold py-3 px-3 rounded-2xl text-xs flex items-center justify-center gap-1.5 transition-all"
           >
             <span>Boshqa variantlarni ko'rish</span>
           </button>
         </div>
-
-        {/* Tahlil Section */}
-        {showTahlil && (
-          <div className="space-y-3">
-            <h4 className="text-xs font-bold text-[#8E8E93] uppercase tracking-wider">
-              Xatolar bo'yicha darslik ko'rsatmalari (Tahlil):
-            </h4>
-
-            {activeQuestions.map((q, idx) => {
-              const userAns = userAnswers[idx];
-              const isCorrect = q.type === 'input' 
-                ? (userAns && isUzbekMatch(userAns, q.correctAnswer))
-                : (userAns === q.correctIndex);
-
-              return (
-                <div
-                  key={idx}
-                  className={`bg-[#1C1C1E] border rounded-2xl p-4 space-y-2 ${
-                    isCorrect ? 'border-emerald-500/20' : 'border-red-500/20'
-                  }`}
-                >
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-bold text-white">Savol {idx + 1}</span>
-                    {isCorrect ? (
-                      <span className="text-emerald-400 font-bold flex items-center gap-1">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> To'g'ri
-                      </span>
-                    ) : (
-                      <span className="text-red-400 font-bold flex items-center gap-1">
-                        <XCircle className="w-3.5 h-3.5" /> Xato
-                      </span>
-                    )}
-                  </div>
-
-                  <p className="text-xs text-white/90 font-medium">{q.text}</p>
-
-                  <div className="bg-[#242426] p-2.5 rounded-xl text-xs text-amber-300 font-semibold flex items-center gap-2">
-                    <BookOpen className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
-                    <span>{q.textbookRef || "Rashidov School darsligi"}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
       </div>
     );
   }
@@ -1330,7 +891,7 @@ export default function TestlarPage({ user, onRegisterBackAction }) {
         }}
       >
         <div 
-          className="h-full flex-1 flex flex-col justify-between items-center px-4 pt-1 pb-1 w-full max-w-md mx-auto overflow-hidden select-none"
+          className="h-full flex-1 flex flex-col justify-between items-center px-4 pt-1 pb-1 w-full max-w-md sm:max-w-xl mx-auto overflow-hidden select-none"
           onTouchStart={(e) => {
             touchStartXRef.current = e.touches[0].clientX;
             touchStartYRef.current = e.touches[0].clientY;
@@ -1467,203 +1028,201 @@ export default function TestlarPage({ user, onRegisterBackAction }) {
   }
 
   // ──────────────────────────────────────────────────────────
-  // SCREEN 2: 2 BANNERS (DTM MOCK & MILLIY SERTIFIKAT)
+  // SCREEN 2: EXAM MODE SELECTOR (MILLIY SERTIFIKAT & ADMIN-ENABLED MODES)
   // ──────────────────────────────────────────────────────────
   if (currentView === 'mode_select') {
     const isSubjectKimyo = selectedSubjectKey === 'kimyo';
     const isSubjectMatem = selectedSubjectKey === 'matematika';
+    const isSubjectBio = selectedSubjectKey === 'biologiya';
 
-    const subjectBadgeTitle = isSubjectKimyo 
-      ? '🧪 Kimyo Testlari' 
-      : isSubjectMatem 
-      ? '📐 Matematika Testlari' 
-      : '🧬 Biologiya Testlari';
+    const subjectRow = subjects.find(s => normalizeSubjectKey(s) === selectedSubjectKey);
+    const subjectLabel = isSubjectKimyo
+      ? 'Kimyo Testlari'
+      : isSubjectMatem
+      ? 'Matematika Testlari'
+      : isSubjectBio
+      ? 'Biologiya Testlari'
+      : `${subjectRow?.name || activeSubjectData?.teacher?.subjectTitle || 'Fan'} Testlari`;
+
+    const SubjectIcon = isSubjectKimyo
+      ? FlaskConical
+      : isSubjectMatem
+      ? Calculator
+      : isSubjectBio
+      ? Dna
+      : Sparkles;
+
+    const subjectIconColor = isSubjectKimyo
+      ? 'text-purple-400'
+      : isSubjectMatem
+      ? 'text-blue-400'
+      : isSubjectBio
+      ? 'text-emerald-400'
+      : 'text-amber-400';
+
+    const enabledModes = ['dtm', 'sertifikat'].filter(
+      (modeKey) => activeSubjectData?.modes?.[modeKey]?.enabled ?? true
+    );
 
     return (
       <div 
-        className="w-full text-white select-none flex flex-col min-h-full px-4 pt-2 space-y-4 max-w-md desktop:max-w-3xl mx-auto"
+        className="w-full text-white select-none flex flex-col min-h-full px-4 sm:px-6 pt-2 space-y-5 max-w-md sm:max-w-4xl desktop:max-w-6xl mx-auto"
         style={{
           paddingBottom: 'calc(var(--safe-area-bottom, 0px) + 88px)'
         }}
       >
-        {/* Subject Header Badge */}
+        {/* Subject Header Badge (SVG icon, no "Yo'nalishni tanlang") */}
         <div className="flex items-center justify-between pt-1">
-          <div className="flex items-center gap-2 bg-[#1C1C1E] border border-white/10 px-3.5 py-1.5 rounded-full text-xs font-bold text-white shadow-sm">
-            <span>{subjectBadgeTitle}</span>
+          <div className="inline-flex items-center gap-2 bg-[#1C1C1E] border border-white/10 px-4 py-2 rounded-full text-xs sm:text-sm font-bold text-white shadow-sm">
+            <SubjectIcon className={`w-4 h-4 ${subjectIconColor}`} />
+            <span>{subjectLabel}</span>
           </div>
-          <span className="text-[11px] text-[#8E8E93]">Yo'nalishni tanlang</span>
         </div>
 
-        <div className="text-left space-y-1">
-          <h2 className="text-xl font-black text-white tracking-wide">
+        <div className="text-left space-y-1.5">
+          <h2 className="text-xl sm:text-2xl lg:text-3xl font-black text-white tracking-tight">
             Imtihon Turini Tanlang
           </h2>
-          <p className="text-xs text-[#8E8E93]">
-            O'zingizga kerakli imtihon formatini tanlang va o'qituvchi tayyorlagan variantlar bilan bilimingizni sinang.
+          <p className="text-xs sm:text-sm text-[#8E8E93] max-w-2xl">
+            O'zingizga kerakli imtihon formatini tanlang va bilimingizni sinang.
           </p>
         </div>
 
-        {/* ── BANNER 1: 🎯 DTM MOCK TEST ── */}
-        <div 
-          onClick={() => handleSelectMode('dtm')}
-          className="relative bg-gradient-to-br from-[#1C1C1E] via-[#161618] to-[#0A0A0C] border border-blue-500/30 rounded-3xl p-5 shadow-[0_8px_30px_rgba(0,122,255,0.15)] cursor-pointer group active:scale-[0.98] transition-all space-y-4"
-        >
-          {/* Top Pill & Badge */}
-          <div className="flex items-center justify-between">
-            <span className="bg-blue-500/15 border border-blue-500/30 text-blue-400 text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full tracking-wider">
-              Davlat Test Markazi (DTM)
-            </span>
-            <span className="text-2xl">🎯</span>
+        {enabledModes.length === 0 ? (
+          <div className="bg-[#1C1C1E] border border-white/10 rounded-3xl p-8 text-center text-xs text-[#8E8E93]">
+            Hozircha bu fan uchun faol imtihon yo'nalishlari mavjud emas.
           </div>
+        ) : (
+          <div className={`grid gap-5 ${enabledModes.length > 1 ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
+            {enabledModes.map((modeKey) => {
+              const modeCfg = activeSubjectData?.modes?.[modeKey] || {};
+              const isSertifikat = modeKey === 'sertifikat';
+              const variantCount = (activeSubjectData?.[modeKey] || []).length;
+              const isWideSingle = enabledModes.length === 1;
 
-          <div>
-            <h3 className="text-white font-extrabold text-lg group-hover:text-blue-300 transition-colors">
-              DTM Mock Test
-            </h3>
-            <p className="text-xs text-[#8E8E93] mt-1 leading-relaxed">
-              Oliy ta'lim muassasalariga kirish imtihonlari rasmiy standarti bo'yicha diagnostika.
-            </p>
+              return (
+                <div
+                  key={modeKey}
+                  onClick={() => handleSelectMode(modeKey)}
+                  className={`relative bg-gradient-to-br from-[#1C1C1E] via-[#161618] to-[#0A0A0C] border rounded-3xl p-5 sm:p-7 cursor-pointer group active:scale-[0.99] transition-all ${
+                    isSertifikat
+                      ? 'border-amber-500/30 shadow-[0_8px_30px_rgba(245,158,11,0.14)] hover:border-amber-400/50'
+                      : 'border-blue-500/30 shadow-[0_8px_30px_rgba(0,122,255,0.14)] hover:border-blue-400/50'
+                  } ${
+                    isWideSingle
+                      ? 'flex flex-col md:grid md:grid-cols-12 md:items-center md:gap-8 space-y-4 md:space-y-0'
+                      : 'flex flex-col justify-between space-y-4'
+                  }`}
+                >
+                  {/* Left / Primary Details */}
+                  <div className={isWideSingle ? 'md:col-span-7 space-y-3.5' : 'space-y-3.5'}>
+                    <div className="flex items-center justify-between gap-2">
+                      <span
+                        className={`text-[10px] sm:text-[11px] font-extrabold uppercase px-3 py-1 rounded-full tracking-wider border ${
+                          isSertifikat
+                            ? 'bg-amber-500/15 border-amber-500/30 text-amber-400'
+                            : 'bg-blue-500/15 border-blue-500/30 text-blue-400'
+                        }`}
+                      >
+                        {modeCfg.badge || (isSertifikat ? "Davlat Ta'lim Standarti" : 'Davlat Test Markazi (DTM)')}
+                      </span>
+                    </div>
+
+                    <div>
+                      <h3
+                        className={`text-white font-extrabold text-lg sm:text-2xl transition-colors ${
+                          isSertifikat ? 'group-hover:text-amber-300' : 'group-hover:text-blue-300'
+                        }`}
+                      >
+                        {modeCfg.title || (isSertifikat ? 'Milliy Sertifikat' : 'DTM Mock Test')}
+                      </h3>
+                      <p className="text-xs sm:text-sm text-[#8E8E93] mt-1.5 leading-relaxed">
+                        {modeCfg.description}
+                      </p>
+                    </div>
+
+                    {Array.isArray(modeCfg.features) && modeCfg.features.length > 0 && (
+                      <div className="space-y-2 text-xs text-white/85 pt-1">
+                        {modeCfg.features.map((feat, fIdx) => (
+                          <div key={fIdx} className="flex items-center gap-2 text-[11px] sm:text-xs">
+                            <Sparkles
+                              className={`w-3.5 h-3.5 flex-shrink-0 ${
+                                fIdx % 2 === 0 ? 'text-purple-400' : 'text-emerald-400'
+                              }`}
+                            />
+                            <span>{feat}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right / Specs + CTA */}
+                  <div className={isWideSingle ? 'md:col-span-5 flex flex-col justify-center gap-4' : 'space-y-4'}>
+                    <div className="grid grid-cols-3 gap-2 sm:gap-2.5 text-center text-xs">
+                      <div className="bg-[#242426] border border-white/5 p-2.5 sm:p-3 rounded-2xl">
+                        <span className="text-[10px] text-[#8E8E93] block mb-0.5">Savollar:</span>
+                        <span className="text-white font-bold sm:text-sm">
+                          {modeCfg.questionCount || (isSertifikat ? 40 : 30)} ta
+                        </span>
+                      </div>
+                      <div className="bg-[#242426] border border-white/5 p-2.5 sm:p-3 rounded-2xl">
+                        <span className="text-[10px] text-[#8E8E93] block mb-0.5">Vaqt:</span>
+                        <span className="text-amber-400 font-bold sm:text-sm">
+                          {formatDurationLabel(modeCfg.durationMinutes || (isSertifikat ? 64 : 60))}
+                        </span>
+                      </div>
+                      <div className="bg-[#242426] border border-white/5 p-2.5 sm:p-3 rounded-2xl">
+                        <span className="text-[10px] text-[#8E8E93] block mb-0.5">Maksimal:</span>
+                        <span className={`font-bold sm:text-sm ${isSertifikat ? 'text-amber-400' : 'text-emerald-400'}`}>
+                          {modeCfg.maxScore || (isSertifikat ? 75 : 93)} ball
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleSelectMode(modeKey);
+                      }}
+                      className={`w-full font-bold py-3.5 px-5 rounded-2xl text-xs sm:text-sm flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer z-10 ${
+                        isSertifikat
+                          ? 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black shadow-lg shadow-amber-500/25'
+                          : 'bg-gradient-to-r from-[#007AFF] to-[#0A84FF] hover:brightness-110 text-white shadow-lg shadow-blue-500/25'
+                      }`}
+                    >
+                      <span>Variantlarni ko'rish</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-
-          {/* Quick Specs Chips */}
-          <div className="grid grid-cols-3 gap-2 text-center text-xs">
-            <div className="bg-[#242426] border border-white/5 p-2 rounded-xl">
-              <span className="text-[10px] text-[#8E8E93] block">Savollar:</span>
-              <span className="text-white font-bold">30 ta</span>
-            </div>
-            <div className="bg-[#242426] border border-white/5 p-2 rounded-xl">
-              <span className="text-[10px] text-[#8E8E93] block">Vaqt:</span>
-              <span className="text-amber-400 font-bold">60 daq</span>
-            </div>
-            <div className="bg-[#242426] border border-white/5 p-2 rounded-xl">
-              <span className="text-[10px] text-[#8E8E93] block">Maksimal:</span>
-              <span className="text-emerald-400 font-bold">93.0 ball</span>
-            </div>
-          </div>
-
-          {/* Feature Bullets */}
-          <div className="space-y-1.5 text-xs text-white/80 pt-1">
-            <div className="flex items-center gap-2 text-[11px]">
-              <Sparkles className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
-              <span>Har bir to'g'ri javob uchun 3.1 ball & grant ehtimoli</span>
-            </div>
-            <div className="flex items-center gap-2 text-[11px]">
-              <BookOpen className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-              <span>Xatolar bo'yicha darslik manbalari va to'liq tahlil</span>
-            </div>
-            <div className="flex items-center gap-2 text-[11px]">
-              <AlertTriangle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
-              <span>Anti-cheat nazorati va vaqt taymeri</span>
-            </div>
-          </div>
-
-          {/* Action Button */}
-          <button 
-            type="button"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              handleSelectMode('dtm');
-            }}
-            className="w-full bg-gradient-to-r from-[#007AFF] to-[#0A84FF] text-white font-bold py-3 px-4 rounded-2xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25 group-hover:brightness-110 transition-all cursor-pointer z-10"
-          >
-            <span>Variantlarni ko'rish</span>
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* ── BANNER 2: 📜 MILLIY SERTIFIKAT ── */}
-        <div 
-          onClick={() => handleSelectMode('sertifikat')}
-          className="relative bg-gradient-to-br from-[#1C1C1E] via-[#161618] to-[#0A0A0C] border border-amber-500/30 rounded-3xl p-5 shadow-[0_8px_30px_rgba(245,158,11,0.15)] cursor-pointer group active:scale-[0.98] transition-all space-y-4"
-        >
-          {/* Top Pill & Badge */}
-          <div className="flex items-center justify-between">
-            <span className="bg-amber-500/15 border border-amber-500/30 text-amber-400 text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full tracking-wider">
-              Davlat Ta'lim Standarti
-            </span>
-            <span className="text-2xl">📜</span>
-          </div>
-
-          <div>
-            <h3 className="text-white font-extrabold text-lg group-hover:text-amber-300 transition-colors">
-              Milliy Sertifikat
-            </h3>
-            <p className="text-xs text-[#8E8E93] mt-1 leading-relaxed">
-              A+, A, B+, B darajalarini taqdim etuvchi ko'p bosqichli chuqurlashtirilgan baholash tizimi.
-            </p>
-          </div>
-
-          {/* Quick Specs Chips */}
-          <div className="grid grid-cols-3 gap-2 text-center text-xs">
-            <div className="bg-[#242426] border border-white/5 p-2 rounded-xl">
-              <span className="text-[10px] text-[#8E8E93] block">Savollar:</span>
-              <span className="text-white font-bold">45 ta</span>
-            </div>
-            <div className="bg-[#242426] border border-white/5 p-2 rounded-xl">
-              <span className="text-[10px] text-[#8E8E93] block">Vaqt:</span>
-              <span className="text-amber-400 font-bold">90 daq</span>
-            </div>
-            <div className="bg-[#242426] border border-white/5 p-2 rounded-xl">
-              <span className="text-[10px] text-[#8E8E93] block">Shkala:</span>
-              <span className="text-amber-400 font-bold">100 ball</span>
-            </div>
-          </div>
-
-          {/* Feature Bullets */}
-          <div className="space-y-1.5 text-xs text-white/80 pt-1">
-            <div className="flex items-center gap-2 text-[11px]">
-              <Award className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
-              <span>Nazariy, moslashtirish va masalalar (A, B, C qismlar)</span>
-            </div>
-            <div className="flex items-center gap-2 text-[11px]">
-              <Sparkles className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" />
-              <span>A+ dan C gacha bo'lgan rasmiy darajani aniqlash</span>
-            </div>
-            <div className="flex items-center gap-2 text-[11px]">
-              <BookOpen className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-              <span>Mantiqiy yechimlar va chuqur tahliliy ko'rsatmalar</span>
-            </div>
-          </div>
-
-          {/* Action Button */}
-          <button 
-            type="button"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              handleSelectMode('sertifikat');
-            }}
-            className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black font-bold py-3 px-4 rounded-2xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/25 active:scale-95 transition-all cursor-pointer z-10"
-          >
-            <span>Variantlarni ko'rish</span>
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
+        )}
       </div>
     );
   }
 
   // ──────────────────────────────────────────────────────────
-  // SCREEN 3: AVAILABLE TESTS ADDED BY TEACHER (USTOZ RASHIDOV)
+  // SCREEN 3: AVAILABLE TESTS ADDED BY TEACHER / ADMIN
   // ──────────────────────────────────────────────────────────
-  const isSubjectKimyo = selectedSubjectKey === 'kimyo';
-  const isSubjectMatem = selectedSubjectKey === 'matematika';
-
   const teacher = activeSubjectData?.teacher || {
     name: "Ustoz Rashidov",
     subjectTitle: "Biologiya",
     role: "Biologiya fani bosh o'qituvchisi",
     avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80",
-    badge: "DTM & Sertifikat eksperti",
-    note: "Ushbu bo'limdagi barcha variantlar DTM va Milliy sertifikat dasturi talablari asosida o'qituvchi tomonidan tuzilgan."
+    badge: "Milliy Sertifikat eksperti",
+    note: "Ushbu bo'limdagi barcha variantlar Milliy sertifikat dasturi talablari asosida o'qituvchi tomonidan tuzilgan."
   };
 
-  const modeTitle = selectedMode === 'dtm' ? 'DTM Mock Testlar' : 'Milliy Sertifikat Variantlari';
+  const modeTitle = activeModeConfig?.title || (selectedMode === 'dtm' ? 'DTM Mock Testlar' : 'Milliy Sertifikat Variantlari');
 
   return (
     <div 
-      className="w-full text-white select-none flex flex-col min-h-full px-4 pt-2 space-y-4 max-w-md desktop:max-w-3xl mx-auto"
+      className="w-full text-white select-none flex flex-col min-h-full px-4 sm:px-6 pt-2 space-y-4 sm:space-y-5 max-w-md sm:max-w-4xl desktop:max-w-6xl mx-auto"
       style={{
         paddingBottom: 'calc(var(--safe-area-bottom, 0px) + 88px)'
       }}
@@ -1675,113 +1234,95 @@ export default function TestlarPage({ user, onRegisterBackAction }) {
             impactLight();
             setCurrentView('mode_select');
           }}
-          className="flex items-center gap-1.5 text-xs text-[#8E8E93] hover:text-white transition-colors"
+          className="flex items-center gap-1.5 text-xs sm:text-sm text-[#8E8E93] hover:text-white transition-colors"
         >
-          <ArrowLeft className="w-3.5 h-3.5" />
+          <ArrowLeft className="w-4 h-4" />
           <span>Yo'nalishlarga qaytish</span>
         </button>
 
-        <span className="text-[11px] font-bold text-blue-400 bg-blue-500/10 px-2.5 py-1 rounded-full border border-blue-500/20">
+        <span className="text-[11px] font-bold text-blue-400 bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/20">
           {activeModeTests.length} ta variant mavjud
         </span>
       </div>
 
-      {/* Teacher Profile Card */}
-      <div className="bg-[#1C1C1E] border border-white/5 rounded-3xl p-4 space-y-3 shadow-lg">
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <img 
-              src={teacher.avatar} 
-              alt={teacher.name} 
-              className="w-12 h-12 rounded-2xl object-cover border border-white/10"
-            />
-            <div className="absolute -bottom-1 -right-1 bg-blue-500 text-white rounded-full p-0.5 border-2 border-black">
-              <Check className="w-2.5 h-2.5 stroke-[3]" />
-            </div>
-          </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <h3 className="text-white font-bold text-sm">{teacher.name}</h3>
-              <span className="bg-amber-400/15 text-amber-300 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full border border-amber-400/25">
-                O'qituvchi
-              </span>
-            </div>
-            <p className="text-xs text-[#8E8E93]">{teacher.role}</p>
-          </div>
-        </div>
-
-        <div className="bg-[#242426] border border-white/5 p-3 rounded-2xl text-[11px] text-white/80 leading-relaxed flex items-start gap-2">
-          <UserCheck className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-          <span>{teacher.note}</span>
-        </div>
-      </div>
-
       {/* Section Title */}
-      <div className="flex items-center justify-between">
-        <h3 className="text-white font-black text-base tracking-wide flex items-center gap-2">
-          <span>{selectedMode === 'dtm' ? '🎯' : '📜'}</span>
+      <div className="flex items-center justify-between pt-1">
+        <h3 className="text-white font-black text-base sm:text-lg tracking-wide flex items-center gap-2">
+          {selectedMode === 'dtm' ? (
+            <Zap className="w-5 h-5 text-blue-400" />
+          ) : (
+            <Award className="w-5 h-5 text-amber-400" />
+          )}
           <span>{modeTitle}</span>
         </h3>
-        <span className="text-[11px] text-[#8E8E93]">
+        <span className="text-xs text-[#8E8E93]">
           {teacher.subjectTitle}
         </span>
       </div>
 
-      {/* Available Tests List */}
-      <div className="space-y-3">
-        {activeModeTests.map((test, index) => {
-          return (
-            <div 
-              key={test.id || index}
-              className="bg-[#1C1C1E] border border-white/5 hover:border-white/15 rounded-3xl p-4 space-y-3.5 transition-all shadow-md group"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="space-y-1">
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${test.badgeColor || 'bg-white/10 text-white border-white/10'}`}>
-                    {test.badge}
-                  </span>
-                  <h4 className="text-white font-bold text-sm group-hover:text-blue-300 transition-colors pt-1">
-                    {test.title}
-                  </h4>
-                </div>
-
-                <div className="w-8 h-8 rounded-xl bg-[#242426] flex items-center justify-center text-white/70 flex-shrink-0 text-xs font-mono font-bold">
-                  #{index + 1}
-                </div>
-              </div>
-
-              <p className="text-xs text-[#8E8E93] leading-relaxed">
-                {test.description}
-              </p>
-
-              {/* Specs Chips */}
-              <div className="flex items-center flex-wrap gap-2 text-[11px]">
-                <div className="bg-[#242426] px-2.5 py-1 rounded-xl text-white/80 flex items-center gap-1">
-                  <FileText className="w-3 h-3 text-blue-400" />
-                  <span>{test.questionCount} ta savol</span>
-                </div>
-                <div className="bg-[#242426] px-2.5 py-1 rounded-xl text-white/80 flex items-center gap-1">
-                  <Clock className="w-3 h-3 text-amber-400" />
-                  <span>{test.durationMinutes} daqiqa</span>
-                </div>
-                <div className={`px-2.5 py-1 rounded-xl border ${test.difficultyColor}`}>
-                  <span>{test.difficulty}</span>
-                </div>
-              </div>
-
-              {/* Start Button */}
-              <button
-                type="button"
-                onClick={() => handleStartExam(test)}
-                className={`w-full bg-gradient-to-r ${buttonGradient} hover:brightness-110 text-white font-bold py-3 px-4 rounded-2xl text-xs flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all`}
+      {/* Available Tests Grid (1-col Phone, 2-col Tablet, 3-col PC) */}
+      {activeModeTests.length === 0 ? (
+        <div className="bg-[#1C1C1E] border border-white/10 rounded-3xl p-8 text-center text-xs sm:text-sm text-[#8E8E93]">
+          Hozircha bu bo'limda test variantlari qo'shilmagan.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {activeModeTests.map((test, index) => {
+            return (
+              <div 
+                key={test.id || index}
+                className="bg-[#1C1C1E] border border-white/5 hover:border-white/15 rounded-3xl p-4 sm:p-5 flex flex-col justify-between gap-4 transition-all shadow-md group"
               >
-                <span>Testni boshlash</span>
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          );
-        })}
-      </div>
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="space-y-1">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${test.badgeColor || 'bg-white/10 text-white border-white/10'}`}>
+                        {test.badge}
+                      </span>
+                      <h4 className="text-white font-bold text-sm sm:text-base group-hover:text-blue-300 transition-colors pt-1">
+                        {test.title}
+                      </h4>
+                    </div>
+
+                    <div className="w-8 h-8 rounded-xl bg-[#242426] flex items-center justify-center text-white/70 flex-shrink-0 text-xs font-mono font-bold">
+                      #{index + 1}
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-[#8E8E93] leading-relaxed">
+                    {test.description}
+                  </p>
+
+                  {/* Specs Chips */}
+                  <div className="flex items-center flex-wrap gap-2 text-[11px]">
+                    <div className="bg-[#242426] px-2.5 py-1 rounded-xl text-white/80 flex items-center gap-1">
+                      <FileText className="w-3 h-3 text-blue-400" />
+                      <span>{test.questionCount} ta savol</span>
+                    </div>
+                    <div className="bg-[#242426] px-2.5 py-1 rounded-xl text-white/80 flex items-center gap-1">
+                      <Clock className="w-3 h-3 text-amber-400" />
+                      <span>{formatDurationLabel(test.durationMinutes)}</span>
+                    </div>
+                    <div className={`px-2.5 py-1 rounded-xl border ${test.difficultyColor || 'text-amber-400 bg-amber-400/10 border-amber-400/20'}`}>
+                      <span>{test.difficulty}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Start Button */}
+                <button
+                  type="button"
+                  onClick={() => handleStartExam(test)}
+                  className={`w-full bg-gradient-to-r ${buttonGradient} hover:brightness-110 text-white font-bold py-3 px-4 rounded-2xl text-xs flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all cursor-pointer`}
+                >
+                  <span>Testni boshlash</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { mockSubjects, mockCourses, mockLessons, mockProgress } from '../mock/data';
+import { mergeExamPortalData } from './examDefaults';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://rcpbepcdgbxjncpxeowx.supabase.co';
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjcGJlcGNkZ2J4am5jcHhlb3d4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwMTQyNTAsImV4cCI6MjEwMzU5MDI1MH0.icLRyq0piPK_aITPZDu42nFOG9_jyfzVc7lwuckubbM';
@@ -281,6 +282,16 @@ const readSiteMetadata = async () => {
     }
   } catch {}
   return {};
+};
+
+export const getExamPortalData = async (subjectRows = []) => {
+  try {
+    const meta = await readSiteMetadata();
+    return mergeExamPortalData(meta?.exam_portal_data || null, subjectRows);
+  } catch (e) {
+    console.warn('Error fetching exam portal data:', e);
+    return mergeExamPortalData(null, subjectRows);
+  }
 };
 
 export const getCourses = async (subjectId, prefetchedMeta = null) => {

@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { mockStats, mockRedZones, mockCourses, mockLessons, mockTeachers, mockAllUsers } from '../mock/data';
+import { mergeExamPortalData } from './examDefaults';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://rcpbepcdgbxjncpxeowx.supabase.co';
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjcGJlcGNkZ2J4am5jcHhlb3d4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwMTQyNTAsImV4cCI6MjEwMzU5MDI1MH0.icLRyq0piPK_aITPZDu42nFOG9_jyfzVc7lwuckubbM';
@@ -617,6 +618,24 @@ export const api = {
       console.error('Error updating site metadata:', e);
       return { success: false, error: e.message };
     }
+  },
+
+  // Testlar & Exam Portal Configuration (Synced via shared metadata)
+  getExamPortalData: async (subjectRows = []) => {
+    try {
+      const meta = await api._readSiteMeta();
+      return mergeExamPortalData(meta?.exam_portal_data || null, subjectRows);
+    } catch (e) {
+      console.warn('Error fetching exam portal data:', e);
+      return mergeExamPortalData(null, subjectRows);
+    }
+  },
+
+  saveExamPortalData: async (examPortalData) => {
+    return api._mergeSiteMeta((meta) => ({
+      ...meta,
+      exam_portal_data: examPortalData
+    }));
   },
 
   // Support Contacts Management (Superadmin)

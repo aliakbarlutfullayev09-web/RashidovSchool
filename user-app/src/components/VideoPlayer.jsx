@@ -8,6 +8,7 @@ import CheckpointModal from './CheckpointModal';
 import GlossaryPanel from './GlossaryPanel';
 import { formatTime } from '../utils/formatters';
 import { useHaptic } from '../hooks/useHaptic';
+import { useIsDesktop } from '../hooks/useIsDesktop';
 import { getWatchProgress, saveWatchProgress, incrementViewCount, saveLessonQuizProgress } from '../api/supabase';
 
 export default function VideoPlayer({ 
@@ -24,16 +25,26 @@ export default function VideoPlayer({
   const containerRef = useRef(null);
   const seekbarRef = useRef(null);
   const { impactLight, impactMedium, notificationSuccess } = useHaptic();
+  const isDesktop = useIsDesktop();
 
-  // Orientation state
-  const [isLandscape, setIsLandscape] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return window.innerWidth > window.innerHeight;
+  // Orientation & viewport state
+  const [viewportInfo, setViewportInfo] = useState(() => {
+    if (typeof window === 'undefined') return { isLandscape: false, isTablet: false };
+    return {
+      isLandscape: window.innerWidth > window.innerHeight,
+      isTablet: window.innerWidth >= 640
+    };
   });
+  const isLandscape = viewportInfo.isLandscape;
+  const isTablet = viewportInfo.isTablet;
+  const isOverlayLayout = isLandscape || isDesktop;
 
   useEffect(() => {
     const handleOrientation = () => {
-      setIsLandscape(window.innerWidth > window.innerHeight);
+      setViewportInfo({
+        isLandscape: window.innerWidth > window.innerHeight,
+        isTablet: window.innerWidth >= 640
+      });
     };
     window.addEventListener('resize', handleOrientation);
     window.addEventListener('orientationchange', handleOrientation);
@@ -88,6 +99,9 @@ export default function VideoPlayer({
   const isSeekingRef = useRef(false);
   const maxWatchedRef = useRef(0);
   const controlsTimeoutRef = useRef(null);
+  const singleTapTimerRef = useRef(null);
+  const ignoreNextClickUntilRef = useRef(0);
+  const doubleTappedRef = useRef(false);
 
   // Expose onBack to window for Telegram native BackButton
   useEffect(() => {
@@ -133,26 +147,32 @@ export default function VideoPlayer({
   // Auto-hide controls timer
   const resetControlsTimeout = useCallback(() => {
     if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
-    if (isPlaying && !isGlossaryOpen) {
+    if (showControls && isPlaying && !isGlossaryOpen && !isEnded && !activeCheckpoint) {
       controlsTimeoutRef.current = setTimeout(() => {
         setShowControls(false);
       }, 4000);
     }
-  }, [isPlaying, isGlossaryOpen]);
+  }, [showControls, isPlaying, isGlossaryOpen, isEnded, activeCheckpoint]);
 
-  // Single tap toggles controls visibility
+  useEffect(() => {
+    resetControlsTimeout();
+    return () => {
+      if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+    };
+  }, [resetControlsTimeout]);
+
+  useEffect(() => {
+    return () => {
+      if (singleTapTimerRef.current) clearTimeout(singleTapTimerRef.current);
+      if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+    };
+  }, []);
+
+  // Single tap toggles controls visibility cleanly without immediate flicker
   const handleToggleControls = useCallback(() => {
-    setShowControls(prev => {
-      const next = !prev;
-      if (next && isPlaying && !isGlossaryOpen) {
-        if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
-        controlsTimeoutRef.current = setTimeout(() => {
-          setShowControls(false);
-        }, 4000);
-      }
-      return next;
-    });
-  }, [isPlaying, isGlossaryOpen]);
+    if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+    setShowControls(prev => !prev);
+  }, []);
 
   // Show friendly seek toast
   const showSeekToast = useCallback((msg) => {
@@ -211,9 +231,14 @@ export default function VideoPlayer({
   // ── PINCH-TO-ZOOM TOUCH LISTENERS ──
   const handleTouchStart = (e) => {
     const now = Date.now();
+    ignoreNextClickUntilRef.current = now + 800;
     touchStateRef.current.hasMoved = false;
 
     if (e.touches.length === 2) {
+      if (singleTapTimerRef.current) {
+        clearTimeout(singleTapTimerRef.current);
+        singleTapTimerRef.current = null;
+      }
       // 2 Fingers: Start Pinch-to-zoom
       const dist = Math.hypot(
         e.touches[0].clientX - e.touches[1].clientX,
@@ -230,19 +255,23 @@ export default function VideoPlayer({
       touchStateRef.current.initialPan = { ...panOffset };
 
       // Double-tap detection (within 300ms)
-      if (now - touchStateRef.current.lastTapTime < 320) {
+      if (now - touchStateRef.current.lastTapTime < 300) {
+        if (singleTapTimerRef.current) {
+          clearTimeout(singleTapTimerRef.current);
+          singleTapTimerRef.current = null;
+        }
+        doubleTappedRef.current = true;
         impactLight();
         if (zoomScale > 1.1) {
-          // Reset zoom
           setZoomScale(1);
           setPanOffset({ x: 0, y: 0 });
         } else {
-          // Zoom in to 2.0x
           setZoomScale(2.0);
         }
         touchStateRef.current.lastTapTime = 0;
         return;
       }
+      doubleTappedRef.current = false;
       touchStateRef.current.lastTapTime = now;
     }
   };
@@ -263,38 +292,49 @@ export default function VideoPlayer({
           setPanOffset({ x: 0, y: 0 });
         }
       }
-    } else if (e.touches.length === 1 && zoomScale > 1.05) {
-      // 1 finger panning when zoomed in
+    } else if (e.touches.length === 1) {
       const t = e.touches[0];
-      const deltaX = t.clientX - touchStateRef.current.panStart.x;
-      const deltaY = t.clientY - touchStateRef.current.panStart.y;
-      if (Math.abs(deltaX) > 4 || Math.abs(deltaY) > 4) {
+      const moveX = Math.abs(t.clientX - touchStateRef.current.tapStart.x);
+      const moveY = Math.abs(t.clientY - touchStateRef.current.tapStart.y);
+      if (moveX > 8 || moveY > 8) {
         touchStateRef.current.hasMoved = true;
+        if (singleTapTimerRef.current) {
+          clearTimeout(singleTapTimerRef.current);
+          singleTapTimerRef.current = null;
+        }
       }
 
-      const maxPanX = (zoomScale - 1) * 160;
-      const maxPanY = (zoomScale - 1) * 110;
+      if (zoomScale > 1.05) {
+        // 1 finger panning when zoomed in
+        const deltaX = t.clientX - touchStateRef.current.panStart.x;
+        const deltaY = t.clientY - touchStateRef.current.panStart.y;
+        const maxPanX = (zoomScale - 1) * 160;
+        const maxPanY = (zoomScale - 1) * 110;
 
-      setPanOffset({
-        x: Math.max(-maxPanX, Math.min(maxPanX, touchStateRef.current.initialPan.x + deltaX)),
-        y: Math.max(-maxPanY, Math.min(maxPanY, touchStateRef.current.initialPan.y + deltaY))
-      });
+        setPanOffset({
+          x: Math.max(-maxPanX, Math.min(maxPanX, touchStateRef.current.initialPan.x + deltaX)),
+          y: Math.max(-maxPanY, Math.min(maxPanY, touchStateRef.current.initialPan.y + deltaY))
+        });
+      }
     }
   };
 
   const handleTouchEnd = (e) => {
+    ignoreNextClickUntilRef.current = Date.now() + 800;
     if (e.touches.length < 2) {
       touchStateRef.current.isPinching = false;
     }
-    // If it was a quick single tap without moving and not a double-tap:
+    if (doubleTappedRef.current) {
+      doubleTappedRef.current = false;
+      return;
+    }
+    // Schedule single-tap controls toggle only once (synthetic click is suppressed via ignoreNextClickUntilRef)
     if (!touchStateRef.current.hasMoved && e.changedTouches.length === 1 && !touchStateRef.current.isPinching) {
-      const now = Date.now();
-      // Slight delay to distinguish single tap from double tap
-      setTimeout(() => {
-        if (Date.now() - touchStateRef.current.lastTapTime >= 280) {
-          handleToggleControls();
-        }
-      }, 290);
+      if (singleTapTimerRef.current) clearTimeout(singleTapTimerRef.current);
+      singleTapTimerRef.current = setTimeout(() => {
+        singleTapTimerRef.current = null;
+        handleToggleControls();
+      }, 260);
     }
   };
 
@@ -487,13 +527,15 @@ export default function VideoPlayer({
     >
       {/* ── TOP TELEGRAM-STYLE "TERMINLAR" BUTTON (Positioned below Telegram's ∨ ⋮ capsule) ── */}
       <div 
+        onTouchStart={(e) => e.stopPropagation()}
+        onTouchEnd={(e) => e.stopPropagation()}
         className={`absolute z-40 pointer-events-auto transition-all duration-300 ${
-          isLandscape ? 'right-4' : 'right-3'
+          isOverlayLayout ? 'right-4' : 'right-3'
         } ${
-          isLandscape && !showControls && !isGlossaryOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'
+          isOverlayLayout && !showControls && !isGlossaryOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'
         }`}
         style={{
-          top: isLandscape 
+          top: isOverlayLayout 
             ? 'max(calc(var(--safe-area-top, 0px) + 36px), 56px)' 
             : 'max(calc(var(--safe-area-top, 0px) + 54px), 80px)'
         }}
@@ -505,7 +547,7 @@ export default function VideoPlayer({
             setIsGlossaryOpen(prev => !prev);
           }}
           className={`flex items-center backdrop-blur-xl border shadow-xl transition-all active:scale-95 ${
-            isLandscape
+            isOverlayLayout
               ? 'w-9 h-9 rounded-full justify-center p-0'
               : 'h-8 px-3 rounded-full gap-1.5 text-xs font-semibold'
           } ${
@@ -516,9 +558,9 @@ export default function VideoPlayer({
           title="Dars terminlari"
         >
           <BookOpen className="w-4 h-4 text-purple-300 shrink-0" />
-          {!isLandscape && <span>Terminlar</span>}
+          {!isOverlayLayout && <span>Terminlar</span>}
           {terms.length > 0 && (
-            !isLandscape ? (
+            !isOverlayLayout ? (
               <span className="bg-purple-500/40 text-purple-200 text-[10px] px-1.5 py-0.2 rounded-full font-bold ml-0.5">
                 {terms.length}
               </span>
@@ -531,15 +573,17 @@ export default function VideoPlayer({
 
       {/* Floating Zoom Indicator & Reset Button (Positioned below Telegram's ← Назад) */}
       {zoomScale > 1.05 && (
-        <div 
+        <div
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
           className={`absolute z-40 pointer-events-auto transition-all animate-in fade-in ${
-            isLandscape ? 'left-4' : 'left-3'
+            isOverlayLayout ? 'left-4' : 'left-3'
           } ${
-            isLandscape && !showControls ? 'opacity-0 pointer-events-none' : 'opacity-100'
+            isOverlayLayout && !showControls ? 'opacity-0 pointer-events-none' : 'opacity-100'
           }`}
           style={{
-            top: isLandscape 
-              ? 'max(calc(var(--safe-area-top, 0px) + 36px), 56px)' 
+            top: isOverlayLayout
+              ? 'max(calc(var(--safe-area-top, 0px) + 36px), 56px)'
               : 'max(calc(var(--safe-area-top, 0px) + 54px), 80px)'
           }}
         >
@@ -556,17 +600,24 @@ export default function VideoPlayer({
       {/* ── VIDEO CONTAINER (POSITIONED BELOW BUTTONS IN PORTRAIT & FULLSCREEN IN LANDSCAPE) ── */}
       <div 
         className={`relative w-full overflow-hidden bg-[#0A0A0C] touch-none video-wrapper ${
-          isLandscape 
+          isOverlayLayout
             ? 'h-full flex-1 flex items-center justify-center'
             : 'aspect-video flex items-center justify-center shrink-0 shadow-2xl'
         }`}
         style={{
-          marginTop: isLandscape ? '0px' : 'max(calc(var(--safe-area-top, 0px) + 90px), 118px)'
+          marginTop: isOverlayLayout
+            ? '0px'
+            : isTablet
+              ? 'max(calc(var(--safe-area-top, 0px) + 56px), 76px)'
+              : 'max(calc(var(--safe-area-top, 0px) + 90px), 118px)'
         }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        onClick={handleToggleControls}
+        onClick={() => {
+          if (Date.now() < ignoreNextClickUntilRef.current) return;
+          handleToggleControls();
+        }}
       >
         <video
           ref={videoRef}
@@ -612,7 +663,12 @@ export default function VideoPlayer({
 
         {/* Video Error Message */}
         {hasError && (
-          <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center p-6 text-center z-20">
+          <div
+            onClick={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+            onTouchEnd={(e) => e.stopPropagation()}
+            className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center p-6 text-center z-20"
+          >
             <AlertCircle className="w-12 h-12 text-red-500 mb-3" />
             <h4 className="text-white font-bold text-sm mb-1">Videoni yuklab bo‘lmadi</h4>
             <p className="text-xs text-[#8E8E93] max-w-[240px] mb-4">
@@ -642,7 +698,12 @@ export default function VideoPlayer({
 
         {/* Stop-Test Checkpoint Overlay */}
         {activeCheckpoint && (
-          <div onClick={(e) => e.stopPropagation()} className="z-30">
+          <div
+            onClick={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+            onTouchEnd={(e) => e.stopPropagation()}
+            className="z-30"
+          >
             <CheckpointModal 
               checkpoint={activeCheckpoint} 
               onAnswer={handleAnswerCheckpoint} 
@@ -651,20 +712,22 @@ export default function VideoPlayer({
         )}
       </div>
 
-      {/* ── CONTROLS & ENHANCED SEEKBAR ── */}
+      {/* ── CONTROLS & ENHANCED SEEKBAR (Full width horizontally across tablet & PC) ── */}
       <div 
         onClick={(e) => e.stopPropagation()}
-        className={`w-full max-w-2xl mx-auto px-4 py-3 z-30 transition-all duration-300 ${
-          isLandscape 
+        onTouchStart={(e) => e.stopPropagation()}
+        onTouchEnd={(e) => e.stopPropagation()}
+        className={`w-full max-w-none px-4 sm:px-8 py-3 z-30 transition-all duration-300 ${
+          isOverlayLayout 
             ? 'absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black/80 to-transparent' 
             : 'bg-[#121214] border-b border-white/[0.06]'
         } ${
           showControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'
         }`}
         style={{
-          paddingBottom: isLandscape ? 'max(calc(var(--safe-area-bottom, 0px) + 12px), 16px)' : '10px',
-          paddingLeft: isLandscape ? 'max(calc(var(--safe-area-left, 0px) + 16px), 20px)' : '16px',
-          paddingRight: isLandscape ? 'max(calc(var(--safe-area-right, 0px) + 16px), 20px)' : '16px'
+          paddingBottom: isOverlayLayout ? 'max(calc(var(--safe-area-bottom, 0px) + 12px), 16px)' : '10px',
+          paddingLeft: isOverlayLayout ? 'max(calc(var(--safe-area-left, 0px) + 20px), 24px)' : undefined,
+          paddingRight: isOverlayLayout ? 'max(calc(var(--safe-area-right, 0px) + 20px), 24px)' : undefined
         }}
       >
         {/* Seekbar Container with comfortable 32px touch target */}
@@ -804,12 +867,12 @@ export default function VideoPlayer({
         )}
       </div>
 
-      {/* ── PORTRAIT MODE: TERMS & LESSON DETAILS BELOW VIDEO ── */}
-      {!isLandscape && (
-        <div className="flex-1 overflow-y-auto bg-[#0E0E10] flex flex-col no-scrollbar">
+      {/* ── PORTRAIT MODE: TERMS BELOW VIDEO ── */}
+      {!isOverlayLayout && (
+        <div className="flex-1 overflow-y-auto bg-[#000000] flex flex-col no-scrollbar">
           {isGlossaryOpen ? (
             /* Dedicated Terms List Section displayed below video */
-            <div className="p-4 space-y-3 flex-1 flex flex-col">
+            <div className="p-4 sm:px-8 space-y-3 flex-1 flex flex-col">
               <div className="flex items-center justify-between pb-2 border-b border-white/[0.08]">
                 <div className="flex items-center gap-2">
                   <div className="w-7 h-7 rounded-lg bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-300">
@@ -885,28 +948,9 @@ export default function VideoPlayer({
               )}
             </div>
           ) : (
-            /* Collapsed / Normal State: Lesson Info and Quick Action */
-            <div className="p-4 space-y-4">
-              <div className="bg-[#161618] border border-white/5 p-4 rounded-2xl space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] uppercase tracking-wider font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full">
-                    Dars jarayoni
-                  </span>
-                  <span className="text-[10px] text-[#8E8E93]">
-                    {Math.round((maxWatchedSeconds / (duration || 1)) * 100)}% ko‘rildi
-                  </span>
-                </div>
-                <h3 className="font-bold text-white text-sm">{lessonTitle}</h3>
-                <div className="w-full bg-[#2C2C2E] h-1.5 rounded-full overflow-hidden">
-                  <div 
-                    className="bg-[#007AFF] h-full rounded-full transition-all duration-300" 
-                    style={{ width: `${Math.min(100, (maxWatchedSeconds / (duration || 1)) * 100)}%` }}
-                  />
-                </div>
-              </div>
-
-              {/* Tap to open terms button if terms exist */}
-              {terms.length > 0 && (
+            /* Tap to open terms button if terms exist (Dars jarayoni card removed) */
+            terms.length > 0 && (
+              <div className="p-4 sm:px-8">
                 <button
                   onClick={() => setIsGlossaryOpen(true)}
                   className="w-full py-3 px-4 rounded-2xl bg-[#1C1C1E] hover:bg-[#242426] border border-purple-500/25 flex items-center justify-between text-xs font-bold text-purple-300 active:scale-[0.98] transition-all"
@@ -919,14 +963,14 @@ export default function VideoPlayer({
                     {terms.length} ta termin
                   </span>
                 </button>
-              )}
-            </div>
+              </div>
+            )
           )}
         </div>
       )}
 
-      {/* ── LANDSCAPE MODE: GLOSSARY RIGHT SIDEBAR DRAWER ── */}
-      {isLandscape && (
+      {/* ── LANDSCAPE / PC MODE: GLOSSARY RIGHT SIDEBAR DRAWER ── */}
+      {isOverlayLayout && (
         <GlossaryPanel
           isOpen={isGlossaryOpen}
           onClose={() => setIsGlossaryOpen(false)}
