@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, BookOpen, Clock, Lock, Sparkles } from 'lucide-react';
 import { formatTime } from '../utils/formatters';
 import { useHaptic } from '../hooks/useHaptic';
+import { useLanguage } from '../context/LanguageContext';
 
 export default function GlossaryPanel({
   isOpen,
@@ -13,6 +14,7 @@ export default function GlossaryPanel({
   onBlockedTimestamp
 }) {
   const { impactLight, impactMedium } = useHaptic();
+  const { lang } = useLanguage();
 
   const handleTermClick = (term) => {
     if (term.timestamp === undefined || term.timestamp === null) return;
@@ -68,9 +70,13 @@ export default function GlossaryPanel({
                   <BookOpen className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-white font-bold text-sm leading-tight">Dars terminlari</h3>
+                  <h3 className="text-white font-bold text-sm leading-tight">
+                    {lang === 'ru' ? 'Термины урока' : 'Dars terminlari'}
+                  </h3>
                   <span className="text-[11px] text-[#8E8E93]">
-                    {terms.length > 0 ? `${terms.length} ta termin` : "Lug'at"}
+                    {terms.length > 0
+                      ? (lang === 'ru' ? `${terms.length} терминов` : `${terms.length} ta termin`)
+                      : (lang === 'ru' ? 'Словарь' : "Lug'at")}
                   </span>
                 </div>
               </div>
@@ -78,7 +84,7 @@ export default function GlossaryPanel({
               <button
                 onClick={onClose}
                 className="w-8 h-8 rounded-full bg-[#1C1C1E] border border-white/10 flex items-center justify-center text-[#8E8E93] hover:text-white active:scale-95 transition-transform"
-                title="Yopish"
+                title={lang === 'ru' ? 'Закрыть' : 'Yopish'}
               >
                 <X className="w-4 h-4" />
               </button>
@@ -134,7 +140,9 @@ export default function GlossaryPanel({
 
                       {hasTimestamp && !isAccessible && (
                         <span className="block mt-2 text-[10px] text-amber-400/80 font-medium">
-                          🔒 Ushbu qismni ko‘rish uchun darsni davom ettiring
+                          {lang === 'ru'
+                            ? 'Посмотрите видео до этого момента, чтобы открыть'
+                            : 'Ushbu qismni ko‘rish uchun darsni davom ettiring'}
                         </span>
                       )}
                     </div>
@@ -143,12 +151,16 @@ export default function GlossaryPanel({
               ) : (
                 /* Honest Empty State */
                 <div className="h-full flex flex-col items-center justify-center text-center p-6 my-auto">
-                  <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-xl mb-3 text-[#8E8E93]">
-                    📖
+                  <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-3 text-[#8E8E93]">
+                    <BookOpen className="w-5 h-5" />
                   </div>
-                  <h4 className="text-white font-bold text-xs mb-1">Lug‘at hozircha bo‘sh</h4>
+                  <h4 className="text-white font-bold text-xs mb-1">
+                    {lang === 'ru' ? 'Словарь пока пуст' : 'Lug‘at hozircha bo‘sh'}
+                  </h4>
                   <p className="text-[11px] text-[#8E8E93] max-w-[200px] leading-relaxed">
-                    Ushbu dars uchun terminlar lug‘ati hali kiritilmagan.
+                    {lang === 'ru'
+                      ? 'Словарь терминов для этого урока ещё не добавлен.'
+                      : 'Ushbu dars uchun terminlar lug‘ati hali kiritilmagan.'}
                   </p>
                 </div>
               )}
@@ -157,7 +169,9 @@ export default function GlossaryPanel({
             {/* Bottom Swipe Hint */}
             <div className="px-5 pt-3 border-t border-white/[0.04] text-center">
               <span className="text-[10px] text-[#636366]">
-                Yopish uchun o‘ng tomonga suring (swipe)
+                {lang === 'ru'
+                  ? 'Смахните вправо, чтобы закрыть'
+                  : 'Yopish uchun o‘ng tomonga suring (swipe)'}
               </span>
             </div>
           </motion.div>

@@ -1,9 +1,144 @@
-export function formatDurationLabel(totalMinutes) {
-  const mins = Math.max(1, parseInt(totalMinutes, 10) || 64);
+export function formatDurationLabel(totalMinutes, lang = 'uz') {
+  const mins = Math.max(1, parseInt(totalMinutes, 10) || 100);
+  if (lang === 'ru') {
+    if (mins <= 60) return `${mins} мин`;
+    const hours = Math.floor(mins / 60);
+    const remMins = mins % 60;
+    return remMins > 0 ? `${hours} ч ${remMins} мин` : `${hours} ч`;
+  }
   if (mins <= 60) return `${mins} daq`;
   const hours = Math.floor(mins / 60);
   const remMins = mins % 60;
   return remMins > 0 ? `${hours} soat ${remMins} daq` : `${hours} soat`;
+}
+
+export function localizeDifficulty(difficulty, lang = 'uz') {
+  if (lang !== 'ru') return difficulty;
+  const map = {
+    "O'rta": 'Средний',
+    Yuqori: 'Высокий',
+    Ekspert: 'Эксперт',
+    Murakkab: 'Сложный'
+  };
+  return map[difficulty] || difficulty;
+}
+
+const VARIANT_RU_TRANSLATIONS = {
+  'bio-dtm-1': {
+    badge: 'Начальный',
+    title: 'Вариант 1: Официальная диагностика ДТМ (Стандарт 2024)',
+    description: 'Вопросы по цитологии, ботанике, физиологии и основным биологическим закономерностям.'
+  },
+  'bio-dtm-2': {
+    badge: 'Уровень гранта',
+    title: 'Вариант 2: Отборочный и углублённый ДТМ',
+    description: 'Логические вопросы, задачи по генетике и анализ тканей.'
+  },
+  'bio-dtm-3': {
+    badge: 'Эксперт',
+    title: 'Вариант 3: Фокус на генетике и молекулярной биологии',
+    description: 'Транскрипция, трансляция и генетические расчёты по новому стандарту ДТМ.'
+  },
+  'bio-cert-1': {
+    badge: 'Уровень A+',
+    title: 'Национальный сертификат: Диагностика 1-го этапа (A+ / A)',
+    description: 'Теоретические вопросы, задания на соответствие и генетические задачи по официальному стандарту.'
+  },
+  'bio-cert-2': {
+    badge: 'Олимпиада / A+',
+    title: 'Национальный сертификат: Логический и задачный вариант',
+    description: 'Сборник сложных расчётных задач по генетике и цитологии, включая открытые вопросы.'
+  },
+  'chem-dtm-1': {
+    badge: 'Стандарт ДТМ',
+    title: 'Вариант 1: Официальный ДТМ по химии (Неорганика и органика)',
+    description: 'Периодическая система, химическая связь, окислительно-восстановительные реакции и классы органики.'
+  },
+  'chem-dtm-2': {
+    badge: 'Уровень гранта',
+    title: 'Вариант 2: Задачи и реакции ДТМ по химии',
+    description: 'Углублённые задачи на концентрацию растворов и органические реакции.'
+  },
+  'chem-cert-1': {
+    badge: 'Уровень A+',
+    title: 'Национальный сертификат: Химия — теория и практика',
+    description: 'Тесты по химической кинетике, равновесию и сложным расчётным задачам.'
+  },
+  'math-dtm-1': {
+    badge: 'Стандарт ДТМ',
+    title: 'Вариант 1: Официальный ДТМ по математике (Алгебра и геометрия)',
+    description: 'Функции, квадратные уравнения, тригонометрия и задачи по планиметрии.'
+  },
+  'math-dtm-2': {
+    badge: 'Уровень гранта',
+    title: 'Вариант 2: Комбинаторика и параметры в математике',
+    description: 'Сложные параметрические уравнения, логарифмы и интегралы.'
+  },
+  'math-cert-1': {
+    badge: 'Уровень A+',
+    title: 'Национальный сертификат: Углублённая математика',
+    description: 'Теоретические и практические задания повышенной сложности по стандарту сертификата.'
+  }
+};
+
+const BADGE_RU_MAP = {
+  "Boshlang'ich": 'Начальный',
+  'Grant darajasi': 'Уровень гранта',
+  Ekspert: 'Эксперт',
+  'A+ Daraja': 'Уровень A+',
+  'Olimpiada / A+': 'Олимпиада / A+',
+  'Standart DTM': 'Стандарт ДТМ'
+};
+
+export function localizeVariant(variant, lang = 'uz') {
+  if (!variant || lang !== 'ru') return variant;
+  const preset = VARIANT_RU_TRANSLATIONS[variant.id];
+  const mappedBadge = BADGE_RU_MAP[variant.badge] || preset?.badge || variant.badge;
+  let localizedTitle = preset?.title || variant.title;
+  if (!preset?.title && typeof variant.title === 'string') {
+    localizedTitle = variant.title.replace(/^(\d+)\s*-\s*Variant\b/i, 'Вариант $1');
+  }
+  return {
+    ...variant,
+    badge: mappedBadge,
+    title: localizedTitle,
+    description: preset?.description || variant.description
+  };
+}
+
+export function localizeModeConfig(modeKey, modeCfg, lang = 'uz') {
+  if (!modeCfg || lang !== 'ru') return modeCfg;
+  const isCert = modeKey === 'sertifikat';
+  const def = DEFAULT_MODE_SETTINGS[modeKey] || {};
+  return {
+    ...modeCfg,
+    badge: modeCfg.badge === def.badge
+      ? (isCert ? 'Гос. образовательный стандарт' : 'Государственный центр тестирования (ГЦТ)')
+      : modeCfg.badge,
+    title: modeCfg.title === def.title
+      ? (isCert ? 'Национальный сертификат' : 'ДТМ Мок-тест')
+      : modeCfg.title,
+    description: modeCfg.description === def.description
+      ? (isCert
+          ? 'Многоуровневая углублённая система оценки с присвоением уровней A+, A, B+, B.'
+          : 'Диагностика по официальному стандарту вступительных экзаменов в вузы.')
+      : modeCfg.description,
+    features: (modeCfg.features || []).map((feat) => {
+      if (feat === "A+ dan C gacha bo'lgan rasmiy darajani aniqlash") {
+        return 'Определение официального уровня от A+ до C';
+      }
+      if (feat === "Mantiqiy yechimlar va chuqur tahliliy ko'rsatmalar") {
+        return 'Логические решения и подробные аналитические разборы';
+      }
+      if (feat === "Har bir to'g'ri javob uchun 3.1 ball") {
+        return 'За каждый правильный ответ — 3.1 балла';
+      }
+      if (feat === 'Anti-cheat nazorati va vaqt taymeri') {
+        return 'Контроль анти-чит и таймер экзамена';
+      }
+      return feat;
+    })
+  };
 }
 
 export function normalizeSubjectKey(subjectOrKey) {
@@ -29,7 +164,7 @@ export const DEFAULT_MODE_SETTINGS = {
     title: "Milliy Sertifikat",
     description: "A+, A, B+, B darajalarini taqdim etuvchi ko'p bosqichli chuqurlashtirilgan baholash tizimi.",
     questionCount: 40,
-    durationMinutes: 64,
+    durationMinutes: 100,
     maxScore: 75,
     features: [
       "A+ dan C gacha bo'lgan rasmiy darajani aniqlash",
@@ -217,7 +352,7 @@ export const DEFAULT_EXAM_PORTAL_DATA = {
           badge: "A+ Daraja",
           badgeColor: "bg-amber-500/15 text-amber-400 border-amber-500/30",
           questionCount: 40,
-          durationMinutes: 64,
+          durationMinutes: 100,
           maxScore: 75,
           difficulty: "Yuqori",
           difficultyColor: "text-amber-400 bg-amber-400/10 border-amber-400/20",
@@ -254,7 +389,7 @@ export const DEFAULT_EXAM_PORTAL_DATA = {
           badge: "Olimpiada / A+",
           badgeColor: "bg-purple-500/15 text-purple-400 border-purple-500/30",
           questionCount: 40,
-          durationMinutes: 64,
+          durationMinutes: 100,
           maxScore: 75,
           difficulty: "Ekspert",
           difficultyColor: "text-purple-400 bg-purple-400/10 border-purple-400/20",
@@ -369,7 +504,7 @@ export const DEFAULT_EXAM_PORTAL_DATA = {
           badge: "A+ Daraja",
           badgeColor: "bg-amber-500/15 text-amber-400 border-amber-500/30",
           questionCount: 40,
-          durationMinutes: 64,
+          durationMinutes: 100,
           maxScore: 75,
           difficulty: "Yuqori",
           difficultyColor: "text-amber-400 bg-amber-400/10 border-amber-400/20",
@@ -476,7 +611,7 @@ export const DEFAULT_EXAM_PORTAL_DATA = {
           badge: "A+ Daraja",
           badgeColor: "bg-amber-500/15 text-amber-400 border-amber-500/30",
           questionCount: 40,
-          durationMinutes: 64,
+          durationMinutes: 100,
           maxScore: 75,
           difficulty: "Yuqori",
           difficultyColor: "text-amber-400 bg-amber-400/10 border-amber-400/20",

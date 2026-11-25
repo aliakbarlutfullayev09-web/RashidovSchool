@@ -2,14 +2,20 @@ import React from 'react';
 import { ArrowLeft } from 'lucide-react';
 import RashidovLogo from './RashidovLogo';
 import { useIsDesktop } from '../hooks/useIsDesktop';
+import { useTheme } from '../context/ThemeContext';
+import { useLanguage } from '../context/LanguageContext';
 
 /**
- * Unified OLED Glassmorphism Header with strictly horizontally centered Rashidov SCHOOL logo.
+ * Unified Glassmorphism Header with strictly horizontally centered Rashidov SCHOOL logo.
  * Applied uniformly across all sections (Darslar, Testlar, Reyting, Profil).
  * Completely hidden on Desktop (Telegram Desktop already provides native window header).
  */
 export default function Header({ onBack, showBackButton = false }) {
   const isDesktop = useIsDesktop();
+  const { resolvedTheme } = useTheme();
+  const { t } = useLanguage();
+  const isLight = resolvedTheme === 'light';
+
   if (isDesktop) return null;
 
   return (
@@ -25,8 +31,12 @@ export default function Header({ onBack, showBackButton = false }) {
         {showBackButton && typeof onBack === 'function' && (
           <button
             onClick={onBack}
-            className="absolute left-4 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-[#1C1C1E]/80 border border-white/10 flex items-center justify-center text-white active:scale-95 transition-transform"
-            title="Orqaga"
+            className={`absolute left-4 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full border flex items-center justify-center active:scale-95 transition-all ${
+              isLight
+                ? 'bg-white/95 hover:bg-gray-100 border-black/10 text-[#1C1C1E] shadow-sm'
+                : 'bg-[#1C1C1E]/80 border-white/10 text-white'
+            }`}
+            title={t('orqaga')}
           >
             <ArrowLeft className="w-4 h-4" />
           </button>
@@ -39,7 +49,11 @@ export default function Header({ onBack, showBackButton = false }) {
       </div>
 
       {/* Soft gradient scrim fading out underneath */}
-      <div className="absolute top-full left-0 right-0 h-5 bg-gradient-to-b from-[#0a0a0c]/85 to-transparent pointer-events-none" />
+      <div
+        className={`absolute top-full left-0 right-0 h-5 bg-gradient-to-b pointer-events-none ${
+          isLight ? 'from-[#F2F2F7]/85 to-transparent' : 'from-[#0a0a0c]/85 to-transparent'
+        }`}
+      />
     </header>
   );
 }

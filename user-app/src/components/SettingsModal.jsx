@@ -175,14 +175,14 @@ export default function SettingsModal({ isOpen, onClose, inlineDesktop = false }
       transition={{ duration: 0.2 }}
       className={`${
         isDesktop && inlineDesktop
-          ? 'w-full max-w-[420px] h-[min(720px,calc(100vh-48px))] rounded-[32px] border border-white/10 shadow-2xl overflow-hidden flex flex-col select-none'
+          ? 'w-full max-w-[420px] h-[min(720px,calc(100vh-48px))] rounded-[32px] border shadow-2xl overflow-hidden flex flex-col select-none'
           : isDesktop
-          ? 'fixed z-10 flex flex-col select-none pointer-events-auto right-10 top-1/2 -translate-y-1/2 w-[420px] max-w-[420px] h-[min(720px,calc(100vh-60px))] rounded-[32px] border border-white/10 shadow-2xl overflow-hidden'
+          ? 'fixed z-10 flex flex-col select-none pointer-events-auto right-10 top-1/2 -translate-y-1/2 w-[420px] max-w-[420px] h-[min(720px,calc(100vh-60px))] rounded-[32px] border shadow-2xl overflow-hidden'
           : 'fixed inset-0 z-10 flex flex-col select-none pointer-events-auto'
       } ${
-        isLight 
-          ? 'bg-[#F2F2F7] text-gray-900' 
-          : 'bg-[#121214] text-white'
+        isLight
+          ? 'bg-[#F2F2F7] text-gray-900 border-black/10'
+          : 'bg-[#121214] text-white border-white/10'
       }`}
     >
           {/* Header with centered title between Telegram's back and menu controls */}
@@ -203,13 +203,17 @@ export default function SettingsModal({ isOpen, onClose, inlineDesktop = false }
               </h3>
             </div>
 
-            {/* Desktop Close Button */}
-            {isDesktop && (
+            {/* Close Button (Desktop and Mobile Web browsers) */}
+            {(isDesktop || (typeof window !== 'undefined' && !window.Telegram?.WebApp?.initData)) && (
               <button
                 type="button"
                 onClick={onClose}
-                aria-label="Yopish"
-                className="absolute right-4 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/80 hover:text-white transition-all cursor-pointer"
+                aria-label={t('yopish')}
+                className={`absolute right-4 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer ${
+                  isLight
+                    ? 'bg-black/5 hover:bg-black/10 text-gray-700'
+                    : 'bg-white/10 hover:bg-white/20 text-white/80 hover:text-white'
+                }`}
               >
                 <X className="w-4 h-4" />
               </button>

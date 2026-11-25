@@ -1,5 +1,5 @@
 export function formatDurationLabel(totalMinutes) {
-  const mins = Math.max(1, parseInt(totalMinutes, 10) || 64);
+  const mins = Math.max(1, parseInt(totalMinutes, 10) || 100);
   if (mins <= 60) return `${mins} daq`;
   const hours = Math.floor(mins / 60);
   const remMins = mins % 60;
@@ -29,7 +29,7 @@ export const DEFAULT_MODE_SETTINGS = {
     title: "Milliy Sertifikat",
     description: "A+, A, B+, B darajalarini taqdim etuvchi ko'p bosqichli chuqurlashtirilgan baholash tizimi.",
     questionCount: 40,
-    durationMinutes: 64,
+    durationMinutes: 100,
     maxScore: 75,
     features: [
       "A+ dan C gacha bo'lgan rasmiy darajani aniqlash",
@@ -217,7 +217,7 @@ export const DEFAULT_EXAM_PORTAL_DATA = {
           badge: "A+ Daraja",
           badgeColor: "bg-amber-500/15 text-amber-400 border-amber-500/30",
           questionCount: 40,
-          durationMinutes: 64,
+          durationMinutes: 100,
           maxScore: 75,
           difficulty: "Yuqori",
           difficultyColor: "text-amber-400 bg-amber-400/10 border-amber-400/20",
@@ -254,7 +254,7 @@ export const DEFAULT_EXAM_PORTAL_DATA = {
           badge: "Olimpiada / A+",
           badgeColor: "bg-purple-500/15 text-purple-400 border-purple-500/30",
           questionCount: 40,
-          durationMinutes: 64,
+          durationMinutes: 100,
           maxScore: 75,
           difficulty: "Ekspert",
           difficultyColor: "text-purple-400 bg-purple-400/10 border-purple-400/20",
@@ -369,7 +369,7 @@ export const DEFAULT_EXAM_PORTAL_DATA = {
           badge: "A+ Daraja",
           badgeColor: "bg-amber-500/15 text-amber-400 border-amber-500/30",
           questionCount: 40,
-          durationMinutes: 64,
+          durationMinutes: 100,
           maxScore: 75,
           difficulty: "Yuqori",
           difficultyColor: "text-amber-400 bg-amber-400/10 border-amber-400/20",
@@ -476,7 +476,7 @@ export const DEFAULT_EXAM_PORTAL_DATA = {
           badge: "A+ Daraja",
           badgeColor: "bg-amber-500/15 text-amber-400 border-amber-500/30",
           questionCount: 40,
-          durationMinutes: 64,
+          durationMinutes: 100,
           maxScore: 75,
           difficulty: "Yuqori",
           difficultyColor: "text-amber-400 bg-amber-400/10 border-amber-400/20",

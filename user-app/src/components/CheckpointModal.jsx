@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle2, XCircle, Sparkles } from 'lucide-react';
 import { useHaptic } from '../hooks/useHaptic';
+import { useLanguage } from '../context/LanguageContext';
 
 export default function CheckpointModal({ checkpoint, onAnswer }) {
+  const { lang } = useLanguage();
   const [selected, setSelected] = useState(null);
   const [status, setStatus] = useState(null); // 'correct' | 'wrong'
   const { notificationSuccess, notificationError, impactMedium } = useHaptic();
@@ -49,7 +51,7 @@ export default function CheckpointModal({ checkpoint, onAnswer }) {
           {/* Badge */}
           <div className="inline-flex items-center gap-1.5 bg-amber-500/20 border border-amber-500/30 text-amber-300 px-3 py-1 rounded-full text-xs font-bold mb-4">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Stop-Test Savoli</span>
+            <span>{lang === 'ru' ? 'Вопрос по видео' : 'Stop-Test Savoli'}</span>
           </div>
 
           <h3 className="text-white font-bold text-lg leading-snug mb-6">
@@ -97,12 +99,16 @@ export default function CheckpointModal({ checkpoint, onAnswer }) {
 
           {status === 'wrong' && (
             <p className="text-xs text-red-300 mt-4 font-medium animate-pulse">
-              ❌ Noto'g'ri! Tushuntirish qismiga qaytarilmoqda...
+              {lang === 'ru'
+                ? 'Неверно! Возвращаемся к фрагменту объяснения...'
+                : "❌ Noto'g'ri! Tushuntirish qismiga qaytarilmoqda..."}
             </p>
           )}
           {status === 'correct' && (
             <p className="text-xs text-emerald-300 mt-4 font-medium">
-              ✅ Ajoyib! Video davom etmoqda...
+              {lang === 'ru'
+                ? 'Отлично! Продолжаем просмотр видео...'
+                : '✅ Ajoyib! Video davom etmoqda...'}
             </p>
           )}
         </motion.div>

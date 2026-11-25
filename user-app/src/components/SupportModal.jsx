@@ -185,13 +185,17 @@ export default function SupportModal({ isOpen, onClose, inlineDesktop = false })
               </h3>
             </div>
 
-            {/* Desktop Close Button */}
-            {isDesktop && (
+            {/* Close Button (Desktop and Mobile Web browsers) */}
+            {(isDesktop || (typeof window !== 'undefined' && !window.Telegram?.WebApp?.initData)) && (
               <button
                 type="button"
                 onClick={onClose}
-                aria-label="Yopish"
-                className="absolute right-4 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/80 hover:text-white transition-all cursor-pointer"
+                aria-label={lang === 'ru' ? 'Закрыть' : 'Yopish'}
+                className={`absolute right-4 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer ${
+                  isLight
+                    ? 'bg-black/5 hover:bg-black/10 text-gray-700'
+                    : 'bg-white/10 hover:bg-white/20 text-white/80 hover:text-white'
+                }`}
               >
                 <X className="w-4 h-4" />
               </button>
@@ -223,7 +227,7 @@ export default function SupportModal({ isOpen, onClose, inlineDesktop = false })
                   <div className={`w-8 h-8 rounded-xl border flex items-center justify-center shrink-0 ${cat.iconBg}`}>
                     {cat.icon}
                   </div>
-                  <h4 className="font-bold text-sm leading-tight text-white/95">
+                  <h4 className={`font-bold text-sm leading-tight ${isLight ? 'text-[#1C1C1E]' : 'text-white/95'}`}>
                     {cat.title}
                   </h4>
                 </div>
@@ -234,7 +238,9 @@ export default function SupportModal({ isOpen, onClose, inlineDesktop = false })
                   {/* Phone Call Button (Displays phone number directly) */}
                   <button
                     onClick={() => handleCallPhone(phoneNum)}
-                    className="flex-1 py-2.5 px-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 flex items-center justify-center gap-2 text-emerald-400 font-bold text-xs active:scale-[0.98] transition-all min-w-0"
+                    className={`flex-1 py-2.5 px-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 flex items-center justify-center gap-2 font-bold text-xs active:scale-[0.98] transition-all min-w-0 ${
+                      isLight ? 'text-emerald-700' : 'text-emerald-400'
+                    }`}
                     title={phoneNum}
                   >
                     <Phone className="w-3.5 h-3.5 shrink-0" />

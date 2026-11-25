@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Play } from 'lucide-react';
 import SubjectBannerEffects from './SubjectBannerEffects';
 import { useHaptic } from '../hooks/useHaptic';
+import { useLanguage } from '../context/LanguageContext';
+import { useTheme } from '../context/ThemeContext';
 
 /**
  * Desktop Subject Carousel
@@ -23,6 +25,9 @@ export default function DesktopSubjectCarousel({
   compact = false
 }) {
   const { impactLight, impactMedium } = useHaptic();
+  const { lang } = useLanguage();
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === 'light';
 
   // Normalize subjects: strictly Biologiya -> Kimyo -> Matematika
   const sortedSubjects = useMemo(() => {
@@ -72,6 +77,11 @@ export default function DesktopSubjectCarousel({
   const containerRef = useRef(null);
   const trackRef = useRef(null);
   const isResettingRef = useRef(false);
+  const virtualIndexRef = useRef(virtualIndex);
+
+  useEffect(() => {
+    virtualIndexRef.current = virtualIndex;
+  }, [virtualIndex]);
 
   const activeCanonical = ((virtualIndex % total) + total) % total;
 
@@ -88,43 +98,47 @@ export default function DesktopSubjectCarousel({
     }
   }, []);
 
-  // Synchronize internal virtual index with activeSubjectIndex prop
+  // Re-center without jump when subjects list finishes async load
   useEffect(() => {
-    if (activeSubjectIndex === undefined) return;
-    const currentCanonical = ((virtualIndex % total) + total) % total;
-    if (activeSubjectIndex !== currentCanonical) {
-      let diff = activeSubjectIndex - currentCanonical;
-      if (diff > total / 2) diff -= total;
-      if (diff < -total / 2) diff += total;
-      setWithTransition(true);
-      setVirtualIndex((v) => v + diff);
+    if (sortedSubjects.length === 0) return;
+    const targetCanonical = (activeSubjectIndex || 0) % sortedSubjects.length;
+    const currentIdx = virtualIndexRef.current;
+    const currentCanonical = ((currentIdx % sortedSubjects.length) + sortedSubjects.length) % sortedSubjects.length;
+    if (currentIdx < sortedSubjects.length || currentIdx >= (SETS_COUNT - 1) * sortedSubjects.length || currentCanonical !== targetCanonical) {
+      const snapped = MIDDLE_SET * sortedSubjects.length + targetCanonical;
+      virtualIndexRef.current = snapped;
+      setWithTransition(false);
+      setVirtualIndex(snapped);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setWithTransition(true);
+        });
+      });
     }
-  }, [activeSubjectIndex, total]);
+  }, [sortedSubjects.length, activeSubjectIndex]);
 
   // Navigate to next card (infinite cycle forward)
   const goToNext = useCallback(() => {
     if (total <= 1) return;
     impactLight();
+    const nextV = virtualIndexRef.current + 1;
+    virtualIndexRef.current = nextV;
+    const canonical = ((nextV % total) + total) % total;
     setWithTransition(true);
-    setVirtualIndex((v) => {
-      const nextV = v + 1;
-      const canonical = ((nextV % total) + total) % total;
-      if (onSubjectChange) onSubjectChange(canonical);
-      return nextV;
-    });
+    setVirtualIndex(nextV);
+    if (onSubjectChange) onSubjectChange(canonical);
   }, [total, impactLight, onSubjectChange]);
 
   // Navigate to previous card (infinite cycle backward)
   const goToPrev = useCallback(() => {
     if (total <= 1) return;
     impactLight();
+    const prevV = virtualIndexRef.current - 1;
+    virtualIndexRef.current = prevV;
+    const canonical = ((prevV % total) + total) % total;
     setWithTransition(true);
-    setVirtualIndex((v) => {
-      const prevV = v - 1;
-      const canonical = ((prevV % total) + total) % total;
-      if (onSubjectChange) onSubjectChange(canonical);
-      return prevV;
-    });
+    setVirtualIndex(prevV);
+    if (onSubjectChange) onSubjectChange(canonical);
   }, [total, impactLight, onSubjectChange]);
 
   // Seamless re-centering to middle set after track animation completes
@@ -223,7 +237,7 @@ export default function DesktopSubjectCarousel({
       ref={containerRef}
       role="region"
       aria-roledescription="carousel"
-      aria-label="Fanlar vitrinasi"
+      aria-label={lang === 'ru' ? 'Витрина предметов' : 'Fanlar vitrinasi'}
       tabIndex={0}
       onKeyDown={handleKeyDown}
       onMouseEnter={() => setIsHovered(true)}
@@ -258,7 +272,13 @@ export default function DesktopSubjectCarousel({
             const isMath = norm.includes('mat') || norm.includes('мат') || subject.id === 3 || subject.key === 'matematika';
 
             const subjectKey = isBio ? 'biologiya' : isChem ? 'kimyo' : isMath ? 'matematika' : (subject.key || 'subject');
-            const title = isBio ? 'BIOLOGIYA' : isChem ? 'KIMYO' : isMath ? 'MATEMATIKA' : (subject.name || 'FAN').toUpperCase();
+            const title = isBio
+              ? (lang === 'ru' ? 'БИОЛОГИЯ' : 'BIOLOGIYA')
+              : isChem
+              ? (lang === 'ru' ? 'ХИМИЯ' : 'KIMYO')
+              : isMath
+              ? (lang === 'ru' ? 'МАТЕМАТИКА' : 'MATEMATIKA')
+              : (subject.name || (lang === 'ru' ? 'ПРЕДМЕТ' : 'FAN')).toUpperCase();
 
             // Strict static background image: Biologiya is ALWAYS the verified DNA particle banner
             let image = subject.image_url;
@@ -372,13 +392,13 @@ export default function DesktopSubjectCarousel({
                       }`}
                     >
                       <Play className={isShortLandscape ? 'w-3.5 h-3.5 fill-current' : 'w-5 h-5 fill-current'} />
-                      <span>Boshlash</span>
+                      <span>{lang === 'ru' ? 'Начать' : 'Boshlash'}</span>
                     </button>
                   ) : (
                     <div className={`text-white/60 font-semibold tracking-wide ${
                       isShortLandscape ? 'text-[10px]' : 'text-sm'
                     }`}>
-                      Tanlash uchun bosing
+                      {lang === 'ru' ? 'Нажмите, чтобы выбрать' : 'Tanlash uchun bosing'}
                     </div>
                   )}
                 </div>
@@ -395,7 +415,13 @@ export default function DesktopSubjectCarousel({
         {sortedSubjects.map((s, idx) => {
           const isDotActive = activeCanonical === idx;
           const norm = (s.key || s.name || '').toLowerCase();
-          const dotTitle = norm.includes('bio') || norm.includes('био') ? 'BIOLOGIYA' : norm.includes('kim') ? 'KIMYO' : norm.includes('mat') ? 'MATEMATIKA' : (s.name || `Fan ${idx + 1}`).toUpperCase();
+          const dotTitle = norm.includes('bio') || norm.includes('био')
+            ? (lang === 'ru' ? 'БИОЛОГИЯ' : 'BIOLOGIYA')
+            : norm.includes('kim') || norm.includes('хим')
+            ? (lang === 'ru' ? 'ХИМИЯ' : 'KIMYO')
+            : norm.includes('mat') || norm.includes('мат')
+            ? (lang === 'ru' ? 'МАТЕМАТИКА' : 'MATEMATIKA')
+            : (s.name || (lang === 'ru' ? `Предмет ${idx + 1}` : `Fan ${idx + 1}`)).toUpperCase();
 
           return (
             <button
@@ -403,11 +429,15 @@ export default function DesktopSubjectCarousel({
               type="button"
               onClick={() => handleDotClick(idx)}
               className={`h-1.5 rounded-full transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
-                isDotActive 
-                  ? 'w-8 bg-white shadow-[0_0_8px_white]' 
+                isDotActive
+                  ? isLight
+                    ? 'w-8 bg-[#007AFF] shadow-[0_0_8px_rgba(0,122,255,0.45)]'
+                    : 'w-8 bg-white shadow-[0_0_8px_white]'
+                  : isLight
+                  ? 'w-2 bg-black/20 hover:bg-black/35'
                   : 'w-2 bg-white/30 hover:bg-white/50'
               }`}
-              aria-label={`${dotTitle} ga o'tish`}
+              aria-label={lang === 'ru' ? `Перейти к ${dotTitle}` : `${dotTitle} ga o'tish`}
             />
           );
         })}

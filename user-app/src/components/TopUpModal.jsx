@@ -201,21 +201,31 @@ export default function TopUpModal({ isOpen, onClose, user, onUpdateUser, inline
     impactMedium();
 
     try {
-      const res = await applyPromoCode(user?.telegram_id, promoInput.trim());
+      const res = await applyPromoCode(user?.telegram_id, promoInput.trim(), lang);
       if (res.success) {
         notificationSuccess();
-        setPromoMessage({ type: 'success', text: res.message || `+${res.bonus} Neyron qo'shildi!` });
+        const unitLabel = lang === 'ru' ? 'Нейронов' : 'Neyron';
+        const addedMsg = lang === 'ru'
+          ? `+${res.bonus} ${unitLabel} зачислено!`
+          : `+${res.bonus} ${unitLabel} qo'shildi!`;
+        setPromoMessage({ type: 'success', text: res.message || addedMsg });
         if (onUpdateUser && res.bonus) {
           onUpdateUser({ ...user, balance: (user.balance || 0) + res.bonus });
         }
         setPromoInput('');
       } else {
         notificationError();
-        setPromoMessage({ type: 'error', text: res.message || 'Xato promo-kod' });
+        setPromoMessage({
+          type: 'error',
+          text: res.message || (lang === 'ru' ? 'Неверный промокод' : 'Xato promo-kod')
+        });
       }
     } catch (err) {
       notificationError();
-      setPromoMessage({ type: 'error', text: 'Server bilan aloqa uzildi' });
+      setPromoMessage({
+        type: 'error',
+        text: lang === 'ru' ? 'Ошибка соединения с сервером' : 'Server bilan aloqa uzildi'
+      });
     } finally {
       setPromoLoading(false);
     }
@@ -229,14 +239,14 @@ export default function TopUpModal({ isOpen, onClose, user, onUpdateUser, inline
       transition={{ duration: 0.2 }}
       className={`${
         isDesktop && inlineDesktop
-          ? 'w-full max-w-[420px] h-[min(720px,calc(100vh-48px))] rounded-[32px] border border-white/10 shadow-2xl overflow-hidden flex flex-col select-none'
+          ? 'w-full max-w-[420px] h-[min(720px,calc(100vh-48px))] rounded-[32px] border shadow-2xl overflow-hidden flex flex-col select-none'
           : isDesktop
-          ? 'fixed z-10 flex flex-col select-none pointer-events-auto right-10 top-1/2 -translate-y-1/2 w-[420px] max-w-[420px] h-[min(720px,calc(100vh-60px))] rounded-[32px] border border-white/10 shadow-2xl overflow-hidden'
+          ? 'fixed z-10 flex flex-col select-none pointer-events-auto right-10 top-1/2 -translate-y-1/2 w-[420px] max-w-[420px] h-[min(720px,calc(100vh-60px))] rounded-[32px] border shadow-2xl overflow-hidden'
           : 'fixed inset-0 z-10 flex flex-col select-none pointer-events-auto'
       } ${
         isLight
-          ? 'bg-[#F2F2F7] text-gray-900'
-          : 'bg-[#121214] text-white'
+          ? 'bg-[#F2F2F7] text-gray-900 border-black/10'
+          : 'bg-[#121214] text-white border-white/10'
       }`}
     >
       {/* Header matching SettingsModal & SupportModal (centered between Telegram native controls on mobile) */}
@@ -257,12 +267,12 @@ export default function TopUpModal({ isOpen, onClose, user, onUpdateUser, inline
           </h3>
         </div>
 
-        {/* Desktop Close Button only (Telegram native BackButton closes on mobile) */}
-        {isDesktop && (
+        {/* Close Button (Desktop and Mobile Web; Telegram native BackButton handles inside Mini App) */}
+        {(isDesktop || (typeof window !== 'undefined' && !window.Telegram?.WebApp?.initData)) && (
           <button
             type="button"
             onClick={onClose}
-            aria-label="Yopish"
+            aria-label={lang === 'ru' ? 'Закрыть' : 'Yopish'}
             className={`absolute right-4 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer ${
               isLight
                 ? 'bg-black/5 hover:bg-black/10 text-gray-700'
@@ -298,7 +308,7 @@ export default function TopUpModal({ isOpen, onClose, user, onUpdateUser, inline
           <p className={`text-xs text-center mt-0.5 ${isLight ? 'text-gray-500' : 'text-[#8E8E93]'}`}>
             {lang === 'ru' ? 'Текущий баланс: ' : 'Joriy balans: '}
             <span className="text-blue-500 font-bold">
-              {user?.balance?.toLocaleString('ru-RU') || 0} Neyron
+              {user?.balance?.toLocaleString('ru-RU') || 0} {lang === 'ru' ? 'Нейронов' : 'Neyron'}
             </span>
           </p>
 
@@ -328,7 +338,7 @@ export default function TopUpModal({ isOpen, onClose, user, onUpdateUser, inline
                   : isLight ? 'text-gray-500 hover:text-gray-900' : 'text-[#8E8E93] hover:text-white'
               }`}
             >
-              <span>Promo</span>
+              <span>{lang === 'ru' ? 'Промо' : 'Promo'}</span>
               <Ticket className="w-3.5 h-3.5 shrink-0" />
             </button>
 
@@ -382,7 +392,7 @@ export default function TopUpModal({ isOpen, onClose, user, onUpdateUser, inline
                   >
                     {pkg.hit && (
                       <div className="absolute top-0 right-0 bg-red-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-bl-lg rounded-tr-2xl">
-                        XIT
+                        {lang === 'ru' ? 'ХИТ' : 'XIT'}
                       </div>
                     )}
                     <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
@@ -395,9 +405,11 @@ export default function TopUpModal({ isOpen, onClose, user, onUpdateUser, inline
                     <div className={`font-bold text-sm ${isLight ? 'text-gray-900' : 'text-white'}`}>
                       +{pkg.neyrons.toLocaleString('ru-RU')}
                     </div>
-                    <div className="bg-amber-500/15 border border-amber-500/30 text-amber-400 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
+                    <div className={`bg-amber-500/15 border border-amber-500/30 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${
+                      isLight ? 'text-amber-600' : 'text-amber-400'
+                    }`}>
                       <span>{pkg.stars}</span>
-                      <TelegramStarIcon className="w-3.5 h-3.5 text-amber-400" />
+                      <TelegramStarIcon className={`w-3.5 h-3.5 ${isLight ? 'text-amber-500' : 'text-amber-400'}`} />
                     </div>
                   </button>
                 );
@@ -464,7 +476,7 @@ export default function TopUpModal({ isOpen, onClose, user, onUpdateUser, inline
               <Clock className="w-6 h-6" />
             </div>
             <p className={`text-sm font-semibold ${isLight ? 'text-gray-500' : 'text-[#8E8E93]'}`}>
-              Tez kunlarda
+              {lang === 'ru' ? 'Скоро' : 'Tez kunlarda'}
             </p>
           </div>
         )}

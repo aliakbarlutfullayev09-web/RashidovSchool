@@ -3,12 +3,15 @@ import { motion } from 'framer-motion';
 import { BookOpen, FileCheck2, Trophy, User } from 'lucide-react';
 import { useHaptic } from '../hooks/useHaptic';
 import { useLanguage } from '../context/LanguageContext';
+import { useTheme } from '../context/ThemeContext';
 import { useIsDesktop } from '../hooks/useIsDesktop';
 
 export default function TabBar({ activeTab, onTabChange }) {
   const { selectionChanged } = useHaptic();
   const { t } = useLanguage();
+  const { resolvedTheme } = useTheme();
   const isDesktop = useIsDesktop();
+  const isLight = resolvedTheme === 'light';
 
   const handleTabClick = (tabIndex) => {
     if (activeTab !== tabIndex) {
@@ -40,7 +43,9 @@ export default function TabBar({ activeTab, onTabChange }) {
     >
       <div className={`glass-dock flex items-center relative ${
         isDesktop
-          ? 'flex-col rounded-full p-1.5 sm:p-2 gap-1.5 sm:gap-2 shadow-2xl border border-white/10'
+          ? `flex-col rounded-full p-1.5 sm:p-2 gap-1.5 sm:gap-2 shadow-2xl border ${
+              isLight ? 'border-black/10' : 'border-white/10'
+            }`
           : 'rounded-full px-2 py-1.5 justify-around'
       }`}>
         {tabs.map((tab) => {
@@ -63,17 +68,23 @@ export default function TabBar({ activeTab, onTabChange }) {
                 <motion.div
                   layoutId="activeTabIndicator"
                   transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                  className="absolute inset-0 bg-white/10 rounded-full"
+                  className={`absolute inset-0 rounded-full ${
+                    isLight ? 'bg-blue-500/12' : 'bg-white/10'
+                  }`}
                 />
               )}
 
-              <div className={`relative z-10 transition-colors duration-200 ${isActive ? 'text-[#007AFF]' : 'text-[#8E8E93]'}`}>
+              <div className={`relative z-10 transition-colors duration-200 ${
+                isActive ? 'text-[#007AFF]' : isLight ? 'text-[#6E6E73]' : 'text-[#8E8E93]'
+              }`}>
                 <Icon className="w-5 h-5" strokeWidth={isActive ? 2.5 : 2} />
               </div>
 
               <span
                 className={`relative z-10 text-[10px] font-semibold mt-0.5 leading-tight transition-colors duration-200 ${
-                  isActive ? 'text-white' : 'text-[#8E8E93]'
+                  isActive
+                    ? isLight ? 'text-[#1C1C1E]' : 'text-white'
+                    : isLight ? 'text-[#6E6E73]' : 'text-[#8E8E93]'
                 }`}
               >
                 {tab.label}

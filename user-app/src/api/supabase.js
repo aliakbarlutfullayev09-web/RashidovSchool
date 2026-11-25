@@ -115,18 +115,25 @@ export async function updateUserProfile(telegramId, data) {
   return { data: user, error };
 }
 
-export async function applyPromoCode(telegramId, code) {
+export async function applyPromoCode(telegramId, code, lang = 'uz') {
+  const isRu = lang === 'ru';
   try {
-    if (!code || !telegramId) return { success: false, message: 'Kodni kiriting' };
+    if (!code || !telegramId) {
+      return { success: false, message: isRu ? 'Введите промокод' : 'Kodni kiriting' };
+    }
 
     const { data: promos, error } = await supabase.from('promo_codes').select('*');
-    if (error) return { success: false, message: `DB xatosi: ${error.message}` };
+    if (error) {
+      return { success: false, message: isRu ? `Ошибка БД: ${error.message}` : `DB xatosi: ${error.message}` };
+    }
 
     const promo = promos?.find(p => p.code.trim().toLowerCase() === code.trim().toLowerCase());
-    if (!promo) return { success: false, message: 'Promo-kod topilmadi' };
+    if (!promo) {
+      return { success: false, message: isRu ? 'Промокод не найден' : 'Promo-kod topilmadi' };
+    }
 
     if (promo.current_uses >= promo.max_uses) {
-      return { success: false, message: 'Foydalanish limiti tugagan' };
+      return { success: false, message: isRu ? 'Лимит активаций исчерпан' : 'Foydalanish limiti tugagan' };
     }
 
     const { data: uses, error: usesError } = await supabase
@@ -136,11 +143,16 @@ export async function applyPromoCode(telegramId, code) {
       .eq('user_id', telegramId);
 
     if (!usesError && uses && uses.length > 0) {
-      return { success: false, message: 'Siz bu promo-koddan allaqachon foydalangansiz' };
+      return {
+        success: false,
+        message: isRu ? 'Вы уже использовали этот промокод' : 'Siz bu promo-koddan allaqachon foydalangansiz'
+      };
     }
 
     const { data: user } = await supabase.from('users').select('balance').eq('telegram_id', telegramId).single();
-    if (!user) return { success: false, message: 'Foydalanuvchi topilmadi' };
+    if (!user) {
+      return { success: false, message: isRu ? 'Пользователь не найден' : 'Foydalanuvchi topilmadi' };
+    }
 
     const newBalance = (user.balance || 0) + (promo.bonus_amount || 0);
 
@@ -160,12 +172,17 @@ export async function applyPromoCode(telegramId, code) {
 
     return { 
       success: true, 
-      message: `${promo.bonus_amount} Neyron hisobingizga qo'shildi!`, 
+      message: isRu
+        ? `На ваш счёт начислено ${promo.bonus_amount} нейронов!`
+        : `${promo.bonus_amount} Neyron hisobingizga qo'shildi!`, 
       bonus: promo.bonus_amount,
       newBalance 
     };
   } catch (err) {
-    return { success: false, message: 'Server xatosi: ' + err.message };
+    return {
+      success: false,
+      message: (isRu ? 'Ошибка сервера: ' : 'Server xatosi: ') + err.message
+    };
   }
 }
 
@@ -520,6 +537,8 @@ export const createInvoice = async (userId, amount) => {
   return createStarsInvoiceLink(amount, userId);
 };
 
+let videoCheckpointsUnavailable = false;
+
 /**
  * Resilient video checkpoints retrieval:
  * Checks 'video_checkpoints' table first; if schema does not have the table,
@@ -527,24 +546,29 @@ export const createInvoice = async (userId, amount) => {
  */
 export const getVideoCheckpoints = async (lessonId) => {
   try {
-    const { data, error } = await supabase
-      .from('video_checkpoints')
-      .select('*')
-      .eq('lesson_id', lessonId)
-      .order('trigger_time_sec');
+    if (!videoCheckpointsUnavailable) {
+      const { data, error } = await supabase
+        .from('video_checkpoints')
+        .select('*')
+        .eq('lesson_id', lessonId)
+        .order('trigger_time_sec');
 
-    if (!error && data) {
-      return data.map(cp => ({
-        id: cp.id,
-        lesson_id: cp.lesson_id,
-        trigger_time_sec: cp.trigger_time_sec || 0,
-        rewind_time_sec: cp.rewind_time_sec ?? cp.rewind_to_sec ?? 0,
-        question: cp.question || cp.question_text || '',
-        question_text: cp.question || cp.question_text || '',
-        options: Array.isArray(cp.options) ? cp.options : [],
-        correct_option: cp.correct_option ?? cp.correct_option_index ?? 0,
-        correct_option_index: cp.correct_option ?? cp.correct_option_index ?? 0
-      }));
+      if (!error && data) {
+        return data.map(cp => ({
+          id: cp.id,
+          lesson_id: cp.lesson_id,
+          trigger_time_sec: cp.trigger_time_sec || 0,
+          rewind_time_sec: cp.rewind_time_sec ?? cp.rewind_to_sec ?? 0,
+          question: cp.question || cp.question_text || '',
+          question_text: cp.question || cp.question_text || '',
+          options: Array.isArray(cp.options) ? cp.options : [],
+          correct_option: cp.correct_option ?? cp.correct_option_index ?? 0,
+          correct_option_index: cp.correct_option ?? cp.correct_option_index ?? 0
+        }));
+      }
+      if (error && (error.code === 'PGRST205' || error.code === '42P01' || String(error.message || '').includes('404'))) {
+        videoCheckpointsUnavailable = true;
+      }
     }
 
     // Fallback: Check if checkpoints are stored in 'questions' table
@@ -637,11 +661,10 @@ export const saveLessonQuizProgress = async (userId, lessonId, stars = 3, score 
     const rewardNeyrons = stars === 3 ? 100 : stars === 2 ? 60 : 30;
     const rewardXp = stars === 3 ? 50 : 25;
 
-    const { data: user } = await supabase.from('users').select('balance, xp').eq('telegram_id', userId).single();
+    const { data: user } = await supabase.from('users').select('balance').eq('telegram_id', userId).single();
     if (user) {
       await supabase.from('users').update({
-        balance: (user.balance || 0) + rewardNeyrons,
-        xp: (user.xp || 0) + rewardXp
+        balance: (user.balance || 0) + rewardNeyrons
       }).eq('telegram_id', userId);
 
       await supabase.from('transactions').insert([{
@@ -669,11 +692,10 @@ export const saveExamProgress = async (userId, subjectKey, mode, testId, score, 
     const rewardNeyrons = mode === 'dtm' ? 120 : 150;
     const rewardXp = mode === 'dtm' ? 60 : 80;
 
-    const { data: user } = await supabase.from('users').select('balance, xp').eq('telegram_id', userId).single();
+    const { data: user } = await supabase.from('users').select('balance').eq('telegram_id', userId).single();
     if (user) {
       await supabase.from('users').update({
-        balance: (user.balance || 0) + rewardNeyrons,
-        xp: (user.xp || 0) + rewardXp
+        balance: (user.balance || 0) + rewardNeyrons
       }).eq('telegram_id', userId);
 
       await supabase.from('transactions').insert([{
@@ -737,7 +759,7 @@ export const DEFAULT_SUPPORT_CONTACTS = {
   },
   tech: {
     telegram: '@rashidov_support',
-    phone: '+998 71 200 00 00',
+    phone: '+998 95 889 78 88',
     label_uz: 'Texnik va boshqa masalalar',
     label_ru: 'Технические и другие вопросы',
     desc_uz: 'Ilova ishlashi, to‘lovlar va hisob masalalari',

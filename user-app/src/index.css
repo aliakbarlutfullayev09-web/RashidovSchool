@@ -556,14 +556,19 @@ body {
 }
 
 [data-theme="light"] .glass-header {
-  background: rgba(255, 255, 255, 0.88) !important;
+  background: rgba(249, 249, 251, 0.88) !important;
   border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
 }
 
 [data-theme="light"] .glass-dock {
   background: rgba(255, 255, 255, 0.92) !important;
+  border: 1px solid rgba(0, 0, 0, 0.09) !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12) !important;
+}
+
+[data-theme="light"] .glass-card {
+  background: rgba(255, 255, 255, 0.9) !important;
   border: 1px solid rgba(0, 0, 0, 0.08) !important;
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.12) !important;
 }
 
 [data-theme="light"] .glass-dock .text-white {

@@ -2,13 +2,14 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   Play, Pause, RotateCcw, Maximize, 
   BookOpen, Clock, AlertCircle, RefreshCw, Sparkles, CheckCircle2, 
-  X, ZoomIn, ZoomOut, ChevronDown 
+  X, ZoomIn, ZoomOut, ChevronDown, ArrowLeft 
 } from 'lucide-react';
 import CheckpointModal from './CheckpointModal';
 import GlossaryPanel from './GlossaryPanel';
 import { formatTime } from '../utils/formatters';
 import { useHaptic } from '../hooks/useHaptic';
 import { useIsDesktop } from '../hooks/useIsDesktop';
+import { useLanguage } from '../context/LanguageContext';
 import { getWatchProgress, saveWatchProgress, incrementViewCount, saveLessonQuizProgress } from '../api/supabase';
 
 export default function VideoPlayer({ 
@@ -26,6 +27,7 @@ export default function VideoPlayer({
   const seekbarRef = useRef(null);
   const { impactLight, impactMedium, notificationSuccess } = useHaptic();
   const isDesktop = useIsDesktop();
+  const { lang } = useLanguage();
 
   // Orientation & viewport state
   const [viewportInfo, setViewportInfo] = useState(() => {
@@ -103,13 +105,22 @@ export default function VideoPlayer({
   const ignoreNextClickUntilRef = useRef(0);
   const doubleTappedRef = useRef(false);
 
-  // Expose onBack to window for Telegram native BackButton
+  const canShowWebBack = Boolean(onBack) && (isDesktop || (typeof window !== 'undefined' && !window.Telegram?.WebApp?.initData));
+
+  // Expose onBack to window for Telegram native BackButton + support Escape on web
   useEffect(() => {
     window.__rb_exit_video = onBack;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && canShowWebBack && !activeCheckpoint && !isGlossaryOpen) {
+        onBack();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
     return () => {
+      window.removeEventListener('keydown', handleKeyDown);
       window.__rb_exit_video = null;
     };
-  }, [onBack]);
+  }, [onBack, canShowWebBack, activeCheckpoint, isGlossaryOpen]);
 
   // Keep maxWatchedRef in sync
   useEffect(() => {
@@ -399,7 +410,11 @@ export default function VideoPlayer({
       setCurrentTime(frontier);
       lastPlaybackTimeRef.current = frontier;
       lastPlaybackWallClockRef.current = Date.now();
-      showSeekToast("Oldinga faqat ko‘rilgan daqiqagacha o‘tkazish mumkin");
+      showSeekToast(
+        lang === 'ru'
+          ? 'Перемотка вперёд доступна только до просмотренной минуты'
+          : 'Oldinga faqat ko‘rilgan daqiqagacha o‘tkazish mumkin'
+      );
     } else {
       const safeTime = Math.max(0, targetTime);
       videoRef.current.currentTime = safeTime;
@@ -525,6 +540,39 @@ export default function VideoPlayer({
       ref={containerRef}
       className="fixed inset-0 z-50 bg-[#000000] text-white flex flex-col justify-between overflow-hidden select-none video-player-container"
     >
+      {/* ── TOP-LEFT WEB BACK BUTTON (Desktop & Mobile Web when outside Telegram Mini App) ── */}
+      {canShowWebBack && (
+        <div
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
+          className={`absolute z-40 pointer-events-auto transition-all duration-300 ${
+            isOverlayLayout ? 'left-4' : 'left-3'
+          } ${
+            isOverlayLayout && !showControls && !isGlossaryOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'
+          }`}
+          style={{
+            top: isOverlayLayout
+              ? 'max(calc(var(--safe-area-top, 0px) + 36px), 56px)'
+              : 'max(calc(var(--safe-area-top, 0px) + 54px), 80px)'
+          }}
+        >
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              impactLight();
+              onBack();
+            }}
+            aria-label={lang === 'ru' ? 'Назад' : 'Orqaga'}
+            title={lang === 'ru' ? 'Назад' : 'Orqaga'}
+            className="h-9 px-3 rounded-full bg-black/60 hover:bg-black/80 backdrop-blur-xl border border-white/20 text-white/95 flex items-center gap-1.5 text-xs font-semibold shadow-xl active:scale-95 transition-all cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4 shrink-0" />
+            <span>{lang === 'ru' ? 'Назад' : 'Orqaga'}</span>
+          </button>
+        </div>
+      )}
+
       {/* ── TOP TELEGRAM-STYLE "TERMINLAR" BUTTON (Positioned below Telegram's ∨ ⋮ capsule) ── */}
       <div 
         onTouchStart={(e) => e.stopPropagation()}
@@ -555,10 +603,10 @@ export default function VideoPlayer({
               ? 'bg-purple-600/40 border-purple-400/60 text-white shadow-purple-500/25'
               : 'bg-black/60 hover:bg-black/75 border-white/20 text-white/95'
           }`}
-          title="Dars terminlari"
+          title={lang === 'ru' ? 'Термины урока' : 'Dars terminlari'}
         >
           <BookOpen className="w-4 h-4 text-purple-300 shrink-0" />
-          {!isOverlayLayout && <span>Terminlar</span>}
+          {!isOverlayLayout && <span>{lang === 'ru' ? 'Термины' : 'Terminlar'}</span>}
           {terms.length > 0 && (
             !isOverlayLayout ? (
               <span className="bg-purple-500/40 text-purple-200 text-[10px] px-1.5 py-0.2 rounded-full font-bold ml-0.5">
@@ -577,7 +625,9 @@ export default function VideoPlayer({
           onTouchStart={(e) => e.stopPropagation()}
           onTouchEnd={(e) => e.stopPropagation()}
           className={`absolute z-40 pointer-events-auto transition-all animate-in fade-in ${
-            isOverlayLayout ? 'left-4' : 'left-3'
+            canShowWebBack
+              ? (isOverlayLayout ? 'left-28' : 'left-28')
+              : (isOverlayLayout ? 'left-4' : 'left-3')
           } ${
             isOverlayLayout && !showControls ? 'opacity-0 pointer-events-none' : 'opacity-100'
           }`}
@@ -592,7 +642,7 @@ export default function VideoPlayer({
             className="h-8 px-3 rounded-full bg-black/60 hover:bg-black/80 backdrop-blur-xl border border-white/20 text-xs font-bold text-cyan-300 flex items-center gap-1.5 active:scale-95 shadow-xl"
           >
             <ZoomOut className="w-3.5 h-3.5 text-cyan-400" />
-            <span>{zoomScale.toFixed(1)}x • Qaytarish</span>
+            <span>{zoomScale.toFixed(1)}x • {lang === 'ru' ? 'Сбросить' : 'Qaytarish'}</span>
           </button>
         </div>
       )}
@@ -644,7 +694,11 @@ export default function VideoPlayer({
               if (videoRef.current) {
                 videoRef.current.currentTime = maxWatchedRef.current;
               }
-              showSeekToast("Oldinga faqat ko‘rilgan daqiqagacha o‘tkazish mumkin");
+              showSeekToast(
+        lang === 'ru'
+          ? 'Перемотка вперёд доступна только до просмотренной минуты'
+          : 'Oldinga faqat ko‘rilgan daqiqagacha o‘tkazish mumkin'
+      );
             }
           }}
           onSeeked={() => {
@@ -670,9 +724,13 @@ export default function VideoPlayer({
             className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center p-6 text-center z-20"
           >
             <AlertCircle className="w-12 h-12 text-red-500 mb-3" />
-            <h4 className="text-white font-bold text-sm mb-1">Videoni yuklab bo‘lmadi</h4>
+            <h4 className="text-white font-bold text-sm mb-1">
+              {lang === 'ru' ? 'Не удалось загрузить видео' : 'Videoni yuklab bo‘lmadi'}
+            </h4>
             <p className="text-xs text-[#8E8E93] max-w-[240px] mb-4">
-              Internet aloqasini tekshiring yoki keyinroq qayta urinib ko‘ring.
+              {lang === 'ru'
+                ? 'Проверьте подключение к интернету или попробуйте позже.'
+                : 'Internet aloqasini tekshiring yoki keyinroq qayta urinib ko‘ring.'}
             </p>
             <button
               onClick={(e) => {
@@ -683,7 +741,7 @@ export default function VideoPlayer({
               className="px-4 py-2 bg-[#007AFF] text-white text-xs font-bold rounded-xl flex items-center gap-1.5 active:scale-95 transition-transform"
             >
               <RefreshCw className="w-3.5 h-3.5" />
-              <span>Qayta urinish</span>
+              <span>{lang === 'ru' ? 'Повторить' : 'Qayta urinish'}</span>
             </button>
           </div>
         )}
@@ -769,7 +827,7 @@ export default function VideoPlayer({
                   isDone ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,199,89,0.8)]' : 'bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.8)]'
                 }`}
                 style={{ left: `${leftPct}%` }}
-                title={`Stop-test: ${formatTime(cp.trigger_time_sec)}`}
+                title={`${lang === 'ru' ? 'Стоп-тест' : 'Stop-test'}: ${formatTime(cp.trigger_time_sec)}`}
               />
             );
           })}
@@ -782,7 +840,7 @@ export default function VideoPlayer({
             <button
               onClick={togglePlay}
               className="w-10 h-10 rounded-full bg-[#007AFF] hover:bg-blue-600 flex items-center justify-center text-white active:scale-95 transition-transform shadow-lg shadow-blue-500/25"
-              title={isPlaying ? "To'xtatish" : "O'ynatish"}
+              title={isPlaying ? (lang === 'ru' ? 'Пауза' : "To'xtatish") : (lang === 'ru' ? 'Воспроизвести' : "O'ynatish")}
             >
               {isPlaying ? <Pause className="w-4 h-4 fill-white" /> : <Play className="w-4 h-4 fill-white ml-0.5" />}
             </button>
@@ -791,7 +849,7 @@ export default function VideoPlayer({
             <button
               onClick={() => seekDelta(-10)}
               className="w-9 h-9 rounded-full bg-[#1C1C1E] border border-white/10 flex items-center justify-center text-white/90 active:scale-95 transition-transform"
-              title="-10 soniya"
+              title={lang === 'ru' ? '-10 секунд' : '-10 soniya'}
             >
               <RotateCcw className="w-3.5 h-3.5" />
             </button>
@@ -809,7 +867,7 @@ export default function VideoPlayer({
             <button
               onClick={handleCycleSpeed}
               className="px-2.5 py-1.5 rounded-xl bg-[#1C1C1E] border border-white/10 text-xs font-bold text-white hover:text-cyan-300 active:scale-95 transition-all"
-              title="Tezlik (Maksimal 1.3x)"
+              title={lang === 'ru' ? 'Скорость (макс. 1.3x)' : 'Tezlik (Maksimal 1.3x)'}
             >
               {playbackRate}x
             </button>
@@ -818,7 +876,7 @@ export default function VideoPlayer({
             <button
               onClick={toggleFullscreen}
               className="w-9 h-9 rounded-xl bg-[#1C1C1E] border border-white/10 flex items-center justify-center text-white/80 hover:text-white active:scale-95 transition-transform"
-              title="To'liq ekran"
+              title={lang === 'ru' ? 'Полный экран' : "To'liq ekran"}
             >
               <Maximize className="w-3.5 h-3.5" />
             </button>
@@ -829,12 +887,16 @@ export default function VideoPlayer({
         {isEnded && (
           <div className="mt-3 bg-[#1C1C1E] border border-emerald-500/30 p-3.5 rounded-2xl space-y-2.5 animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-base">
-                🎉
+              <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                <CheckCircle2 className="w-4 h-4" />
               </div>
               <div>
-                <h4 className="text-white font-bold text-xs">Dars muvaffaqiyatli ko‘rildi!</h4>
-                <p className="text-[10px] text-emerald-400 font-medium">Barcha qismlar tasdiqlandi</p>
+                <h4 className="text-white font-bold text-xs">
+                  {lang === 'ru' ? 'Урок успешно просмотрен!' : 'Dars muvaffaqiyatli ko‘rildi!'}
+                </h4>
+                <p className="text-[10px] text-emerald-400 font-medium">
+                  {lang === 'ru' ? 'Все фрагменты подтверждены' : 'Barcha qismlar tasdiqlandi'}
+                </p>
               </div>
             </div>
 
@@ -846,7 +908,8 @@ export default function VideoPlayer({
                 }}
                 className="bg-[#007AFF] hover:bg-blue-600 text-white font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-lg active:scale-95 transition-all"
               >
-                <span>📝 Testni boshlash</span>
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>{lang === 'ru' ? 'Начать тест' : 'Testni boshlash'}</span>
               </button>
 
               <button
@@ -860,7 +923,8 @@ export default function VideoPlayer({
                 }}
                 className="bg-[#2C2C2E] hover:bg-[#3A3A3C] text-white font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all"
               >
-                <span>🔄 Qayta ko‘rish</span>
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>{lang === 'ru' ? 'Смотреть снова' : 'Qayta ko‘rish'}</span>
               </button>
             </div>
           </div>
@@ -879,8 +943,12 @@ export default function VideoPlayer({
                     <BookOpen className="w-3.5 h-3.5" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-white text-xs">Dars terminlari</h3>
-                    <span className="text-[10px] text-[#8E8E93]">{terms.length} ta termin kiritilgan</span>
+                    <h3 className="font-bold text-white text-xs">
+                      {lang === 'ru' ? 'Термины урока' : 'Dars terminlari'}
+                    </h3>
+                    <span className="text-[10px] text-[#8E8E93]">
+                      {lang === 'ru' ? `Добавлено терминов: ${terms.length}` : `${terms.length} ta termin kiritilgan`}
+                    </span>
                   </div>
                 </div>
 
@@ -888,7 +956,7 @@ export default function VideoPlayer({
                   onClick={() => setIsGlossaryOpen(false)}
                   className="px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/15 text-[11px] font-bold text-white/80 flex items-center gap-1 active:scale-95"
                 >
-                  <span>Yopish</span>
+                  <span>{lang === 'ru' ? 'Закрыть' : 'Yopish'}</span>
                   <X className="w-3 h-3" />
                 </button>
               </div>
@@ -907,7 +975,11 @@ export default function VideoPlayer({
                             if (isUnlocked) {
                               clampAndSeek(term.timestamp);
                             } else {
-                              showSeekToast("Ushbu termin video davomida tushuntiriladi");
+                              showSeekToast(
+                                lang === 'ru'
+                                  ? 'Этот термин объясняется далее в видеоуроке'
+                                  : 'Ushbu termin video davomida tushuntiriladi'
+                              );
                             }
                           }
                         }}
@@ -935,7 +1007,11 @@ export default function VideoPlayer({
                           )}
                         </div>
                         <p className="text-[11px] text-[#8E8E93] leading-relaxed">
-                          {term.definition || term.description || "Ushbu termin bo‘yicha qo‘shimcha izoh video darsda berilgan."}
+                          {term.definition || term.description || (
+                            lang === 'ru'
+                              ? 'Подробное объяснение термина дано в видеоуроке.'
+                              : 'Ushbu termin bo‘yicha qo‘shimcha izoh video darsda berilgan.'
+                          )}
                         </p>
                       </div>
                     );
@@ -943,7 +1019,9 @@ export default function VideoPlayer({
                 </div>
               ) : (
                 <div className="py-8 text-center text-[#8E8E93] text-xs">
-                  Ushbu dars uchun terminlar lug‘ati kiritilmagan.
+                  {lang === 'ru'
+                    ? 'Словарь терминов для этого урока не добавлен.'
+                    : 'Ushbu dars uchun terminlar lug‘ati kiritilmagan.'}
                 </div>
               )}
             </div>
@@ -957,10 +1035,10 @@ export default function VideoPlayer({
                 >
                   <div className="flex items-center gap-2.5">
                     <BookOpen className="w-4 h-4 text-purple-400" />
-                    <span>Dars terminlari ro‘yxati</span>
+                    <span>{lang === 'ru' ? 'Список терминов урока' : 'Dars terminlari ro‘yxati'}</span>
                   </div>
                   <span className="bg-purple-500/20 text-purple-200 text-[10px] px-2 py-0.5 rounded-full">
-                    {terms.length} ta termin
+                    {lang === 'ru' ? `${terms.length} терм.` : `${terms.length} ta termin`}
                   </span>
                 </button>
               </div>
@@ -980,7 +1058,11 @@ export default function VideoPlayer({
             clampAndSeek(time);
           }}
           onBlockedTimestamp={() => {
-            showSeekToast("Ushbu termin video davomida tushuntiriladi. Unga o‘tish uchun darsni ko‘ring.");
+            showSeekToast(
+              lang === 'ru'
+                ? 'Этот термин объясняется далее. Посмотрите видео, чтобы перейти к нему.'
+                : 'Ushbu termin video davomida tushuntiriladi. Unga o‘tish uchun darsni ko‘ring.'
+            );
           }}
         />
       )}

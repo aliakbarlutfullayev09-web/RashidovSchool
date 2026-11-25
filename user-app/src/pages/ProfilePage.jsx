@@ -16,6 +16,7 @@ import {
 } from '../utils/profileColors';
 import { useHaptic } from '../hooks/useHaptic';
 import { useLanguage } from '../context/LanguageContext';
+import { useTheme } from '../context/ThemeContext';
 import { useIsDesktop } from '../hooks/useIsDesktop';
 import { getSupportContacts } from '../api/supabase';
 
@@ -45,6 +46,8 @@ const TelegramVerifiedBadge = ({ className = "w-6 h-6" }) => (
 
 export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }) {
   const { t, lang } = useLanguage();
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === 'light';
   const { impactLight, impactMedium } = useHaptic();
   const isDesktop = useIsDesktop();
 
@@ -199,17 +202,21 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
           : 'w-full'
       }`}>
         {/* Profile Header Card */}
-      <div className="bg-[#1C1C1E] border border-white/5 rounded-3xl p-6 shadow-2xl relative overflow-hidden flex flex-col items-center text-center">
+      <div className={`border rounded-3xl p-6 relative overflow-hidden flex flex-col items-center text-center transition-colors ${
+        isLight ? 'bg-white border-black/[0.06] shadow-lg' : 'bg-[#1C1C1E] border-white/5 shadow-2xl'
+      }`}>
         {/* Telegram-Style Colored Profile Header Backdrop behind/around Avatar */}
         <div
           data-profile-color={profilePreset.id}
           className="absolute inset-x-0 top-0 h-52 pointer-events-none transition-all duration-300"
           style={{
-            background: `radial-gradient(ellipse 95% 85% at 50% 0%, ${profilePreset.hex}66 0%, ${profilePreset.accent}22 50%, transparent 100%)`,
+            background: isLight
+              ? `radial-gradient(ellipse 95% 85% at 50% 0%, ${profilePreset.hex}44 0%, ${profilePreset.accent}18 55%, transparent 100%)`
+              : `radial-gradient(ellipse 95% 85% at 50% 0%, ${profilePreset.hex}66 0%, ${profilePreset.accent}22 50%, transparent 100%)`,
           }}
         >
           {/* Subtle Telegram-style floating background pattern icons around the avatar */}
-          <div className="relative w-full h-full max-w-xs mx-auto opacity-[0.14]" style={{ color: profilePreset.accent }}>
+          <div className={`relative w-full h-full max-w-xs mx-auto ${isLight ? 'opacity-[0.22]' : 'opacity-[0.14]'}`} style={{ color: profilePreset.accent }}>
             <Dna className="w-5 h-5 absolute top-5 left-12 -rotate-12" />
             <Sparkles className="w-4 h-4 absolute top-14 left-5 rotate-12" />
             <Atom className="w-5 h-5 absolute top-24 left-14 rotate-45" />
@@ -222,17 +229,23 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
         {/* Edit Button Top-Right */}
         <button
           onClick={() => toggleModal('profile')}
-          className={`absolute top-4 right-4 z-20 w-9 h-9 rounded-full bg-black/25 backdrop-blur-md border flex items-center justify-center text-white/90 active:scale-95 transition-all ${
-            isDesktop && isEditProfileOpen ? 'border-white/50 ring-2 ring-white/30 bg-black/40' : 'border-white/10 hover:bg-black/40'
+          className={`absolute top-4 right-4 z-20 w-9 h-9 rounded-full backdrop-blur-md border flex items-center justify-center active:scale-95 transition-all ${
+            isDesktop && isEditProfileOpen
+              ? 'border-[#007AFF] ring-2 ring-blue-500/30 bg-blue-500/15 text-[#007AFF]'
+              : isLight
+              ? 'bg-black/[0.06] hover:bg-black/10 border-black/[0.08] text-[#1C1C1E]'
+              : 'bg-black/25 border-white/10 hover:bg-black/40 text-white/90'
           }`}
-          title="Tahrirlash"
+          title={lang === 'ru' ? 'Редактировать' : 'Tahrirlash'}
         >
           <Edit3 className="w-4 h-4" />
         </button>
 
         {/* Avatar (Clean Telegram Photo or First Letter + Random Background, No Rainbow Ring) */}
         <div className="relative z-10 mb-3 mt-1">
-          <div className="w-24 h-24 rounded-full overflow-hidden shadow-xl border-2 border-white/15 bg-[#161618] flex items-center justify-center">
+          <div className={`w-24 h-24 rounded-full overflow-hidden shadow-xl border-2 flex items-center justify-center ${
+            isLight ? 'border-white bg-gray-100' : 'border-white/15 bg-[#161618]'
+          }`}>
             {hasPhoto ? (
               <img
                 src={user.photo_url}
@@ -255,16 +268,24 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
           {/* Official Telegram Verified Checkmark Badge */}
           <div
             data-verified-badge="telegram"
-            className="absolute bottom-0 right-0 rounded-full bg-[#1C1C1E] p-[2px] shadow-md flex items-center justify-center"
+            className={`absolute bottom-0 right-0 rounded-full p-[2px] shadow-md flex items-center justify-center ${
+              isLight ? 'bg-white' : 'bg-[#1C1C1E]'
+            }`}
           >
             <TelegramVerifiedBadge className="w-6 h-6" />
           </div>
         </div>
 
         {/* Name & Centered Class Badge */}
-        <h2 className="relative z-10 text-xl font-bold text-white mb-1.5">{fullName}</h2>
+        <h2 className={`relative z-10 text-xl font-bold mb-1.5 ${isLight ? 'text-[#1C1C1E]' : 'text-white'}`}>
+          {fullName}
+        </h2>
         <div className="relative z-10 flex items-center justify-center mb-4">
-          <span className="bg-white/10 backdrop-blur-sm text-white/95 text-xs font-bold px-3.5 py-1 rounded-full border border-white/10">
+          <span className={`backdrop-blur-sm text-xs font-bold px-3.5 py-1 rounded-full border ${
+            isLight
+              ? 'bg-black/[0.06] text-[#1C1C1E] border-black/[0.08]'
+              : 'bg-white/10 text-white/95 border-white/10'
+          }`}>
             {classGroup}
           </span>
         </div>
@@ -277,48 +298,74 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
             onClick={handleRankTap}
             className={`relative overflow-visible border p-3 rounded-2xl flex flex-col items-center justify-center cursor-pointer select-none transition-all duration-150 ${
               isRankGrayed
-                ? 'bg-[#3A3A3C]/70 border-white/10 grayscale opacity-60 scale-[0.98]'
+                ? isLight
+                  ? 'bg-gray-200 border-gray-300 opacity-70 scale-[0.98]'
+                  : 'bg-[#3A3A3C]/70 border-white/10 grayscale opacity-60 scale-[0.98]'
+                : isLight
+                ? 'bg-[#F2F2F7] border-black/[0.06] hover:border-black/15 active:scale-95'
                 : 'bg-[#2C2C2E] border-white/5 hover:border-white/10 active:scale-95'
             }`}
           >
-            <span className="text-xl font-bold text-white/80 leading-none mb-1.5">-</span>
-            <span className={`text-xs font-bold transition-colors ${isRankGrayed ? 'text-[#8E8E93]' : 'text-emerald-400'}`}>
-              O'rin
+            <span className={`text-xl font-bold leading-none mb-1.5 ${isLight ? 'text-[#1C1C1E]' : 'text-white/80'}`}>-</span>
+            <span className={`text-xs font-bold transition-colors ${
+              isRankGrayed
+                ? 'text-[#8E8E93]'
+                : isLight ? 'text-emerald-600' : 'text-emerald-400'
+            }`}>
+              {lang === 'ru' ? 'Место' : "O'rin"}
             </span>
 
-            {/* Floating gray "Tez kunlarda ..." popup anchored to exact tap point */}
+            {/* Floating gray "Tez kunlarda ..." / "Скоро ..." popup anchored above exact tap point */}
             <AnimatePresence>
               {rankPopups.map((popup) => (
                 <motion.span
                   key={popup.id}
-                  initial={{ opacity: 0, y: 4, scale: 0.9 }}
-                  animate={{ opacity: 1, y: -12, scale: 1 }}
-                  exit={{ opacity: 0, y: -22, scale: 0.95 }}
+                  initial={{ opacity: 0, y: -4, scale: 0.9 }}
+                  animate={{ opacity: 1, y: -22, scale: 1 }}
+                  exit={{ opacity: 0, y: -32, scale: 0.95 }}
                   transition={{ duration: 0.25 }}
-                  style={{ left: popup.x, top: popup.y }}
-                  className="absolute -translate-x-1/2 -translate-y-full z-50 pointer-events-none whitespace-nowrap px-2.5 py-1 rounded-full bg-[#242426]/95 border border-white/10 text-[11px] font-semibold text-[#8E8E93] shadow-xl"
+                  style={{ left: popup.x, top: Math.min(popup.y, 18) }}
+                  className={`absolute -translate-x-1/2 -translate-y-full z-50 pointer-events-none whitespace-nowrap px-2 py-0.5 rounded-full border text-[10px] font-semibold shadow-lg ${
+                    isLight
+                      ? 'bg-[#E5E5EA]/95 border-black/10 text-gray-600'
+                      : 'bg-[#3A3A3C]/95 border-white/10 text-[#AEAEB2]'
+                  }`}
                 >
-                  Tez kunlarda ...
+                  {lang === 'ru' ? 'Скоро ...' : 'Tez kunlarda ...'}
                 </motion.span>
               ))}
             </AnimatePresence>
           </button>
 
-          <div className="bg-[#2C2C2E] border border-white/5 p-3 rounded-2xl flex flex-col items-center">
+          <div className={`border p-3 rounded-2xl flex flex-col items-center ${
+            isLight ? 'bg-[#F2F2F7] border-black/[0.06]' : 'bg-[#2C2C2E] border-white/5'
+          }`}>
             <span className="text-lg mb-0.5">🔥</span>
-            <span className="text-[10px] text-[#8E8E93] leading-none mb-1">Streak</span>
-            <span className="text-xs font-bold text-amber-400">{streak} kun</span>
+            <span className={`text-[10px] leading-none mb-1 ${isLight ? 'text-gray-500' : 'text-[#8E8E93]'}`}>
+              {lang === 'ru' ? 'Серия' : 'Streak'}
+            </span>
+            <span className={`text-xs font-bold ${isLight ? 'text-amber-600' : 'text-amber-400'}`}>
+              {streak} {lang === 'ru' ? 'дн.' : 'kun'}
+            </span>
           </div>
 
           <button
             onClick={() => toggleModal('topup')}
-            className={`bg-[#2C2C2E] border p-3 rounded-2xl flex flex-col items-center active:scale-95 transition-all ${
-              isDesktop && isTopUpOpen ? 'border-blue-500 ring-2 ring-blue-500/50 bg-[#343438]' : 'border-blue-500/20 hover:border-blue-500/40'
+            className={`border p-3 rounded-2xl flex flex-col items-center active:scale-95 transition-all ${
+              isDesktop && isTopUpOpen
+                ? isLight
+                  ? 'border-blue-500 ring-2 ring-blue-500/30 bg-blue-50'
+                  : 'border-blue-500 ring-2 ring-blue-500/50 bg-[#343438]'
+                : isLight
+                ? 'bg-[#F2F2F7] border-blue-500/25 hover:border-blue-500/45'
+                : 'bg-[#2C2C2E] border-blue-500/20 hover:border-blue-500/40'
             }`}
           >
             <span className="text-lg mb-0.5">🧠</span>
-            <span className="text-[10px] text-[#8E8E93] leading-none mb-1">Balans</span>
-            <span className="text-xs font-bold text-blue-400 truncate max-w-[80px]">
+            <span className={`text-[10px] leading-none mb-1 ${isLight ? 'text-gray-500' : 'text-[#8E8E93]'}`}>
+              {lang === 'ru' ? 'Баланс' : 'Balans'}
+            </span>
+            <span className={`text-xs font-bold truncate max-w-[80px] ${isLight ? 'text-blue-600' : 'text-blue-400'}`}>
               {formatCompactNeyron(balance)}
             </span>
           </button>
@@ -327,13 +374,19 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
       </div>
 
       {/* iOS-Style Grouped Squircle Menu (Every Row is Clickable) */}
-      <div className="card-grouped bg-[#1C1C1E] border border-white/5 rounded-3xl overflow-hidden shadow-2xl">
+      <div className={`card-grouped border rounded-3xl overflow-hidden ${
+        isLight ? 'bg-white border-black/[0.06] shadow-lg' : 'bg-[#1C1C1E] border-white/5 shadow-2xl'
+      }`}>
         
         {/* Row 1: Balansni to'ldirish (Dark Blue Squircle) */}
         <div
           onClick={() => toggleModal('topup')}
-          className={`card-row flex items-center justify-between p-4 cursor-pointer transition-colors border-b border-white/[0.04] ${
-            isDesktop && isTopUpOpen ? 'bg-white/[0.08] ring-1 ring-blue-500/50' : 'hover:bg-white/[0.03]'
+          className={`card-row flex items-center justify-between p-4 cursor-pointer transition-colors border-b ${
+            isLight ? 'border-black/[0.06]' : 'border-white/[0.04]'
+          } ${
+            isDesktop && isTopUpOpen
+              ? isLight ? 'bg-blue-50/70 ring-1 ring-blue-500/40' : 'bg-white/[0.08] ring-1 ring-blue-500/50'
+              : isLight ? 'hover:bg-black/[0.02]' : 'hover:bg-white/[0.03]'
           }`}
         >
           <div className="flex items-center gap-3.5">
@@ -341,19 +394,23 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
               <CreditCard className="w-5 h-5" />
             </div>
             <div>
-              <span className="font-bold text-white text-sm block">
+              <span className={`font-bold text-sm block ${isLight ? 'text-[#1C1C1E]' : 'text-white'}`}>
                 {lang === 'ru' ? 'Пополнить баланс' : "Balansni to'ldirish"}
               </span>
             </div>
           </div>
-          <ChevronRight className={`w-5 h-5 transition-transform ${isDesktop && isTopUpOpen ? 'text-blue-400 translate-x-1' : 'text-[#8E8E93]'}`} />
+          <ChevronRight className={`w-5 h-5 transition-transform ${isDesktop && isTopUpOpen ? 'text-blue-500 translate-x-1' : 'text-[#8E8E93]'}`} />
         </div>
 
         {/* Row 2: Sozlamalar (Dark Blue Squircle) */}
         <div
           onClick={() => toggleModal('settings')}
-          className={`card-row flex items-center justify-between p-4 cursor-pointer transition-colors border-b border-white/[0.04] ${
-            isDesktop && isSettingsOpen ? 'bg-white/[0.08] ring-1 ring-blue-500/50' : 'hover:bg-white/[0.03]'
+          className={`card-row flex items-center justify-between p-4 cursor-pointer transition-colors border-b ${
+            isLight ? 'border-black/[0.06]' : 'border-white/[0.04]'
+          } ${
+            isDesktop && isSettingsOpen
+              ? isLight ? 'bg-blue-50/70 ring-1 ring-blue-500/40' : 'bg-white/[0.08] ring-1 ring-blue-500/50'
+              : isLight ? 'hover:bg-black/[0.02]' : 'hover:bg-white/[0.03]'
           }`}
         >
           <div className="flex items-center gap-3.5">
@@ -361,17 +418,21 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
               <Settings className="w-5 h-5" />
             </div>
             <div>
-              <span className="font-bold text-white text-sm block">{t('sozlamalar')}</span>
+              <span className={`font-bold text-sm block ${isLight ? 'text-[#1C1C1E]' : 'text-white'}`}>{t('sozlamalar')}</span>
             </div>
           </div>
-          <ChevronRight className={`w-5 h-5 transition-transform ${isDesktop && isSettingsOpen ? 'text-blue-400 translate-x-1' : 'text-[#8E8E93]'}`} />
+          <ChevronRight className={`w-5 h-5 transition-transform ${isDesktop && isSettingsOpen ? 'text-blue-500 translate-x-1' : 'text-[#8E8E93]'}`} />
         </div>
 
         {/* Row 3: Aloqa va yordam (Dark Blue Squircle) */}
         <div
           onClick={() => toggleModal('support')}
-          className={`card-row flex items-center justify-between p-4 cursor-pointer transition-colors border-b border-white/[0.04] ${
-            isDesktop && isSupportOpen ? 'bg-white/[0.08] ring-1 ring-emerald-500/50' : 'hover:bg-white/[0.03]'
+          className={`card-row flex items-center justify-between p-4 cursor-pointer transition-colors border-b ${
+            isLight ? 'border-black/[0.06]' : 'border-white/[0.04]'
+          } ${
+            isDesktop && isSupportOpen
+              ? isLight ? 'bg-emerald-50/70 ring-1 ring-emerald-500/40' : 'bg-white/[0.08] ring-1 ring-emerald-500/50'
+              : isLight ? 'hover:bg-black/[0.02]' : 'hover:bg-white/[0.03]'
           }`}
         >
           <div className="flex items-center gap-3.5">
@@ -379,25 +440,27 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
               <Headphones className="w-5 h-5" />
             </div>
             <div>
-              <span className="font-bold text-white text-sm block">
+              <span className={`font-bold text-sm block ${isLight ? 'text-[#1C1C1E]' : 'text-white'}`}>
                 {lang === 'ru' ? 'Связь и помощь' : 'Aloqa va yordam'}
               </span>
             </div>
           </div>
-          <ChevronRight className={`w-5 h-5 transition-transform ${isDesktop && isSupportOpen ? 'text-emerald-400 translate-x-1' : 'text-[#8E8E93]'}`} />
+          <ChevronRight className={`w-5 h-5 transition-transform ${isDesktop && isSupportOpen ? 'text-emerald-500 translate-x-1' : 'text-[#8E8E93]'}`} />
         </div>
 
         {/* Row 4: Telegram Kanal (Dark Blue Squircle + Official Telegram Logo) */}
         <div
           onClick={handleOpenChannel}
-          className="card-row flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.03] transition-colors border-b border-white/[0.04]"
+          className={`card-row flex items-center justify-between p-4 cursor-pointer transition-colors border-b ${
+            isLight ? 'border-black/[0.06] hover:bg-black/[0.02]' : 'border-white/[0.04] hover:bg-white/[0.03]'
+          }`}
         >
           <div className="flex items-center gap-3.5">
             <div className="w-10 h-10 rounded-2xl bg-blue-600/15 border border-blue-500/30 flex items-center justify-center text-blue-500">
               <TelegramIcon className="w-5 h-5" />
             </div>
             <div>
-              <span className="font-bold text-white text-sm block">
+              <span className={`font-bold text-sm block ${isLight ? 'text-[#1C1C1E]' : 'text-white'}`}>
                 {lang === 'ru' ? 'Официальный канал' : 'Rasmiy kanal'}
               </span>
             </div>
@@ -408,20 +471,24 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
         {/* Row 5: Rasmiy sayt (Dark Blue Squircle) */}
         <div
           onClick={handleOpenWebsite}
-          className="card-row flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.03] transition-colors"
+          className={`card-row flex items-center justify-between p-4 cursor-pointer transition-colors ${
+            isLight ? 'hover:bg-black/[0.02]' : 'hover:bg-white/[0.03]'
+          }`}
         >
           <div className="flex items-center gap-3.5">
             <div className="w-10 h-10 rounded-2xl bg-blue-600/15 border border-blue-500/30 flex items-center justify-center text-blue-500">
               <Globe className="w-5 h-5" />
             </div>
             <div>
-              <span className="font-bold text-white text-sm block">
+              <span className={`font-bold text-sm block ${isLight ? 'text-[#1C1C1E]' : 'text-white'}`}>
                 {lang === 'ru' ? 'Официальный сайт' : 'Rasmiy sayt'}
               </span>
             </div>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-[#8E8E93] font-mono hidden sm:inline">
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className={`text-xs text-[#8E8E93] font-mono whitespace-nowrap ${
+              isDesktop && isAnyModalOpen ? 'hidden xl:inline' : 'hidden sm:inline'
+            }`}>
               {officialWebsite.replace(/^https?:\/\//, '')}
             </span>
             <ChevronRight className="w-5 h-5 text-[#8E8E93]" />

@@ -9,13 +9,14 @@ import ProfilePage from './pages/ProfilePage';
 import { useTelegram } from './hooks/useTelegram';
 import { useIsDesktop } from './hooks/useIsDesktop';
 import { getUserData, syncUserSession } from './api/supabase';
-import { LanguageProvider } from './context/LanguageContext';
+import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { getSavedProfileColor } from './utils/profileColors';
 import { Loader2 } from 'lucide-react';
 
 function MainApp() {
   const { resolvedTheme } = useTheme();
+  const { lang } = useLanguage();
   const isLight = resolvedTheme === 'light';
   const [activeTab, setActiveTab] = useState(0);
   const { tg, isTelegram, user: tgUser, setBackButton } = useTelegram();
@@ -53,20 +54,29 @@ function MainApp() {
     setProfileBackAction(() => action);
   }, []);
 
+  // Track whether an actual exam session is currently in progress (not merely viewing mode_select/variants)
+  const [isExamInProgress, setIsExamInProgress] = useState(false);
+
   // Desktop environment detection (>= 1024px with fine pointer and hover)
   const isDesktop = useIsDesktop();
 
   // Tab change handler respecting active exam restrictions
   const handleTabChange = useCallback((newTab) => {
-    if (activeTab === 1 && typeof testlarBackAction === 'function' && newTab !== 1) {
-      if (window.confirm("Test jarayonidan chiqmoqchimisiz? Natijalar saqlanmaydi.")) {
-        testlarBackAction();
+    if (activeTab === 1 && isExamInProgress && typeof testlarBackAction === 'function' && newTab !== 1) {
+      const msg = lang === 'ru'
+        ? 'Вы уверены, что хотите выйти из теста? Результаты не сохранятся.'
+        : "Test jarayonidan chiqmoqchimisiz? Natijalar saqlanmaydi.";
+      if (window.confirm(msg)) {
+        setIsExamInProgress(false);
         setActiveTab(newTab);
       }
       return;
     }
+    if (newTab !== 1 && isExamInProgress) {
+      setIsExamInProgress(false);
+    }
     setActiveTab(newTab);
-  }, [activeTab, testlarBackAction]);
+  }, [activeTab, isExamInProgress, testlarBackAction, lang]);
 
   // Coordinated Navigation-Level BackButton Handler (Telegram WebApp 6.1+)
   useEffect(() => {
@@ -160,11 +170,15 @@ function MainApp() {
 
   if (loading || !dbUser) {
     return (
-      <div className="h-screen w-full flex items-center justify-center bg-[#000000] text-white p-6 text-center">
+      <div className={`h-screen w-full flex items-center justify-center p-6 text-center ${
+        isLight ? 'bg-[#F2F2F7] text-[#1C1C1E]' : 'bg-[#000000] text-white'
+      }`}>
         <div className="flex flex-col items-center">
           <Loader2 className="w-10 h-10 text-[#007AFF] animate-spin mb-4" />
-          <h2 className="text-xl font-bold mb-1">Rashidov Biologiya</h2>
-          <p className="text-[#8E8E93] text-xs max-w-[240px]">Yuklanmoqda...</p>
+          <h2 className="text-xl font-bold mb-1">Rashidov School</h2>
+          <p className={`text-xs max-w-[240px] ${isLight ? 'text-[#6E6E73]' : 'text-[#8E8E93]'}`}>
+            {lang === 'ru' ? 'Загрузка...' : 'Yuklanmoqda...'}
+          </p>
         </div>
       </div>
     );
@@ -185,6 +199,7 @@ function MainApp() {
           <TestlarPage 
             user={dbUser} 
             onRegisterBackAction={registerTestlarBackAction}
+            onExamActiveChange={setIsExamInProgress}
           />
         );
       case 2:
@@ -254,8 +269,8 @@ function MainApp() {
         {renderTabContent()}
       </main>
 
-      {/* Floating Bottom Navigation Dock (Hidden during video playback) */}
-      {!isVideoPlaying && (
+      {/* Floating Bottom Navigation Dock (Hidden during video playback & active exam) */}
+      {!isVideoPlaying && !isExamInProgress && (
         <TabBar 
           activeTab={activeTab} 
           onTabChange={handleTabChange} 

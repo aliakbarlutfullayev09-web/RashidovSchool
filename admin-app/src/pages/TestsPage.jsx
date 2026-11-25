@@ -173,7 +173,7 @@ export default function TestsPage({ user }) {
       badge: formValues.badge?.trim() || 'Milliy Sertifikat',
       badgeColor: formValues.badgeColor || BADGE_PRESETS[0].value,
       questionCount: Math.max(1, parseInt(formValues.questionCount, 10) || 40),
-      durationMinutes: Math.max(1, parseInt(formValues.durationMinutes, 10) || 64),
+      durationMinutes: Math.max(1, parseInt(formValues.durationMinutes, 10) || 100),
       maxScore: Math.max(1, parseFloat(formValues.maxScore) || 75),
       difficulty: formValues.difficulty || 'Yuqori',
       difficultyColor: DIFFICULTY_STYLES[formValues.difficulty] || DIFFICULTY_STYLES.Yuqori,
@@ -602,7 +602,7 @@ export default function TestsPage({ user }) {
                 badge: selectedMode === 'sertifikat' ? 'A+ Daraja' : 'Standart DTM',
                 badgeColor: BADGE_PRESETS[0].value,
                 questionCount: modeConfig.questionCount || 40,
-                durationMinutes: modeConfig.durationMinutes || 64,
+                durationMinutes: modeConfig.durationMinutes || 100,
                 maxScore: modeConfig.maxScore || 75,
                 difficulty: 'Yuqori',
                 description: '',
@@ -835,7 +835,7 @@ function ModeSettingsEditor({ modeConfig, saving, onSave }) {
   const [badge, setBadge] = useState(modeConfig.badge || '');
   const [description, setDescription] = useState(modeConfig.description || '');
   const [questionCount, setQuestionCount] = useState(modeConfig.questionCount || 40);
-  const [durationMinutes, setDurationMinutes] = useState(modeConfig.durationMinutes || 64);
+  const [durationMinutes, setDurationMinutes] = useState(modeConfig.durationMinutes || 100);
   const [maxScore, setMaxScore] = useState(modeConfig.maxScore || 75);
   const [featuresText, setFeaturesText] = useState((modeConfig.features || []).join('\n'));
 
@@ -844,7 +844,7 @@ function ModeSettingsEditor({ modeConfig, saving, onSave }) {
     setBadge(modeConfig.badge || '');
     setDescription(modeConfig.description || '');
     setQuestionCount(modeConfig.questionCount || 40);
-    setDurationMinutes(modeConfig.durationMinutes || 64);
+    setDurationMinutes(modeConfig.durationMinutes || 100);
     setMaxScore(modeConfig.maxScore || 75);
     setFeaturesText((modeConfig.features || []).join('\n'));
   }, [modeConfig]);
@@ -857,7 +857,7 @@ function ModeSettingsEditor({ modeConfig, saving, onSave }) {
       badge: badge.trim() || "Davlat Ta'lim Standarti",
       description: description.trim(),
       questionCount: Math.max(1, parseInt(questionCount, 10) || 40),
-      durationMinutes: Math.max(1, parseInt(durationMinutes, 10) || 64),
+      durationMinutes: Math.max(1, parseInt(durationMinutes, 10) || 100),
       maxScore: Math.max(1, parseFloat(maxScore) || 75),
       features: featuresText
         .split('\n')
@@ -993,7 +993,7 @@ function VariantFormModal({ initial, saving, onClose, onSubmit }) {
               <input
                 type="number"
                 min={1}
-                value={form.durationMinutes || 64}
+                value={form.durationMinutes || 100}
                 onChange={e => setForm(prev => ({ ...prev, durationMinutes: e.target.value }))}
                 className="input-field"
                 required
