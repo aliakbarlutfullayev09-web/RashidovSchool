@@ -547,22 +547,22 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
                 custom={slideDirection}
                 variants={{
                   enter: (dir) => ({
-                    x: dir > 0 ? '100%' : '-100%',
+                    x: dir > 0 ? 'calc(100% + 20px)' : 'calc(-100% - 20px)',
                     opacity: 1,
                   }),
                   center: {
                     x: 0,
                     opacity: 1,
                     transition: {
-                      x: { type: "tween", ease: [0.32, 0.72, 0, 1], duration: 0.38 },
+                      x: { type: "tween", ease: [0.32, 0.72, 0, 1], duration: 0.4 },
                       opacity: { duration: 0 },
                     }
                   },
                   exit: (dir) => ({
-                    x: dir > 0 ? '-100%' : '100%',
+                    x: dir > 0 ? 'calc(-100% - 20px)' : 'calc(100% + 20px)',
                     opacity: 1,
                     transition: {
-                      x: { type: "tween", ease: [0.32, 0.72, 0, 1], duration: 0.38 },
+                      x: { type: "tween", ease: [0.32, 0.72, 0, 1], duration: 0.4 },
                       opacity: { duration: 0 },
                     }
                   })
