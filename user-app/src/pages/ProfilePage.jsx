@@ -44,6 +44,34 @@ const TelegramVerifiedBadge = ({ className = "w-6 h-6" }) => (
   </svg>
 );
 
+// Crisp SVG Streak Flame icon
+const StreakFlameSvgIcon = ({ className = "w-5 h-5" }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <defs>
+      <linearGradient id="streakFlameGrad" x1="12" y1="2" x2="12" y2="22" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stopColor="#FF9F0A" />
+        <stop offset="100%" stopColor="#FF3B30" />
+      </linearGradient>
+    </defs>
+    <path
+      d="M12.7 2.4c.2 2.4-.7 4.2-2.2 5.6-1.2 1.1-1.7 2.1-1.7 3.3 0 1 .4 1.8 1.2 2.4-.3-.9-.1-1.9.6-2.8.5-.7 1.3-1.2 2-1.7 1.1-.8 1.7-1.9 1.9-3.2 2.3 1.7 3.8 4.4 3.8 7.3 0 3.7-2.8 6.7-6.3 6.7S5.7 17 5.7 13.3c0-2.7 1.2-5 3.3-7.1 1.4-1.4 2.7-2.4 3.7-3.8z"
+      fill="url(#streakFlameGrad)"
+    />
+    <path
+      d="M12.2 19.6c1.7 0 3-1.3 3-3 0-1.1-.6-2.1-1.4-2.8-.1.9-.6 1.5-1.3 1.9-.6.4-1 .9-1 1.6 0 1.2.6 2.3 1.7 2.3z"
+      fill="#FFD60A"
+    />
+  </svg>
+);
+
+// Crisp SVG Neuron / Brain icon matching TopUpModal
+const NeuronSvgIcon = ({ className = "w-5 h-5" }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-1.54" />
+    <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-1.54" />
+  </svg>
+);
+
 export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }) {
   const { t, lang } = useLanguage();
   const { resolvedTheme } = useTheme();
@@ -208,15 +236,15 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
         {/* Telegram-Style Colored Profile Header Backdrop behind/around Avatar */}
         <div
           data-profile-color={profilePreset.id}
-          className="absolute inset-x-0 top-0 h-52 pointer-events-none transition-all duration-300"
+          className="absolute inset-x-0 top-0 h-56 pointer-events-none transition-all duration-300"
           style={{
             background: isLight
-              ? `radial-gradient(ellipse 95% 85% at 50% 0%, ${profilePreset.hex}44 0%, ${profilePreset.accent}18 55%, transparent 100%)`
-              : `radial-gradient(ellipse 95% 85% at 50% 0%, ${profilePreset.hex}66 0%, ${profilePreset.accent}22 50%, transparent 100%)`,
+              ? `radial-gradient(ellipse 100% 90% at 50% 0%, ${profilePreset.hex}BD 0%, ${profilePreset.accent}5C 48%, ${profilePreset.hex}18 76%, transparent 100%)`
+              : `radial-gradient(ellipse 100% 90% at 50% 0%, ${profilePreset.hex}99 0%, ${profilePreset.accent}42 52%, transparent 100%)`,
           }}
         >
           {/* Subtle Telegram-style floating background pattern icons around the avatar */}
-          <div className={`relative w-full h-full max-w-xs mx-auto ${isLight ? 'opacity-[0.22]' : 'opacity-[0.14]'}`} style={{ color: profilePreset.accent }}>
+          <div className={`relative w-full h-full max-w-xs mx-auto ${isLight ? 'opacity-[0.38]' : 'opacity-[0.22]'}`} style={{ color: profilePreset.accent }}>
             <Dna className="w-5 h-5 absolute top-5 left-12 -rotate-12" />
             <Sparkles className="w-4 h-4 absolute top-14 left-5 rotate-12" />
             <Atom className="w-5 h-5 absolute top-24 left-14 rotate-45" />
@@ -233,7 +261,7 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
             isDesktop && isEditProfileOpen
               ? 'border-[#007AFF] ring-2 ring-blue-500/30 bg-blue-500/15 text-[#007AFF]'
               : isLight
-              ? 'bg-black/[0.06] hover:bg-black/10 border-black/[0.08] text-[#1C1C1E]'
+              ? 'bg-white/70 hover:bg-white/90 border-black/[0.08] text-[#1C1C1E] shadow-sm'
               : 'bg-black/25 border-white/10 hover:bg-black/40 text-white/90'
           }`}
           title={lang === 'ru' ? 'Редактировать' : 'Tahrirlash'}
@@ -265,14 +293,12 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
               </div>
             )}
           </div>
-          {/* Official Telegram Verified Checkmark Badge */}
+          {/* Official Telegram Verified Checkmark Badge (no background circle) */}
           <div
             data-verified-badge="telegram"
-            className={`absolute bottom-0 right-0 rounded-full p-[2px] shadow-md flex items-center justify-center ${
-              isLight ? 'bg-white' : 'bg-[#1C1C1E]'
-            }`}
+            className="absolute -bottom-0.5 -right-0.5 flex items-center justify-center pointer-events-none"
           >
-            <TelegramVerifiedBadge className="w-6 h-6" />
+            <TelegramVerifiedBadge className="w-6 h-6 drop-shadow-sm" />
           </div>
         </div>
 
@@ -340,7 +366,7 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
           <div className={`border p-3 rounded-2xl flex flex-col items-center ${
             isLight ? 'bg-[#F2F2F7] border-black/[0.06]' : 'bg-[#2C2C2E] border-white/5'
           }`}>
-            <span className="text-lg mb-0.5">🔥</span>
+            <StreakFlameSvgIcon className="w-5 h-5 mb-1" />
             <span className={`text-[10px] leading-none mb-1 ${isLight ? 'text-gray-500' : 'text-[#8E8E93]'}`}>
               {lang === 'ru' ? 'Серия' : 'Streak'}
             </span>
@@ -361,7 +387,7 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
                 : 'bg-[#2C2C2E] border-blue-500/20 hover:border-blue-500/40'
             }`}
           >
-            <span className="text-lg mb-0.5">🧠</span>
+            <NeuronSvgIcon className={`w-5 h-5 mb-1 ${isLight ? 'text-[#007AFF]' : 'text-blue-400'}`} />
             <span className={`text-[10px] leading-none mb-1 ${isLight ? 'text-gray-500' : 'text-[#8E8E93]'}`}>
               {lang === 'ru' ? 'Баланс' : 'Balans'}
             </span>

@@ -68,8 +68,10 @@ export default function TabBar({ activeTab, onTabChange }) {
                 <motion.div
                   layoutId="activeTabIndicator"
                   transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                  className={`absolute inset-0 rounded-full ${
-                    isLight ? 'bg-blue-500/12' : 'bg-white/10'
+                  className={`absolute inset-0 rounded-full border ${
+                    isLight
+                      ? 'bg-[#007AFF]/15 border-[#007AFF]/25 shadow-[0_2px_10px_rgba(0,122,255,0.14)]'
+                      : 'bg-white/12 border-white/10'
                   }`}
                 />
               )}

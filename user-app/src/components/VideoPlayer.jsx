@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   Play, Pause, RotateCcw, Maximize, 
   BookOpen, Clock, AlertCircle, RefreshCw, Sparkles, CheckCircle2, 
-  X, ZoomIn, ZoomOut, ChevronDown, ArrowLeft 
+  X, ZoomIn, ZoomOut, ChevronDown 
 } from 'lucide-react';
 import CheckpointModal from './CheckpointModal';
 import GlossaryPanel from './GlossaryPanel';
@@ -105,22 +105,11 @@ export default function VideoPlayer({
   const ignoreNextClickUntilRef = useRef(0);
   const doubleTappedRef = useRef(false);
 
-  const canShowWebBack = Boolean(onBack) && (isDesktop || (typeof window !== 'undefined' && !window.Telegram?.WebApp?.initData));
-
-  // Expose onBack to window for Telegram native BackButton + support Escape on web
+  // Expose onBack to window for Telegram native BackButton
   useEffect(() => {
     window.__rb_exit_video = onBack;
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape' && canShowWebBack && !activeCheckpoint && !isGlossaryOpen) {
-        onBack();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.__rb_exit_video = null;
-    };
-  }, [onBack, canShowWebBack, activeCheckpoint, isGlossaryOpen]);
+    return () => { window.__rb_exit_video = null; };
+  }, [onBack]);
 
   // Keep maxWatchedRef in sync
   useEffect(() => {
@@ -540,38 +529,6 @@ export default function VideoPlayer({
       ref={containerRef}
       className="fixed inset-0 z-50 bg-[#000000] text-white flex flex-col justify-between overflow-hidden select-none video-player-container"
     >
-      {/* ── TOP-LEFT WEB BACK BUTTON (Desktop & Mobile Web when outside Telegram Mini App) ── */}
-      {canShowWebBack && (
-        <div
-          onTouchStart={(e) => e.stopPropagation()}
-          onTouchEnd={(e) => e.stopPropagation()}
-          className={`absolute z-40 pointer-events-auto transition-all duration-300 ${
-            isOverlayLayout ? 'left-4' : 'left-3'
-          } ${
-            isOverlayLayout && !showControls && !isGlossaryOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'
-          }`}
-          style={{
-            top: isOverlayLayout
-              ? 'max(calc(var(--safe-area-top, 0px) + 36px), 56px)'
-              : 'max(calc(var(--safe-area-top, 0px) + 54px), 80px)'
-          }}
-        >
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              impactLight();
-              onBack();
-            }}
-            aria-label={lang === 'ru' ? 'Назад' : 'Orqaga'}
-            title={lang === 'ru' ? 'Назад' : 'Orqaga'}
-            className="h-9 px-3 rounded-full bg-black/60 hover:bg-black/80 backdrop-blur-xl border border-white/20 text-white/95 flex items-center gap-1.5 text-xs font-semibold shadow-xl active:scale-95 transition-all cursor-pointer"
-          >
-            <ArrowLeft className="w-4 h-4 shrink-0" />
-            <span>{lang === 'ru' ? 'Назад' : 'Orqaga'}</span>
-          </button>
-        </div>
-      )}
 
       {/* ── TOP TELEGRAM-STYLE "TERMINLAR" BUTTON (Positioned below Telegram's ∨ ⋮ capsule) ── */}
       <div 
@@ -619,15 +576,13 @@ export default function VideoPlayer({
         </button>
       </div>
 
-      {/* Floating Zoom Indicator & Reset Button (Positioned below Telegram's ← Назад) */}
+      {/* Floating Zoom Indicator & Reset Button */}
       {zoomScale > 1.05 && (
         <div
           onTouchStart={(e) => e.stopPropagation()}
           onTouchEnd={(e) => e.stopPropagation()}
           className={`absolute z-40 pointer-events-auto transition-all animate-in fade-in ${
-            canShowWebBack
-              ? (isOverlayLayout ? 'left-28' : 'left-28')
-              : (isOverlayLayout ? 'left-4' : 'left-3')
+            isOverlayLayout ? 'left-4' : 'left-3'
           } ${
             isOverlayLayout && !showControls ? 'opacity-0 pointer-events-none' : 'opacity-100'
           }`}
