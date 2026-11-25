@@ -99,6 +99,7 @@ export default {
       },
       fontFamily: {
         sans: ['-apple-system', 'BlinkMacSystemFont', '"SF Pro Display"', 'system-ui', 'sans-serif'],
+        display: ['"Outfit"', '"Montserrat"', 'system-ui', 'sans-serif'],
       },
     },
   },

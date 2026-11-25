@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from bot.handlers.click_webhook import router as click_router
+from bot.handlers.payments import api_router as payments_api_router
 
 logging.basicConfig(level=logging.INFO)
 
@@ -53,6 +54,7 @@ async def main():
     )
     
     app.include_router(click_router)
+    app.include_router(payments_api_router)
     
     uvicorn_config = uvicorn.Config(app, host="0.0.0.0", port=config.FASTAPI_PORT, log_level="info")
     server = uvicorn.Server(uvicorn_config)

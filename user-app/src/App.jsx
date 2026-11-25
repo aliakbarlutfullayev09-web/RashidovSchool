@@ -11,6 +11,7 @@ import { useIsDesktop } from './hooks/useIsDesktop';
 import { getUserData, syncUserSession } from './api/supabase';
 import { LanguageProvider } from './context/LanguageContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
+import { getSavedProfileColor } from './utils/profileColors';
 import { Loader2 } from 'lucide-react';
 
 function MainApp() {
@@ -113,17 +114,24 @@ function MainApp() {
       
       const telegramId = urlUserId ? parseInt(urlUserId, 10) : (tgUserObj?.id || tgUser?.id || tgUser?.telegram_id);
       const firstName = tgUserObj?.first_name || tgUser?.first_name || 'Aliakbar Lutfullayev';
+      const photoUrl = tgUserObj?.photo_url || tgUser?.photo_url || null;
+      const resolvedId = telegramId || 123456789;
 
       const rawUser = {
-        id: telegramId || 123456789,
-        telegram_id: telegramId || 123456789,
-        first_name: firstName
+        id: resolvedId,
+        telegram_id: resolvedId,
+        first_name: firstName,
+        photo_url: photoUrl
       };
 
       try {
         const synced = await syncUserSession(rawUser);
         if (mounted && synced) {
-          setDbUser(synced);
+          setDbUser({
+            ...synced,
+            photo_url: synced.photo_url || photoUrl,
+            profile_color: getSavedProfileColor(synced.telegram_id || resolvedId)
+          });
           setLoading(false);
           return;
         }
@@ -132,8 +140,10 @@ function MainApp() {
       }
       
       setDbUser({
-        telegram_id: telegramId || 123456789,
+        telegram_id: resolvedId,
         full_name: firstName,
+        photo_url: photoUrl,
+        profile_color: getSavedProfileColor(resolvedId),
         balance: 1000,
         streak_days: 1,
         class_group: '11-A',
@@ -201,7 +211,7 @@ function MainApp() {
   return (
     <div 
       className={`${isLight ? 'bg-[#F2F2F7] text-[#1C1C1E]' : 'bg-[#000000] text-white'} relative flex flex-col ${
-        isDesktop ? 'w-full h-full min-h-screen pl-28 pr-6' : 'w-full max-w-[480px] mx-auto'
+        isDesktop ? 'w-full h-full min-h-screen pl-28 pr-6' : 'w-full max-w-[480px] sm:max-w-4xl mx-auto'
       }`}
       style={{
         height: 'var(--app-viewport-stable-height, 100dvh)',

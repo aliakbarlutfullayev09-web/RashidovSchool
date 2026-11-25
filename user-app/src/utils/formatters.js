@@ -20,3 +20,19 @@ export function formatTime(seconds) {
   const s = Math.floor(seconds % 60);
   return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 }
+
+/**
+ * Formats video duration cleanly (e.g. "2:05", "14:20", "1:02:15").
+ * Returns null if duration is missing/invalid.
+ */
+export function formatVideoDuration(seconds) {
+  const sec = Math.round(Number(seconds));
+  if (!Number.isFinite(sec) || sec <= 0) return null;
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  if (h > 0) {
+    return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  }
+  return `${m}:${String(s).padStart(2, '0')}`;
+}

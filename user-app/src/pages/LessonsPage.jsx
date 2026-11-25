@@ -11,7 +11,15 @@ import {
 import { useLanguage } from '../context/LanguageContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useIsDesktop } from '../hooks/useIsDesktop';
+import { useVideoDurations } from '../hooks/useVideoDurations';
 import DesktopSubjectCarousel from '../components/DesktopSubjectCarousel';
+
+const DEFAULT_COVER_IMAGE = 'https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?auto=format&fit=crop&w=800&q=80';
+const LESSON_FILTER_TABS = [
+  { id: 'unwatched', label: 'Ko‘rilmagan' },
+  { id: 'continue', label: 'Qaytarish' },
+  { id: 'saved', label: 'Saqlangan' }
+];
 
 export default function LessonsPage({ user, onPlayingChange, onRegisterBackAction }) {
   const { t } = useLanguage();
@@ -37,6 +45,22 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
   const [lessons, setLessons] = useState([]);
   const [progressMap, setProgressMap] = useState({});
   const [loading, setLoading] = useState(true);
+  const durationsById = useVideoDurations(lessons);
+
+  const courseById = React.useMemo(() => {
+    return courses.reduce((acc, c) => {
+      acc[c.id] = c;
+      return acc;
+    }, {});
+  }, [courses]);
+
+  const getLessonCover = (lesson) =>
+    lesson?.thumbnail_url || courseById[lesson?.course_id]?.image_url || DEFAULT_COVER_IMAGE;
+
+  const getLessonDuration = (lesson) => durationsById[lesson?.id] || lesson?.duration || null;
+
+  const getLessonCategory = (lesson) =>
+    lesson?.category_name || courseById[lesson?.course_id]?.title || activeSubject?.name || 'Biologiya';
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -597,13 +621,13 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
       )}
 
       {/* ──────────────────────────────────────────────────────────
-          SCREEN 2: SUBJECT HUB (2x2 CATEGORIES & RECENT LESSON)
+          SCREEN 2: SUBJECT HUB (RESPONSIVE COURSE GRID & RECENT LESSON)
       ────────────────────────────────────────────────────────── */}
       {currentView === 'subject_hub' && (
-        <div className="w-full max-w-md desktop:max-w-3xl mx-auto px-4 pt-3 pb-8 animate-in fade-in duration-300">
-          {/* Search Input Bar with glass styling */}
+        <div className="w-full max-w-md sm:max-w-4xl desktop:max-w-7xl mx-auto px-4 desktop:px-2 pt-3 pb-8 animate-in fade-in duration-300">
+          {/* Search Input Bar with glass styling & visible Search icon */}
           <div className="relative mb-3">
-            <Search className="w-4 h-4 text-[#8E8E93] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Search className="w-4 h-4 text-white/60 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none z-10" />
             <input
               type="text"
               value={searchQuery}
@@ -618,22 +642,18 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
             />
           </div>
 
-          {/* Filter Chips */}
+          {/* Filter Chips (Barchasi removed; active chip toggles off on second tap) */}
           <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar mb-5 py-1">
-            {[
-              { id: 'all', label: 'Barchasi' },
-              { id: 'unwatched', label: 'Ko‘rilmagan' },
-              { id: 'continue', label: 'Qaytarish' },
-              { id: 'saved', label: 'Saqlangan' }
-            ].map((tab) => {
+            {LESSON_FILTER_TABS.map((tab) => {
               const isActive = activeFilter === tab.id;
               return (
                 <button
                   key={tab.id}
                   onClick={() => {
                     impactLight();
-                    setActiveFilter(tab.id);
-                    if (tab.id !== 'all') {
+                    const next = activeFilter === tab.id ? 'all' : tab.id;
+                    setActiveFilter(next);
+                    if (next !== 'all') {
                       setCurrentView('lesson_list');
                     }
                   }}
@@ -649,8 +669,8 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
             })}
           </div>
 
-          {/* Grid of Thematic Courses */}
-          <div className="grid grid-cols-2 gap-3 mb-6">
+          {/* Responsive Grid of Thematic Courses: 3 cols on wide/PC, 2 on tablet, 1 on phone */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-5 mb-6">
             {courses.length > 0 ? (
               courses.map((course, idx) => (
                 <div
@@ -660,24 +680,24 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
                     setSelectedCourse(course);
                     setCurrentView('lesson_list');
                   }}
-                  className="relative aspect-[4/3] rounded-2xl overflow-hidden border border-white/5 hover:border-emerald-500/40 cursor-pointer active:scale-[0.98] transition-all group shadow-lg"
+                  className="relative aspect-[16/10] rounded-2xl sm:rounded-3xl overflow-hidden border border-white/10 hover:border-emerald-500/45 cursor-pointer active:scale-[0.98] transition-all group shadow-xl bg-[#1C1C1E]"
                 >
                   <img 
-                    src={course.image_url || 'https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?auto=format&fit=crop&w=600&q=80'} 
+                    src={course.image_url || DEFAULT_COVER_IMAGE} 
                     alt={course.title} 
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-black/10" />
 
-                  <div className="absolute bottom-3 left-3 right-3">
-                    <h4 className="text-white font-bold text-sm tracking-wide leading-tight">
+                  <div className="absolute bottom-4 left-4 right-4">
+                    <h4 className="font-display text-white font-extrabold text-xl sm:text-2xl tracking-tight leading-tight first-letter:uppercase drop-shadow-md group-hover:text-emerald-300 transition-colors">
                       {course.title}
                     </h4>
                   </div>
                 </div>
               ))
             ) : (
-              <div className="col-span-2 p-5 bg-[#1C1C1E] border border-white/5 rounded-2xl text-center text-xs text-[#8E8E93]">
+              <div className="col-span-full p-5 bg-[#1C1C1E] border border-white/5 rounded-2xl text-center text-xs text-[#8E8E93]">
                 Ushbu fanda kurslar mavjud emas
               </div>
             )}
@@ -697,7 +717,7 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-[#2C2C2E] flex-shrink-0">
                     <img 
-                      src={lastWatchedLesson.thumbnail_url || 'https://images.unsplash.com/photo-1490750967868-88aa4486c946?auto=format&fit=crop&w=400&q=80'} 
+                      src={getLessonCover(lastWatchedLesson)} 
                       alt="" 
                       className="w-full h-full object-cover" 
                     />
@@ -748,10 +768,10 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
           SCREEN 3: LESSON LIST & SEARCH RESULTS
       ────────────────────────────────────────────────────────── */}
       {currentView === 'lesson_list' && (
-        <div className="w-full max-w-md desktop:max-w-3xl mx-auto px-4 pt-3 pb-8 animate-in fade-in duration-300">
-          {/* Search Input Bar with Clear button and glass styling */}
+        <div className="w-full max-w-md sm:max-w-4xl desktop:max-w-7xl mx-auto px-4 desktop:px-2 pt-3 pb-8 animate-in fade-in duration-300">
+          {/* Search Input Bar with Clear button, visible Search icon & glass styling */}
           <div className="relative mb-3">
-            <Search className="w-4 h-4 text-[#8E8E93] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Search className="w-4 h-4 text-white/60 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none z-10" />
             <input
               type="text"
               value={searchQuery}
@@ -762,86 +782,155 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-[#2C2C2E] flex items-center justify-center text-[#8E8E93] hover:text-white"
+                className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-[#2C2C2E] flex items-center justify-center text-[#8E8E93] hover:text-white z-10"
               >
                 <X className="w-3 h-3" />
               </button>
             )}
           </div>
 
-          {/* Subtitle: "X ta dars topildi" */}
-          <div className="flex items-center justify-between mb-3 px-1">
-            <span className="text-xs text-[#8E8E93] font-medium">
-              {filteredLessons.length} ta dars topildi
-            </span>
-
-            {selectedCourse && (
-              <button
-                onClick={() => setSelectedCourse(null)}
-                className="text-[11px] text-[#007AFF] font-bold"
-              >
-                Barchasi
-              </button>
-            )}
+          {/* Filter Chips (no Barchasi button; toggleable filters) */}
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar mb-5 py-1">
+            {LESSON_FILTER_TABS.map((tab) => {
+              const isActive = activeFilter === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    impactLight();
+                    setActiveFilter(prev => prev === tab.id ? 'all' : tab.id);
+                  }}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap active:scale-95 ${
+                    isActive
+                      ? 'bg-[#007AFF] text-white shadow-md shadow-blue-500/20'
+                      : 'bg-[#1C1C1E] border border-white/5 text-[#8E8E93] hover:text-white'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
           </div>
 
-          {/* List of Compact Horizontal Lesson Cards */}
+          {/* Lessons: Grid Cards (like Courses) on Tablet/PC, Compact Rows on Phone */}
           {filteredLessons.length > 0 ? (
-            <div className="space-y-2.5 mb-6">
-              {filteredLessons.map((lesson, idx) => {
-                const isSaved = savedLessonIds.includes(lesson.id);
+            <>
+              {/* Phone Portrait Compact Row List */}
+              <div className="space-y-2.5 sm:hidden mb-6">
+                {filteredLessons.map((lesson, idx) => {
+                  const isSaved = savedLessonIds.includes(lesson.id);
+                  const realDuration = getLessonDuration(lesson);
 
-                return (
-                  <div
-                    key={lesson.id || idx}
-                    onClick={() => handleStartLesson(lesson)}
-                    className="bg-[#1C1C1E] border border-white/5 hover:border-white/15 rounded-2xl p-2.5 flex items-center gap-3 cursor-pointer active:scale-[0.98] transition-all shadow-md group"
-                  >
-                    {/* 16:9 Thumbnail Box */}
-                    <div className="relative w-28 aspect-video rounded-xl overflow-hidden bg-[#2C2C2E] flex-shrink-0">
+                  return (
+                    <div
+                      key={lesson.id || idx}
+                      onClick={() => handleStartLesson(lesson)}
+                      className="bg-[#1C1C1E] border border-white/5 hover:border-white/15 rounded-2xl p-2.5 flex items-center gap-3 cursor-pointer active:scale-[0.98] transition-all shadow-md group"
+                    >
+                      {/* 16:9 Thumbnail Box */}
+                      <div className="relative w-28 aspect-video rounded-xl overflow-hidden bg-[#2C2C2E] flex-shrink-0">
+                        <img 
+                          src={getLessonCover(lesson)} 
+                          alt={lesson.title} 
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                        />
+                        {realDuration && (
+                          <div className="absolute bottom-1 left-1 bg-black/80 backdrop-blur-md px-1.5 py-0.5 rounded text-[9px] font-mono font-bold text-white flex items-center gap-1">
+                            <Play className="w-2 h-2 fill-white" />
+                            <span>{realDuration}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Lesson Title & Category */}
+                      <div className="flex-1 min-w-0 pr-1">
+                        <h4 className="text-white font-bold text-xs leading-snug line-clamp-2 mb-1 group-hover:text-blue-400 transition-colors">
+                          {lesson.title}
+                        </h4>
+                        <span className="text-[11px] text-[#8E8E93] block truncate">
+                          {getLessonCategory(lesson)}
+                        </span>
+                      </div>
+
+                      {/* Bookmark Button */}
+                      <button
+                        onClick={(e) => toggleBookmark(e, lesson.id)}
+                        className="w-8 h-8 rounded-full bg-[#2C2C2E] flex items-center justify-center text-white/80 active:scale-90 transition-transform flex-shrink-0"
+                        title="Saqlash"
+                      >
+                        {isSaved ? (
+                          <BookmarkCheck className="w-4 h-4 text-amber-400" />
+                        ) : (
+                          <Bookmark className="w-4 h-4 text-[#8E8E93]" />
+                        )}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Tablet & PC Rich Course-Style Visual Card Grid */}
+              <div className="hidden sm:grid sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-5 mb-6">
+                {filteredLessons.map((lesson, idx) => {
+                  const isSaved = savedLessonIds.includes(lesson.id);
+                  const realDuration = getLessonDuration(lesson);
+
+                  return (
+                    <div
+                      key={lesson.id || idx}
+                      onClick={() => handleStartLesson(lesson)}
+                      className="relative aspect-[16/10] rounded-2xl sm:rounded-3xl overflow-hidden border border-white/10 hover:border-blue-500/45 cursor-pointer active:scale-[0.98] transition-all group shadow-xl bg-[#1C1C1E]"
+                    >
                       <img 
-                        src={lesson.thumbnail_url || 'https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?auto=format&fit=crop&w=400&q=80'} 
-                        alt="" 
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                        src={getLessonCover(lesson)} 
+                        alt={lesson.title} 
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
                       />
-                      {/* Duration Tag */}
-                      <div className="absolute bottom-1 left-1 bg-black/80 backdrop-blur-md px-1.5 py-0.5 rounded text-[9px] font-mono font-bold text-white flex items-center gap-1">
-                        <Play className="w-2 h-2 fill-white" />
-                        <span>{lesson.duration || '14 daq'}</span>
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-black/15" />
+
+                      {/* Top Row: Real Duration Badge + Bookmark Button */}
+                      <div className="absolute top-3 left-3 right-3 flex items-center justify-between">
+                        {realDuration ? (
+                          <div className="bg-black/70 backdrop-blur-md border border-white/10 px-2.5 py-1 rounded-full text-[11px] font-mono font-bold text-white flex items-center gap-1.5 shadow">
+                            <Play className="w-2.5 h-2.5 fill-white" />
+                            <span>{realDuration}</span>
+                          </div>
+                        ) : (
+                          <div />
+                        )}
+
+                        <button
+                          onClick={(e) => toggleBookmark(e, lesson.id)}
+                          className="w-8 h-8 rounded-full bg-black/60 hover:bg-black/80 backdrop-blur-md border border-white/15 flex items-center justify-center text-white active:scale-90 transition-all"
+                          title="Saqlash"
+                        >
+                          {isSaved ? (
+                            <BookmarkCheck className="w-4 h-4 text-amber-400" />
+                          ) : (
+                            <Bookmark className="w-4 h-4 text-white/80" />
+                          )}
+                        </button>
+                      </div>
+
+                      {/* Bottom Lesson Title & Category */}
+                      <div className="absolute bottom-4 left-4 right-4">
+                        <h4 className="font-display text-white font-extrabold text-lg lg:text-xl tracking-tight leading-snug line-clamp-2 drop-shadow-md group-hover:text-blue-300 transition-colors">
+                          {lesson.title}
+                        </h4>
+                        <span className="text-xs text-white/65 font-medium block truncate mt-0.5">
+                          {getLessonCategory(lesson)}
+                        </span>
                       </div>
                     </div>
-
-                    {/* Lesson Title & Category */}
-                    <div className="flex-1 min-w-0 pr-1">
-                      <h4 className="text-white font-bold text-xs leading-snug line-clamp-2 mb-1 group-hover:text-blue-400 transition-colors">
-                        {lesson.title}
-                      </h4>
-                      <span className="text-[11px] text-[#8E8E93] block truncate">
-                        {lesson.category_name || 'Biologiya'}
-                      </span>
-                    </div>
-
-                    {/* Bookmark Button */}
-                    <button
-                      onClick={(e) => toggleBookmark(e, lesson.id)}
-                      className="w-8 h-8 rounded-full bg-[#2C2C2E] flex items-center justify-center text-white/80 active:scale-90 transition-transform flex-shrink-0"
-                      title="Saqlash"
-                    >
-                      {isSaved ? (
-                        <BookmarkCheck className="w-4 h-4 text-amber-400" />
-                      ) : (
-                        <Bookmark className="w-4 h-4 text-[#8E8E93]" />
-                      )}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            </>
           ) : (
             /* Empty State */
             <div className="bg-[#1C1C1E] border border-white/5 rounded-3xl p-8 text-center my-6">
-              <div className="w-10 h-10 rounded-2xl bg-white/5 flex items-center justify-center text-lg mx-auto mb-3 text-[#8E8E93]">
-                🔍
+              <div className="w-10 h-10 rounded-2xl bg-white/5 flex items-center justify-center mx-auto mb-3 text-[#8E8E93]">
+                <Search className="w-5 h-5" />
               </div>
               <h4 className="text-white font-bold text-xs mb-1">Dars topilmadi</h4>
               <p className="text-[11px] text-[#8E8E93] mb-4">
@@ -859,21 +948,6 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
               </button>
             </div>
           )}
-
-          {/* Bottom link: "Biologiyaning barcha mavzulari >" */}
-          <div
-            onClick={() => {
-              impactLight();
-              setSelectedCourse(null);
-              setSearchQuery('');
-              setActiveFilter('all');
-            }}
-            className="text-center py-2 cursor-pointer active:scale-95 transition-transform"
-          >
-            <span className="text-xs font-bold text-[#007AFF] hover:underline">
-              {activeSubject.name}ning barcha mavzulari &gt;
-            </span>
-          </div>
 
         </div>
       )}

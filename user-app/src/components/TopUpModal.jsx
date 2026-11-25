@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Check, Copy, Sparkles, Star, CreditCard, Ticket, Gift, ExternalLink } from 'lucide-react';
+import {
+  X, Wallet, Ticket, Gift, Clock, Loader2, CheckCircle2, AlertCircle
+} from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import { useTheme } from '../context/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useIsDesktop } from '../hooks/useIsDesktop';
-import { applyPromoCode } from '../api/supabase';
+import { applyPromoCode, createStarsInvoiceLink, getUserData } from '../api/supabase';
 
 const STARS_PACKAGES = [
   { stars: 5, neyrons: 1250 },
@@ -15,24 +18,74 @@ const STARS_PACKAGES = [
   { stars: 3500, neyrons: 1000000, hit: true }
 ];
 
-const DAILY_QUESTS = [
-  { id: 'quest_1', title: "1 ta darsni to'liq ko'rish", reward: 100, icon: "▶️", progress: "1/1", done: true },
-  { id: 'quest_2', title: "Kanalga a'zo bo'lish", reward: 150, icon: "📢", progress: "0/1", done: false, link: "https://t.me/rashidov_biologiya" },
-  { id: 'quest_3', title: "Do'stni taklif qilish", reward: 300, icon: "👥", progress: "0/1", done: false, action: "share" }
-];
+// Crisp SVG Neuron / Brain icon (replaces brain emoji)
+const NeuronSvgIcon = ({ className = "w-7 h-7" }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-1.54" />
+    <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-1.54" />
+  </svg>
+);
+
+// Authentic rounded Telegram Star SVG icon (replaces star emoji)
+const TelegramStarIcon = ({ className = "w-3.5 h-3.5" }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12.001 2.5c.63 0 1.21.35 1.5.91l2.12 4.11 4.55.73c.62.1 1.13.53 1.32 1.13.19.6.02 1.25-.44 1.68l-3.25 3.24.71 4.55c.1.62-.16 1.24-.67 1.61-.51.37-1.18.42-1.74.13L12 18.48l-4.1 2.11c-.56.29-1.23.24-1.74-.13a1.69 1.69 0 0 1-.67-1.61l.71-4.55-3.25-3.24a1.68 1.68 0 0 1-.44-1.68c.19-.6.7-1.03 1.32-1.13l4.55-.73 2.12-4.11c.29-.56.87-.91 1.5-.91z" />
+  </svg>
+);
 
 export default function TopUpModal({ isOpen, onClose, user, onUpdateUser, inlineDesktop = false }) {
-  const { t, lang } = useLanguage();
+  const { lang } = useLanguage();
+  const { resolvedTheme } = useTheme();
   const { selectionChanged, notificationSuccess, notificationError, impactMedium } = useHaptic();
   const isDesktop = useIsDesktop();
+  const isLight = resolvedTheme === 'light';
+
   const [activeTab, setActiveTab] = useState('stars'); // 'stars' | 'promo' | 'quests'
+
+  // Stars invoice state
+  const [buyingStars, setBuyingStars] = useState(null);
+  const [starsFeedback, setStarsFeedback] = useState(null);
 
   // Promo state
   const [promoInput, setPromoInput] = useState('');
   const [promoLoading, setPromoLoading] = useState(false);
   const [promoMessage, setPromoMessage] = useState(null);
 
-  // Escape key listener for desktop
+  // Native Telegram WebApp BackButton coordination & title sync (matches SettingsModal & SupportModal)
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const prevTitle = document.title;
+    document.title = lang === 'ru' ? 'Баланс' : 'Balans';
+
+    const tg = window.Telegram?.WebApp;
+    if (tg?.BackButton) {
+      const handleTelegramBack = () => {
+        onClose();
+      };
+
+      try {
+        tg.BackButton.show();
+        tg.BackButton.onClick(handleTelegramBack);
+      } catch (e) {
+        console.warn('Telegram BackButton attach error in TopUpModal:', e);
+      }
+
+      return () => {
+        document.title = prevTitle;
+        try {
+          tg.BackButton.offClick(handleTelegramBack);
+          tg.BackButton.hide();
+        } catch {}
+      };
+    }
+
+    return () => {
+      document.title = prevTitle;
+    };
+  }, [isOpen, onClose, lang]);
+
+  // Keyboard Escape listener
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e) => {
@@ -48,15 +101,96 @@ export default function TopUpModal({ isOpen, onClose, user, onUpdateUser, inline
     if (tab !== activeTab) {
       selectionChanged();
       setActiveTab(tab);
+      setStarsFeedback(null);
     }
   };
 
-  const handleBuyStars = (pkg) => {
+  const refreshBalanceAfterPayment = async (creditedNeurons) => {
+    if (!user?.telegram_id) return;
+    const initialBalance = Number(user?.balance || 0);
+
+    // Poll briefly so webhook update from bot/handlers/payments.py reflects right away
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await new Promise((r) => setTimeout(r, 450));
+      try {
+        const { data } = await getUserData(user.telegram_id);
+        if (data && Number(data.balance) > initialBalance) {
+          if (onUpdateUser) onUpdateUser({ ...user, ...data });
+          return;
+        }
+      } catch {}
+    }
+
+    if (onUpdateUser) {
+      onUpdateUser({ ...user, balance: initialBalance + creditedNeurons });
+    }
+  };
+
+  const handleBuyStars = async (pkg) => {
+    if (buyingStars !== null) return;
     impactMedium();
-    if (window.Telegram?.WebApp?.openTelegramLink) {
-      window.Telegram.WebApp.openTelegramLink(`https://t.me/RashidovSchool_bot?start=buy_${pkg.stars}`);
-    } else {
-      alert(`Telegram Stars: ${pkg.stars} ⭐️`);
+    setStarsFeedback(null);
+    setBuyingStars(pkg.stars);
+
+    try {
+      const tg = window.Telegram?.WebApp;
+      if (!tg || typeof tg.openInvoice !== 'function') {
+        notificationError();
+        setStarsFeedback({
+          type: 'error',
+          text: lang === 'ru'
+            ? 'Оплата через Telegram Stars доступна внутри приложения Telegram.'
+            : "Telegram Stars orqali to'lov faqat Telegram ilovasi ichida ishlaydi."
+        });
+        setBuyingStars(null);
+        return;
+      }
+
+      const res = await createStarsInvoiceLink(pkg.stars, user?.telegram_id);
+      if (!res?.ok || !res?.invoiceUrl) {
+        notificationError();
+        setStarsFeedback({
+          type: 'error',
+          text: res?.code === 'BOT_TOKEN_MISSING'
+            ? (lang === 'ru'
+                ? 'Счёт на оплату не настроен (отсутствует BOT_TOKEN на сервере).'
+                : "To'lov schyotini yaratish uchun serverda BOT_TOKEN sozlanmagan.")
+            : (res?.error || (lang === 'ru'
+                ? 'Не удалось открыть счёт на оплату. Попробуйте позже.'
+                : "To'lov schyotini ochib bo'lmadi. Keyinroq urinib ko'ring."))
+        });
+        setBuyingStars(null);
+        return;
+      }
+
+      tg.openInvoice(res.invoiceUrl, async (status) => {
+        setBuyingStars(null);
+        if (status === 'paid') {
+          notificationSuccess();
+          setStarsFeedback({
+            type: 'success',
+            text: lang === 'ru'
+              ? `+${pkg.neyrons.toLocaleString('ru-RU')} Нейронов зачислено!`
+              : `+${pkg.neyrons.toLocaleString('ru-RU')} Neyron hisobingizga qo'shildi!`
+          });
+          await refreshBalanceAfterPayment(pkg.neyrons);
+        } else if (status === 'failed') {
+          notificationError();
+          setStarsFeedback({
+            type: 'error',
+            text: lang === 'ru'
+              ? 'Оплата не прошла. Попробуйте ещё раз.'
+              : "To'lov amalga oshmadi. Qayta urinib ko'ring."
+          });
+        }
+      });
+    } catch (err) {
+      notificationError();
+      setStarsFeedback({
+        type: 'error',
+        text: err?.message || (lang === 'ru' ? 'Ошибка соединения' : 'Aloqa xatosi')
+      });
+      setBuyingStars(null);
     }
   };
 
@@ -87,213 +221,255 @@ export default function TopUpModal({ isOpen, onClose, user, onUpdateUser, inline
     }
   };
 
-  const handleQuestAction = (quest) => {
-    impactMedium();
-    if (quest.link) {
-      if (window.Telegram?.WebApp?.openTelegramLink) {
-        window.Telegram.WebApp.openTelegramLink(quest.link);
-      } else {
-        window.open(quest.link, '_blank');
-      }
-    } else if (quest.action === 'share') {
-      const shareUrl = `https://t.me/share/url?url=https://t.me/RashidovSchool_bot?start=ref_${user?.telegram_id || ''}&text=${encodeURIComponent("Rashidov Biologiya platformasida bepul darslar va testlar!")}`;
-      if (window.Telegram?.WebApp?.openTelegramLink) {
-        window.Telegram.WebApp.openTelegramLink(shareUrl);
-      } else {
-        window.open(shareUrl, '_blank');
-      }
-    }
-  };
-
   const modalContent = (
     <motion.div
-      initial={{ opacity: 0, y: isDesktop ? 10 : '100%' }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: isDesktop ? 10 : '100%' }}
-      transition={{ type: "spring", damping: 26, stiffness: 320 }}
-      className={`bg-[#161618] border border-white/10 overflow-hidden flex flex-col shadow-2xl relative pointer-events-auto ${
+      initial={{ opacity: 0, scale: 0.98, x: isDesktop ? 15 : 0 }}
+      animate={{ opacity: 1, scale: 1, x: 0 }}
+      exit={{ opacity: 0, scale: 0.98, x: isDesktop ? 15 : 0 }}
+      transition={{ duration: 0.2 }}
+      className={`${
         isDesktop && inlineDesktop
-          ? 'w-[420px] max-w-[420px] h-[min(720px,calc(100vh-60px))] rounded-[32px]'
+          ? 'w-full max-w-[420px] h-[min(720px,calc(100vh-48px))] rounded-[32px] border border-white/10 shadow-2xl overflow-hidden flex flex-col select-none'
           : isDesktop
-          ? 'fixed right-10 top-1/2 -translate-y-1/2 w-[420px] max-w-[420px] h-[min(720px,calc(100vh-60px))] rounded-[32px]'
-          : 'w-full max-w-lg rounded-t-[32px] sm:rounded-[32px] max-h-[90vh]'
+          ? 'fixed z-10 flex flex-col select-none pointer-events-auto right-10 top-1/2 -translate-y-1/2 w-[420px] max-w-[420px] h-[min(720px,calc(100vh-60px))] rounded-[32px] border border-white/10 shadow-2xl overflow-hidden'
+          : 'fixed inset-0 z-10 flex flex-col select-none pointer-events-auto'
+      } ${
+        isLight
+          ? 'bg-[#F2F2F7] text-gray-900'
+          : 'bg-[#121214] text-white'
       }`}
     >
-          {/* Header with 3D Glowing Brain */}
-          <div className="relative pt-6 pb-4 px-6 flex flex-col items-center bg-gradient-to-b from-[#1C1C1E] to-[#161618] border-b border-white/5">
-            <button
-              onClick={onClose}
-              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/70"
-            >
-              <X className="w-5 h-5" />
-            </button>
+      {/* Header matching SettingsModal & SupportModal (centered between Telegram native controls on mobile) */}
+      <div
+        className={`relative px-4 pb-3 flex items-center justify-center border-b ${
+          isLight ? 'border-black/5 bg-white/80' : 'border-white/5 bg-[#121214]/80'
+        } backdrop-blur-xl shrink-0`}
+        style={{
+          paddingTop: isDesktop ? '16px' : 'max(calc(var(--safe-area-top, 0px) + 6px), 12px)'
+        }}
+      >
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-xl bg-blue-500/15 border border-blue-500/25 flex items-center justify-center text-blue-400 font-bold shrink-0">
+            <Wallet className="w-4 h-4 text-blue-400" />
+          </div>
+          <h3 className="font-extrabold text-base leading-tight text-center">
+            {lang === 'ru' ? 'Баланс' : 'Balans'}
+          </h3>
+        </div>
 
-            <div className="relative mb-2">
-              <div className="absolute inset-0 bg-blue-500/20 blur-xl rounded-full"></div>
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-cyan-500/30 to-blue-600/30 border border-blue-400/40 flex items-center justify-center text-3xl shadow-lg relative">
-                🧠
-              </div>
-            </div>
+        {/* Desktop Close Button only (Telegram native BackButton closes on mobile) */}
+        {isDesktop && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Yopish"
+            className={`absolute right-4 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer ${
+              isLight
+                ? 'bg-black/5 hover:bg-black/10 text-gray-700'
+                : 'bg-white/10 hover:bg-white/20 text-white/80 hover:text-white'
+            }`}
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
+      </div>
 
-            <h3 className="text-white font-bold text-lg text-center">Neyronlarni xarid qilish</h3>
-            <p className="text-xs text-[#8E8E93] text-center mt-0.5">
-              Joriy balans: <span className="text-blue-400 font-bold">{user?.balance?.toLocaleString('ru-RU') || 0} Neyron</span>
-            </p>
-
-            {/* Segmented 3 Tabs (Stars, Promo, Quests) */}
-            <div className="grid grid-cols-3 gap-1.5 w-full bg-[#242426] p-1 rounded-2xl mt-4">
-              <button
-                onClick={() => handleTabSwitch('stars')}
-                className={`py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
-                  activeTab === 'stars' ? 'bg-[#007AFF] text-white shadow-md' : 'text-[#8E8E93] hover:text-white'
-                }`}
-              >
-                <span>Telegram Stars</span>
-                <span className="text-yellow-400">⭐️</span>
-              </button>
-              <button
-                onClick={() => handleTabSwitch('promo')}
-                className={`py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
-                  activeTab === 'promo' ? 'bg-[#007AFF] text-white shadow-md' : 'text-[#8E8E93] hover:text-white'
-                }`}
-              >
-                <span>Promo</span>
-                <span>🎟</span>
-              </button>
-              <button
-                onClick={() => handleTabSwitch('quests')}
-                className={`py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
-                  activeTab === 'quests' ? 'bg-[#007AFF] text-white shadow-md' : 'text-[#8E8E93] hover:text-white'
-                }`}
-              >
-                <span>Bepul</span>
-                <span>🎁</span>
-              </button>
+      {/* Scrollable Compact Body */}
+      <div
+        className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar"
+        style={{
+          paddingBottom: 'max(calc(var(--safe-area-bottom, 0px) + 24px), 32px)'
+        }}
+      >
+        {/* Top Balance Overview & Tabs Card */}
+        <div className={`p-4 rounded-2xl border flex flex-col items-center ${
+          isLight ? 'bg-white border-black/5 shadow-sm' : 'bg-[#1C1C1E] border-white/5 shadow-md'
+        }`}>
+          <div className="relative mb-2">
+            <div className="absolute inset-0 bg-blue-500/20 blur-xl rounded-full" />
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-cyan-500/20 to-blue-600/25 border border-blue-400/35 flex items-center justify-center text-blue-400 shadow-lg relative">
+              <NeuronSvgIcon className="w-7 h-7" />
             </div>
           </div>
 
-          {/* Modal Content */}
-          <div className="p-5 overflow-y-auto space-y-3 pb-8">
-            {/* TAB 1: STARS */}
-            {activeTab === 'stars' && (
-              <div className="grid grid-cols-2 gap-3">
-                {STARS_PACKAGES.map((pkg, idx) => (
+          <h4 className={`font-bold text-base text-center ${isLight ? 'text-gray-900' : 'text-white'}`}>
+            {lang === 'ru' ? 'Пополнение нейронов' : 'Neyronlarni xarid qilish'}
+          </h4>
+          <p className={`text-xs text-center mt-0.5 ${isLight ? 'text-gray-500' : 'text-[#8E8E93]'}`}>
+            {lang === 'ru' ? 'Текущий баланс: ' : 'Joriy balans: '}
+            <span className="text-blue-500 font-bold">
+              {user?.balance?.toLocaleString('ru-RU') || 0} Neyron
+            </span>
+          </p>
+
+          {/* Segmented 3 Tabs with SVG Icons Only */}
+          <div className={`grid grid-cols-3 gap-1.5 w-full p-1 rounded-2xl mt-4 ${
+            isLight ? 'bg-gray-100' : 'bg-[#242426]'
+          }`}>
+            <button
+              type="button"
+              onClick={() => handleTabSwitch('stars')}
+              className={`py-2 px-1 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+                activeTab === 'stars'
+                  ? 'bg-[#007AFF] text-white shadow-md'
+                  : isLight ? 'text-gray-500 hover:text-gray-900' : 'text-[#8E8E93] hover:text-white'
+              }`}
+            >
+              <span>Stars</span>
+              <TelegramStarIcon className={`w-3.5 h-3.5 shrink-0 ${activeTab === 'stars' ? 'text-amber-300' : 'text-amber-400'}`} />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleTabSwitch('promo')}
+              className={`py-2 px-1 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+                activeTab === 'promo'
+                  ? 'bg-[#007AFF] text-white shadow-md'
+                  : isLight ? 'text-gray-500 hover:text-gray-900' : 'text-[#8E8E93] hover:text-white'
+              }`}
+            >
+              <span>Promo</span>
+              <Ticket className="w-3.5 h-3.5 shrink-0" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleTabSwitch('quests')}
+              className={`py-2 px-1 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+                activeTab === 'quests'
+                  ? 'bg-[#007AFF] text-white shadow-md'
+                  : isLight ? 'text-gray-500 hover:text-gray-900' : 'text-[#8E8E93] hover:text-white'
+              }`}
+            >
+              <span>{lang === 'ru' ? 'Бесплатно' : 'Bepul'}</span>
+              <Gift className="w-3.5 h-3.5 shrink-0" />
+            </button>
+          </div>
+        </div>
+
+        {/* TAB 1: TELEGRAM STARS */}
+        {activeTab === 'stars' && (
+          <div className="space-y-3">
+            {starsFeedback && (
+              <div className={`p-3 rounded-2xl text-xs font-semibold flex items-center gap-2 border ${
+                starsFeedback.type === 'success'
+                  ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                  : 'bg-red-500/15 text-red-400 border-red-500/30'
+              }`}>
+                {starsFeedback.type === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                )}
+                <span>{starsFeedback.text}</span>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3">
+              {STARS_PACKAGES.map((pkg, idx) => {
+                const isPkgLoading = buyingStars === pkg.stars;
+                return (
                   <button
                     key={idx}
+                    type="button"
+                    disabled={buyingStars !== null}
                     onClick={() => handleBuyStars(pkg)}
-                    className="bg-[#1C1C1E] hover:bg-[#242426] border border-white/5 p-4 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all active:scale-95 relative"
+                    className={`border p-4 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all active:scale-95 relative disabled:opacity-70 ${
+                      isLight
+                        ? 'bg-white hover:bg-gray-50 border-black/5 shadow-sm'
+                        : 'bg-[#1C1C1E] hover:bg-[#242426] border-white/5 shadow-md'
+                    }`}
                   >
                     {pkg.hit && (
-                      <div className="absolute top-0 right-0 bg-red-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-bl-lg">
+                      <div className="absolute top-0 right-0 bg-red-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-bl-lg rounded-tr-2xl">
                         XIT
                       </div>
                     )}
-                    <div className="text-2xl">🧠</div>
-                    <div className="font-bold text-white text-sm">+{pkg.neyrons.toLocaleString('ru-RU')}</div>
-                    <div className="bg-yellow-500/15 border border-yellow-500/30 text-yellow-300 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
-                      <span>{pkg.stars}</span>
-                      <span>⭐️</span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* TAB 3: PROMO */}
-            {activeTab === 'promo' && (
-              <div className="space-y-4 pt-2">
-                <div className="bg-[#1C1C1E] border border-white/5 p-5 rounded-2xl flex flex-col gap-3">
-                  <label className="text-xs text-[#8E8E93]">Promo-kodni kiriting:</label>
-                  <input
-                    type="text"
-                    value={promoInput}
-                    onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
-                    placeholder="BIO2026"
-                    className="w-full bg-[#2C2C2E] border border-white/10 rounded-xl p-3.5 text-white font-bold tracking-wider placeholder-[#636366] text-center text-lg outline-none focus:border-[#007AFF]"
-                  />
-                  
-                  {promoMessage && (
-                    <div className={`p-3 rounded-xl text-xs font-medium text-center ${
-                      promoMessage.type === 'success' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'
-                    }`}>
-                      {promoMessage.text}
-                    </div>
-                  )}
-
-                  <button
-                    onClick={handleApplyPromo}
-                    disabled={promoLoading || !promoInput.trim()}
-                    className="w-full bg-[#007AFF] hover:bg-blue-600 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl transition-all active:scale-95"
-                  >
-                    {promoLoading ? 'Tekshirilmoqda...' : 'Faollashtirish'}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* TAB 4: FREE QUESTS & 7-DAY STREAK */}
-            {activeTab === 'quests' && (
-              <div className="space-y-4">
-                {/* 7-Day Streak Rewards */}
-                <div>
-                  <h4 className="text-xs font-bold text-[#8E8E93] mb-2 uppercase tracking-wider">7 kunlik Streak mukofotlari</h4>
-                  <div className="grid grid-cols-7 gap-1.5">
-                    {[1, 2, 3, 4, 5, 6, 7].map((day) => {
-                      const currentStreak = user?.streak_days || 0;
-                      const isReached = currentStreak >= day;
-                      return (
-                        <div
-                          key={day}
-                          className={`p-2 rounded-xl flex flex-col items-center justify-center border text-center ${
-                            isReached
-                              ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
-                              : 'bg-[#1C1C1E] border-white/5 text-[#636366]'
-                          }`}
-                        >
-                          <span className="text-[10px] font-bold">{day}-kun</span>
-                          <span className="text-sm my-0.5">{day === 7 ? '🎁' : '🔥'}</span>
-                          <span className="text-[9px] font-bold">+{day * 50}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Daily Quests */}
-                <div className="space-y-2 pt-2">
-                  <h4 className="text-xs font-bold text-[#8E8E93] mb-2 uppercase tracking-wider">Kundalik vazifalar</h4>
-                  {DAILY_QUESTS.map((quest) => (
-                    <div
-                      key={quest.id}
-                      className="bg-[#1C1C1E] border border-white/5 p-3.5 rounded-2xl flex items-center justify-between"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="text-xl">{quest.icon}</span>
-                        <div>
-                          <div className="text-white text-xs font-bold">{quest.title}</div>
-                          <div className="text-[10px] text-emerald-400 font-medium">+{quest.reward} Neyron</div>
-                        </div>
-                      </div>
-
-                      {quest.done ? (
-                        <span className="bg-emerald-500/20 text-emerald-400 text-[11px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
-                          <Check className="w-3 h-3" /> Bajarildi
-                        </span>
+                    <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+                      {isPkgLoading ? (
+                        <Loader2 className="w-5 h-5 animate-spin text-blue-400" />
                       ) : (
-                        <button
-                          onClick={() => handleQuestAction(quest)}
-                          className="bg-[#007AFF] hover:bg-blue-600 text-white text-[11px] font-bold px-3 py-1.5 rounded-full transition-all active:scale-95"
-                        >
-                          Bajarish
-                        </button>
+                        <NeuronSvgIcon className="w-5 h-5" />
                       )}
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
+                    <div className={`font-bold text-sm ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                      +{pkg.neyrons.toLocaleString('ru-RU')}
+                    </div>
+                    <div className="bg-amber-500/15 border border-amber-500/30 text-amber-400 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
+                      <span>{pkg.stars}</span>
+                      <TelegramStarIcon className="w-3.5 h-3.5 text-amber-400" />
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </motion.div>
+        )}
+
+        {/* TAB 2: PROMO */}
+        {activeTab === 'promo' && (
+          <div className="space-y-4">
+            <div className={`border p-5 rounded-2xl flex flex-col gap-3 ${
+              isLight ? 'bg-white border-black/5 shadow-sm' : 'bg-[#1C1C1E] border-white/5 shadow-md'
+            }`}>
+              <label className={`text-xs ${isLight ? 'text-gray-500' : 'text-[#8E8E93]'}`}>
+                {lang === 'ru' ? 'Введите промокод:' : 'Promo-kodni kiriting:'}
+              </label>
+              <input
+                type="text"
+                value={promoInput}
+                onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
+                placeholder="BIO2026"
+                className={`w-full border rounded-xl p-3.5 font-bold tracking-wider text-center text-lg outline-none focus:border-[#007AFF] ${
+                  isLight
+                    ? 'bg-gray-100 border-black/10 text-gray-900 placeholder-gray-400'
+                    : 'bg-[#2C2C2E] border-white/10 text-white placeholder-[#636366]'
+                }`}
+              />
+
+              {promoMessage && (
+                <div className={`p-3 rounded-xl text-xs font-medium text-center ${
+                  promoMessage.type === 'success'
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                    : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                }`}>
+                  {promoMessage.text}
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={handleApplyPromo}
+                disabled={promoLoading || !promoInput.trim()}
+                className="w-full bg-[#007AFF] hover:bg-blue-600 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl transition-all active:scale-95"
+              >
+                {promoLoading
+                  ? (lang === 'ru' ? 'Проверка...' : 'Tekshirilmoqda...')
+                  : (lang === 'ru' ? 'Активировать' : 'Faollashtirish')}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: BEPUL ("Tez kunlarda") */}
+        {activeTab === 'quests' && (
+          <div className={`border rounded-2xl py-14 px-6 flex flex-col items-center justify-center text-center ${
+            isLight ? 'bg-white border-black/5 shadow-sm' : 'bg-[#1C1C1E] border-white/5 shadow-md'
+          }`}>
+            <div className={`w-12 h-12 rounded-2xl border flex items-center justify-center mb-3 ${
+              isLight
+                ? 'bg-blue-500/10 border-blue-500/20 text-blue-500'
+                : 'bg-white/5 border-white/10 text-[#8E8E93]'
+            }`}>
+              <Clock className="w-6 h-6" />
+            </div>
+            <p className={`text-sm font-semibold ${isLight ? 'text-gray-500' : 'text-[#8E8E93]'}`}>
+              Tez kunlarda
+            </p>
+          </div>
+        )}
+      </div>
+    </motion.div>
   );
 
   if (isDesktop && inlineDesktop) {
@@ -302,9 +478,7 @@ export default function TopUpModal({ isOpen, onClose, user, onUpdateUser, inline
 
   return (
     <AnimatePresence>
-      <div className={`fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 ${
-        isDesktop ? 'bg-transparent pointer-events-none' : 'bg-black/80 backdrop-blur-md'
-      }`}>
+      <div className={`fixed inset-0 z-[120] ${isDesktop ? 'pointer-events-auto' : 'pointer-events-none'}`}>
         {isDesktop && (
           <div 
             onClick={onClose} 

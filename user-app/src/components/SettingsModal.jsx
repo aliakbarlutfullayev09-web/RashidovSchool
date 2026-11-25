@@ -175,7 +175,7 @@ export default function SettingsModal({ isOpen, onClose, inlineDesktop = false }
       transition={{ duration: 0.2 }}
       className={`${
         isDesktop && inlineDesktop
-          ? 'w-[420px] max-w-[420px] h-[min(720px,calc(100vh-60px))] rounded-[32px] border border-white/10 shadow-2xl overflow-hidden flex flex-col select-none'
+          ? 'w-full max-w-[420px] h-[min(720px,calc(100vh-48px))] rounded-[32px] border border-white/10 shadow-2xl overflow-hidden flex flex-col select-none'
           : isDesktop
           ? 'fixed z-10 flex flex-col select-none pointer-events-auto right-10 top-1/2 -translate-y-1/2 w-[420px] max-w-[420px] h-[min(720px,calc(100vh-60px))] rounded-[32px] border border-white/10 shadow-2xl overflow-hidden'
           : 'fixed inset-0 z-10 flex flex-col select-none pointer-events-auto'

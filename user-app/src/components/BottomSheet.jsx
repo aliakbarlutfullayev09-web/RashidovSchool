@@ -86,10 +86,12 @@ export default function BottomSheet({
                   {lesson.order_index || 1}-Dars
                 </div>
 
-                <div className="absolute bottom-2.5 right-2.5 bg-black/80 backdrop-blur-md text-white text-xs font-semibold px-2 py-0.5 rounded-md flex items-center gap-1">
-                  <Clock className="w-3 h-3 text-[#8E8E93]" />
-                  <span>{lesson.duration || '14:20'}</span>
-                </div>
+                {lesson.duration && (
+                  <div className="absolute bottom-2.5 right-2.5 bg-black/80 backdrop-blur-md text-white text-xs font-semibold px-2 py-0.5 rounded-md flex items-center gap-1">
+                    <Clock className="w-3 h-3 text-[#8E8E93]" />
+                    <span>{lesson.duration}</span>
+                  </div>
+                )}
               </div>
 
               {/* Title & Metadata */}

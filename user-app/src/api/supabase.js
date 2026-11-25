@@ -265,14 +265,41 @@ export const getSubjects = async () => {
   return mockSubjects;
 };
 
-export const getCourses = async (subjectId) => {
+const readSiteMetadata = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('subjects')
+      .select('id, description')
+      .eq('id', 1)
+      .maybeSingle();
+
+    if (!error && data?.description && typeof data.description === 'string') {
+      const parsed = JSON.parse(data.description);
+      if (parsed && typeof parsed === 'object') {
+        return parsed;
+      }
+    }
+  } catch {}
+  return {};
+};
+
+export const getCourses = async (subjectId, prefetchedMeta = null) => {
   try {
     let query = supabase.from('courses').select('*').order('order_index');
     if (subjectId) {
       query = query.eq('subject_id', subjectId);
     }
-    const { data, error } = await query;
-    if (!error && data && data.length > 0) return data;
+    const [{ data, error }, meta] = await Promise.all([
+      query,
+      prefetchedMeta ? Promise.resolve(prefetchedMeta) : readSiteMetadata()
+    ]);
+    const courseImages = meta?.course_images || {};
+    if (!error && data && data.length > 0) {
+      return data.map(c => ({
+        ...c,
+        image_url: c.image_url || courseImages[String(c.id)] || null
+      }));
+    }
   } catch (e) {
     console.warn('Supabase getCourses fallback to mock:', e);
   }
@@ -285,8 +312,18 @@ export const getLessons = async (courseId) => {
     if (courseId) {
       query = query.eq('course_id', courseId);
     }
-    const { data, error } = await query;
-    if (!error && data && data.length > 0) return data;
+    const [{ data, error }, meta] = await Promise.all([query, readSiteMetadata()]);
+    const lessonMeta = meta?.lesson_meta || {};
+    if (!error && data && data.length > 0) {
+      return data.map(l => {
+        const m = lessonMeta[String(l.id)] || {};
+        return {
+          ...l,
+          thumbnail_url: l.thumbnail_url || m.thumbnail_url || null,
+          duration: l.duration || m.duration || null
+        };
+      });
+    }
   } catch (e) {
     console.warn('Supabase getLessons fallback to mock:', e);
   }
@@ -302,10 +339,16 @@ export const getLessons = async (courseId) => {
  */
 export const getCoursesAndLessons = async (subjectId) => {
   try {
-    const dbCourses = await getCourses(subjectId);
+    const meta = await readSiteMetadata();
+    const dbCourses = await getCourses(subjectId, meta);
     if (!dbCourses || dbCourses.length === 0) {
       return { courses: [], lessons: [] };
     }
+
+    const courseMap = dbCourses.reduce((acc, c) => {
+      acc[c.id] = c;
+      return acc;
+    }, {});
 
     const courseIds = dbCourses.map(c => c.id);
     const { data: dbLessons, error } = await supabase
@@ -314,8 +357,20 @@ export const getCoursesAndLessons = async (subjectId) => {
       .in('course_id', courseIds)
       .order('order_index');
 
+    const lessonMeta = meta?.lesson_meta || {};
+
     if (!error && dbLessons && dbLessons.length > 0) {
-      return { courses: dbCourses, lessons: dbLessons };
+      const hydrated = dbLessons.map(l => {
+        const m = lessonMeta[String(l.id)] || {};
+        const parentCourse = courseMap[l.course_id];
+        return {
+          ...l,
+          thumbnail_url: l.thumbnail_url || m.thumbnail_url || parentCourse?.image_url || null,
+          duration: l.duration || m.duration || null,
+          category_name: l.category_name || parentCourse?.title || null
+        };
+      });
+      return { courses: dbCourses, lessons: hydrated };
     }
     
     // Fallback if dbLessons is empty
@@ -403,8 +458,55 @@ export const freezeStreak = async (userId) => {
   }
 };
 
+export const createStarsInvoiceLink = async (stars, userId) => {
+  const apiUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, '');
+  const endpoints = apiUrl
+    ? [`${apiUrl}/api/payments/create-stars-invoice`, '/api/create-invoice']
+    : ['/api/create-invoice'];
+
+  let lastError = null;
+  let lastCode = null;
+
+  for (const url of endpoints) {
+    try {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stars: Number(stars), userId })
+      });
+      const contentType = resp.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        continue;
+      }
+      const data = await resp.json();
+      if (resp.ok && data?.ok && data?.invoiceUrl) {
+        return { ok: true, invoiceUrl: data.invoiceUrl };
+      }
+      if (data?.code) lastCode = data.code;
+      if (data?.error) lastError = data.error;
+    } catch (e) {
+      lastError = e?.message || 'Network error';
+    }
+  }
+
+  try {
+    const { data, error } = await supabase.functions.invoke('create-stars-invoice', {
+      body: { stars: Number(stars), userId }
+    });
+    if (!error && data?.ok && data?.invoiceUrl) {
+      return { ok: true, invoiceUrl: data.invoiceUrl };
+    }
+  } catch {}
+
+  return {
+    ok: false,
+    code: lastCode || 'INVOICE_UNAVAILABLE',
+    error: lastError || 'To‘lov schyotini yaratib bo‘lmadi'
+  };
+};
+
 export const createInvoice = async (userId, amount) => {
-  return { success: true };
+  return createStarsInvoiceLink(amount, userId);
 };
 
 /**

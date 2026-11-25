@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api/supabase';
+import { compressImageFileToDataUrl, formatDurationFromSeconds } from '../utils/mediaUtils';
 import VideoCheckpointStudio from './VideoCheckpointStudio';
 import { 
-  Play, Plus, Trash2, Video, Clock, HelpCircle, Sparkles, Check, 
-  ExternalLink, Image as ImageIcon, ChevronRight, ArrowLeft 
+  Plus, Trash2, Video, Check, Upload,
+  Image as ImageIcon, ArrowLeft, X 
 } from 'lucide-react';
 
 export default function LessonBuilder({ courseId, courseName, onSelectLesson, onBack }) {
@@ -19,6 +20,12 @@ export default function LessonBuilder({ courseId, courseName, onSelectLesson, on
   // Checkpoint Studio state
   const [editingCheckpointLesson, setEditingCheckpointLesson] = useState(null);
 
+  // Edit media/duration modal state for existing lessons
+  const [editingMediaLesson, setEditingMediaLesson] = useState(null);
+  const [editThumb, setEditThumb] = useState('');
+  const [editDuration, setEditDuration] = useState('');
+  const [savingMedia, setSavingMedia] = useState(false);
+
   useEffect(() => {
     loadLessons();
   }, [courseId]);
@@ -26,6 +33,16 @@ export default function LessonBuilder({ courseId, courseName, onSelectLesson, on
   const loadLessons = async () => {
     const data = await api.getLessons(courseId);
     setLessons(data);
+  };
+
+  const handleFilePick = async (file, setter) => {
+    if (!file) return;
+    try {
+      const dataUrl = await compressImageFileToDataUrl(file, 720, 0.8);
+      setter(dataUrl);
+    } catch (err) {
+      alert(err.message || "Rasmni yuklashda xatolik");
+    }
   };
 
   const handleAdd = async (e) => {
@@ -53,6 +70,26 @@ export default function LessonBuilder({ courseId, courseName, onSelectLesson, on
       setThumbnailUrl('');
       setDuration('');
       setIsFree(false);
+    }
+  };
+
+  const handleSaveLessonMedia = async () => {
+    if (!editingMediaLesson) return;
+    setSavingMedia(true);
+    const res = await api.updateLessonMedia(editingMediaLesson.id, {
+      thumbnail_url: editThumb.trim() || null,
+      duration: editDuration.trim() || null
+    });
+    setSavingMedia(false);
+    if (res?.success) {
+      setLessons(prev =>
+        prev.map(l =>
+          l.id === editingMediaLesson.id
+            ? { ...l, thumbnail_url: res.thumbnail_url, duration: res.duration }
+            : l
+        )
+      );
+      setEditingMediaLesson(null);
     }
   };
 
@@ -136,28 +173,40 @@ export default function LessonBuilder({ courseId, courseName, onSelectLesson, on
 
               <div>
                 <label className="block text-xs font-semibold text-[#8E8E93] mb-1.5 uppercase tracking-wider">
-                  Muqova rasmi (Thumbnail URL)
+                  Muqova rasmi (URL yoki fayl yuklash)
                 </label>
-                <input 
-                  type="url" 
-                  value={thumbnailUrl} 
-                  onChange={e => setThumbnailUrl(e.target.value)} 
-                  className="input-field" 
-                  placeholder="https://images.unsplash.com/..." 
-                />
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    value={thumbnailUrl.startsWith('data:') ? '' : thumbnailUrl} 
+                    onChange={e => setThumbnailUrl(e.target.value)} 
+                    className="input-field flex-1" 
+                    placeholder={thumbnailUrl.startsWith('data:') ? 'Rasm fayldan yuklandi' : 'https://images.unsplash.com/...'} 
+                  />
+                  <label className="cursor-pointer bg-[#2C2C2E] hover:bg-[#3A3A3C] border border-white/10 rounded-2xl px-3.5 text-xs font-bold text-white flex items-center justify-center gap-1.5 shrink-0 transition-colors">
+                    <Upload className="w-4 h-4 text-blue-400" />
+                    <span>Yuklash</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={e => handleFilePick(e.target.files?.[0], setThumbnailUrl)}
+                    />
+                  </label>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-[#8E8E93] mb-1.5 uppercase tracking-wider">
-                    Davomiyligi
+                    Davomiyligi (avto)
                   </label>
                   <input 
                     type="text" 
                     value={duration} 
                     onChange={e => setDuration(e.target.value)} 
                     className="input-field font-mono" 
-                    placeholder="14:20" 
+                    placeholder="Masalan: 12:35" 
                   />
                 </div>
 
@@ -200,6 +249,13 @@ export default function LessonBuilder({ courseId, courseName, onSelectLesson, on
                   <video 
                     src={videoUrl} 
                     controls 
+                    preload="metadata"
+                    onLoadedMetadata={(e) => {
+                      const detected = formatDurationFromSeconds(e.currentTarget.duration);
+                      if (detected && !duration) {
+                        setDuration(detected);
+                      }
+                    }}
                     className="w-full h-full object-contain max-h-[50vh]" 
                     playsInline
                     webkit-playsinline="true"
@@ -224,7 +280,7 @@ export default function LessonBuilder({ courseId, courseName, onSelectLesson, on
               {videoUrl && (
                 <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-300 font-semibold flex items-center gap-2">
                   <Check className="w-4 h-4 text-emerald-400" />
-                  <span>Video yuklandi va ijroga tayyor</span>
+                  <span>Video yuklandi {duration ? `(${duration})` : ''} va ijroga tayyor</span>
                 </div>
               )}
             </div>
@@ -295,8 +351,21 @@ export default function LessonBuilder({ courseId, courseName, onSelectLesson, on
               </div>
 
               {/* Actions */}
-              <div className="flex items-center justify-between pt-3 border-t border-white/5 gap-2">
-                <div className="flex items-center gap-2">
+              <div className="flex items-center justify-between pt-3 border-t border-white/5 gap-2 flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingMediaLesson(lesson);
+                      setEditThumb(lesson.thumbnail_url || '');
+                      setEditDuration(lesson.duration || '');
+                    }}
+                    className="bg-[#2C2C2E] hover:bg-white/10 border border-white/5 text-xs font-semibold py-1.5 px-3 rounded-xl transition-all flex items-center gap-1.5"
+                  >
+                    <ImageIcon className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Rasm</span>
+                  </button>
+
                   <button 
                     onClick={() => setEditingCheckpointLesson(lesson)}
                     className="bg-[#2C2C2E] hover:bg-amber-500/20 hover:text-amber-300 border border-white/5 text-xs font-semibold py-1.5 px-3 rounded-xl transition-all flex items-center gap-1.5"
@@ -330,6 +399,97 @@ export default function LessonBuilder({ courseId, courseName, onSelectLesson, on
           )}
         </div>
       </div>
+
+      {/* Edit Lesson Photo / Duration Modal */}
+      {editingMediaLesson && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#1C1C1E] border border-white/10 rounded-3xl p-6 w-full max-w-md space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-white truncate pr-2">
+                {editingMediaLesson.title}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setEditingMediaLesson(null)}
+                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/70 shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="relative w-full aspect-video rounded-2xl overflow-hidden bg-[#2C2C2E] border border-white/10">
+              {editThumb ? (
+                <img src={editThumb} alt="Preview" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-3xl">🧬</div>
+              )}
+              {editingMediaLesson.video_url && !editDuration && (
+                <video
+                  src={editingMediaLesson.video_url}
+                  preload="metadata"
+                  className="hidden"
+                  onLoadedMetadata={(e) => {
+                    const detected = formatDurationFromSeconds(e.currentTarget.duration);
+                    if (detected) setEditDuration(detected);
+                  }}
+                />
+              )}
+            </div>
+
+            <div className="space-y-3">
+              <label className="w-full cursor-pointer bg-[#2C2C2E] hover:bg-[#3A3A3C] border border-white/10 rounded-2xl py-3 px-4 text-xs font-bold text-white flex items-center justify-center gap-2 transition-colors">
+                <Upload className="w-4 h-4 text-blue-400" />
+                <span>Qurilmadan muqova tanlash</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={e => handleFilePick(e.target.files?.[0], setEditThumb)}
+                />
+              </label>
+
+              <input
+                type="url"
+                value={editThumb.startsWith('data:') ? '' : editThumb}
+                onChange={e => setEditThumb(e.target.value)}
+                placeholder="Yoki rasm havolasi (https://...)"
+                className="input-field text-xs"
+              />
+
+              <div>
+                <label className="block text-[11px] font-semibold text-[#8E8E93] mb-1">
+                  Video davomiyligi (masalan: 12:35)
+                </label>
+                <input
+                  type="text"
+                  value={editDuration}
+                  onChange={e => setEditDuration(e.target.value)}
+                  placeholder="Masalan: 12:35"
+                  className="input-field text-xs font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setEditingMediaLesson(null)}
+                className="flex-1 bg-[#2C2C2E] text-white py-3 rounded-2xl font-bold text-xs"
+              >
+                Bekor qilish
+              </button>
+              <button
+                type="button"
+                disabled={savingMedia}
+                onClick={handleSaveLessonMedia}
+                className="flex-1 bg-[#007AFF] hover:bg-blue-600 disabled:opacity-50 text-white py-3 rounded-2xl font-bold text-xs"
+              >
+                {savingMedia ? 'Saqlanmoqda...' : 'Saqlash'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

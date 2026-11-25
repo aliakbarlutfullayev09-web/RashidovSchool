@@ -228,54 +228,125 @@ export const api = {
     return !error;
   },
 
-  createCourse: async (subjectId, title, price) => {
-    const { data: c, error } = await supabase.from('courses').insert([{
-      subject_id: subjectId, 
-      title, 
-      price: parseInt(price, 10) || 0
-    }]).select().single();
-    
-    if (error) {
-      console.error("Course creation error:", error);
-      alert("Kurs yaratishda xatolik: " + error.message);
-      return null;
+  createCourse: async (subjectId, title, price, imageUrl = null) => {
+    const cleanImage = imageUrl?.trim() || null;
+    let created = null;
+
+    if (cleanImage) {
+      const { data: withImg, error: imgErr } = await supabase.from('courses').insert([{
+        subject_id: subjectId,
+        title,
+        price: parseInt(price, 10) || 0,
+        image_url: cleanImage
+      }]).select().single();
+      if (!imgErr && withImg) created = withImg;
     }
-    return c;
+
+    if (!created) {
+      const { data: c, error } = await supabase.from('courses').insert([{
+        subject_id: subjectId, 
+        title, 
+        price: parseInt(price, 10) || 0
+      }]).select().single();
+      
+      if (error) {
+        console.error("Course creation error:", error);
+        alert("Kurs yaratishda xatolik: " + error.message);
+        return null;
+      }
+      created = c;
+    }
+
+    if (created && cleanImage) {
+      await api.updateCourseMedia(created.id, cleanImage);
+      created = { ...created, image_url: cleanImage };
+    }
+    return created;
+  },
+
+  updateCourseMedia: async (courseId, imageUrl) => {
+    const cleanImage = imageUrl?.trim() || null;
+    try {
+      await supabase.from('courses').update({ image_url: cleanImage }).eq('id', courseId);
+    } catch {}
+    await api._mergeSiteMeta((meta) => {
+      const courseImages = { ...(meta.course_images || {}) };
+      if (cleanImage) {
+        courseImages[String(courseId)] = cleanImage;
+      } else {
+        delete courseImages[String(courseId)];
+      }
+      return { ...meta, course_images: courseImages };
+    });
+    return { success: true, image_url: cleanImage };
   },
   
   createLesson: async (courseId, title, videoUrl, testQuestionCount, thumbnailUrl, duration, isFree) => {
+    const cleanThumb = thumbnailUrl?.trim() || null;
+    const cleanDuration = duration?.trim() || null;
     try {
+      let created = null;
       // 1. Try with extra columns
       const payload = {
         course_id: courseId,
         title,
         video_url: videoUrl,
         test_question_count: testQuestionCount,
-        thumbnail_url: thumbnailUrl || null,
-        duration: duration || null,
+        thumbnail_url: cleanThumb,
+        duration: cleanDuration,
         is_free: !!isFree
       };
       const { data: l, error } = await supabase.from('lessons').insert([payload]).select().single();
-      if (!error && l) return l;
+      if (!error && l) {
+        created = l;
+      } else {
+        // 2. Fallback if extra columns don't exist in live table
+        const { data: fallbackL, error: fallbackErr } = await supabase.from('lessons').insert([{
+          course_id: courseId,
+          title,
+          video_url: videoUrl,
+          test_question_count: testQuestionCount
+        }]).select().single();
 
-      // 2. Fallback if extra columns don't exist in live table
-      const { data: fallbackL, error: fallbackErr } = await supabase.from('lessons').insert([{
-        course_id: courseId,
-        title,
-        video_url: videoUrl,
-        test_question_count: testQuestionCount
-      }]).select().single();
-
-      if (fallbackErr) {
-        console.error("Lesson creation error:", fallbackErr);
-        alert("Dars yaratishda xatolik: " + fallbackErr.message);
-        return null;
+        if (fallbackErr) {
+          console.error("Lesson creation error:", fallbackErr);
+          alert("Dars yaratishda xatolik: " + fallbackErr.message);
+          return null;
+        }
+        created = fallbackL;
       }
-      return fallbackL;
+
+      if (created && (cleanThumb || cleanDuration)) {
+        await api.updateLessonMedia(created.id, { thumbnail_url: cleanThumb, duration: cleanDuration });
+        created = { ...created, thumbnail_url: cleanThumb, duration: cleanDuration };
+      }
+      return created;
     } catch (e) {
       console.error("Lesson creation error:", e);
       return null;
     }
+  },
+
+  updateLessonMedia: async (lessonId, { thumbnail_url, duration }) => {
+    const cleanThumb = thumbnail_url?.trim() || null;
+    const cleanDuration = duration?.trim() || null;
+    try {
+      await supabase.from('lessons').update({
+        thumbnail_url: cleanThumb,
+        duration: cleanDuration
+      }).eq('id', lessonId);
+    } catch {}
+    await api._mergeSiteMeta((meta) => {
+      const lessonMeta = { ...(meta.lesson_meta || {}) };
+      const existing = lessonMeta[String(lessonId)] || {};
+      lessonMeta[String(lessonId)] = {
+        ...existing,
+        ...(thumbnail_url !== undefined ? { thumbnail_url: cleanThumb } : {}),
+        ...(duration !== undefined ? { duration: cleanDuration } : {})
+      };
+      return { ...meta, lesson_meta: lessonMeta };
+    });
+    return { success: true, thumbnail_url: cleanThumb, duration: cleanDuration };
   },
 
   deleteCourse: async (courseId) => {
@@ -319,13 +390,30 @@ export const api = {
     if (subjectId) {
       query = query.eq('subject_id', subjectId);
     }
-    const { data } = await query;
-    return (data || []).map(c => ({ ...c, lessons_count: c.lessons?.[0]?.count || 0 }));
+    const [{ data }, meta] = await Promise.all([query, api._readSiteMeta()]);
+    const courseImages = meta?.course_images || {};
+    return (data || []).map(c => ({
+      ...c,
+      image_url: c.image_url || courseImages[String(c.id)] || null,
+      lessons_count: c.lessons?.[0]?.count || 0
+    }));
   },
 
   getLessons: async (courseId) => {
-    const { data } = await supabase.from('lessons').select('*, questions(count)').eq('course_id', courseId).order('order_index');
-    return (data || []).map(l => ({ ...l, questions_count: l.questions?.[0]?.count || 0 }));
+    const [{ data }, meta] = await Promise.all([
+      supabase.from('lessons').select('*, questions(count)').eq('course_id', courseId).order('order_index'),
+      api._readSiteMeta()
+    ]);
+    const lessonMeta = meta?.lesson_meta || {};
+    return (data || []).map(l => {
+      const m = lessonMeta[String(l.id)] || {};
+      return {
+        ...l,
+        thumbnail_url: l.thumbnail_url || m.thumbnail_url || null,
+        duration: l.duration || m.duration || null,
+        questions_count: l.questions?.[0]?.count || 0
+      };
+    });
   },
 
   getQuestions: async (lessonId) => {
@@ -496,8 +584,7 @@ export const api = {
     }
   },
 
-  // Support Contacts Management (Superadmin)
-  getSupportContacts: async () => {
+  _readSiteMeta: async () => {
     try {
       const { data, error } = await supabase
         .from('subjects')
@@ -506,17 +593,43 @@ export const api = {
         .maybeSingle();
 
       if (!error && data?.description) {
-        try {
-          const parsed = JSON.parse(data.description);
-          if (parsed && typeof parsed === 'object') {
-            return {
-              bio: parsed.bio || { telegram: '@rashidov_bio_mentor', phone: '+998 90 123 45 67' },
-              chem: parsed.chem || { telegram: '@rashidov_chem_mentor', phone: '+998 90 765 43 21' },
-              tech: parsed.tech || { telegram: '@rashidov_support', phone: '+998 71 200 00 00' },
-              website: parsed.website || 'https://rashidovschool.uz'
-            };
-          }
-        } catch {}
+        const parsed = JSON.parse(data.description);
+        if (parsed && typeof parsed === 'object') {
+          return parsed;
+        }
+      }
+    } catch {}
+    return {};
+  },
+
+  _mergeSiteMeta: async (updater) => {
+    try {
+      const current = await api._readSiteMeta();
+      const next = updater(current);
+      const jsonStr = JSON.stringify(next);
+      const { error } = await supabase
+        .from('subjects')
+        .update({ description: jsonStr })
+        .eq('id', 1);
+      if (error) throw error;
+      return { success: true, data: next };
+    } catch (e) {
+      console.error('Error updating site metadata:', e);
+      return { success: false, error: e.message };
+    }
+  },
+
+  // Support Contacts Management (Superadmin)
+  getSupportContacts: async () => {
+    try {
+      const parsed = await api._readSiteMeta();
+      if (parsed && typeof parsed === 'object' && (parsed.bio || parsed.chem || parsed.tech || parsed.website)) {
+        return {
+          bio: parsed.bio || { telegram: '@rashidov_bio_mentor', phone: '+998 90 123 45 67' },
+          chem: parsed.chem || { telegram: '@rashidov_chem_mentor', phone: '+998 90 765 43 21' },
+          tech: parsed.tech || { telegram: '@rashidov_support', phone: '+998 71 200 00 00' },
+          website: parsed.website || 'https://rashidovschool.uz'
+        };
       }
     } catch (e) {
       console.warn('Error fetching support contacts:', e);
@@ -537,15 +650,13 @@ export const api = {
 
   saveSupportContacts: async (contacts) => {
     try {
-      const jsonStr = JSON.stringify(contacts);
-      const { error } = await supabase
-        .from('subjects')
-        .update({ description: jsonStr })
-        .eq('id', 1);
-
-      if (error) throw error;
+      const res = await api._mergeSiteMeta((meta) => ({
+        ...meta,
+        ...contacts
+      }));
+      if (!res.success) throw new Error(res.error);
       try {
-        localStorage.setItem('rb_support_contacts', jsonStr);
+        localStorage.setItem('rb_support_contacts', JSON.stringify(contacts));
       } catch {}
       return { success: true };
     } catch (e) {
