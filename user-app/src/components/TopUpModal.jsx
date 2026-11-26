@@ -233,13 +233,13 @@ export default function TopUpModal({ isOpen, onClose, user, onUpdateUser, inline
 
   const modalContent = (
     <motion.div
-      initial={{ opacity: 0, scale: 0.98, x: isDesktop ? 15 : 0 }}
-      animate={{ opacity: 1, scale: 1, x: 0 }}
-      exit={{ opacity: 0, scale: 0.98, x: isDesktop ? 15 : 0 }}
-      transition={{ duration: 0.2 }}
+      initial={isDesktop && inlineDesktop ? { opacity: 0 } : { opacity: 0, scale: 0.98, x: isDesktop ? 15 : 0 }}
+      animate={isDesktop && inlineDesktop ? { opacity: 1 } : { opacity: 1, scale: 1, x: 0 }}
+      exit={isDesktop && inlineDesktop ? { opacity: 0 } : { opacity: 0, scale: 0.98, x: isDesktop ? 15 : 0 }}
+      transition={{ duration: 0.18 }}
       className={`${
         isDesktop && inlineDesktop
-          ? 'w-full max-w-[420px] h-[min(720px,calc(100vh-48px))] rounded-[32px] border shadow-2xl overflow-hidden flex flex-col select-none'
+          ? 'w-full rounded-[32px] border shadow-2xl overflow-hidden flex flex-col select-none'
           : isDesktop
           ? 'fixed z-10 flex flex-col select-none pointer-events-auto right-10 top-1/2 -translate-y-1/2 w-[420px] max-w-[420px] h-[min(720px,calc(100vh-60px))] rounded-[32px] border shadow-2xl overflow-hidden'
           : 'fixed inset-0 z-10 flex flex-col select-none pointer-events-auto'
@@ -284,11 +284,11 @@ export default function TopUpModal({ isOpen, onClose, user, onUpdateUser, inline
         )}
       </div>
 
-      {/* Scrollable Compact Body */}
+      {/* Scrollable Compact Body (unified page scroll when inlineDesktop) */}
       <div
-        className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar"
+        className={isDesktop && inlineDesktop ? 'p-4 space-y-4' : 'flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar'}
         style={{
-          paddingBottom: 'max(calc(var(--safe-area-bottom, 0px) + 24px), 32px)'
+          paddingBottom: isDesktop && inlineDesktop ? '20px' : 'max(calc(var(--safe-area-bottom, 0px) + 24px), 32px)'
         }}
       >
         {/* Top Balance Overview & Tabs Card */}

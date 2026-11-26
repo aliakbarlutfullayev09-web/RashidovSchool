@@ -91,14 +91,15 @@ export default function Profile({ user, isOpen, onClose, onUpdateUser, onPreview
 
   const modalContent = (
     <motion.div
-      initial={{ scale: 0.95, y: 20, opacity: 0 }}
-      animate={{ scale: 1, y: 0, opacity: 1 }}
-      exit={{ scale: 0.95, y: 20, opacity: 0 }}
+      initial={isDesktop && inlineDesktop ? { opacity: 0 } : { scale: 0.95, y: 20, opacity: 0 }}
+      animate={isDesktop && inlineDesktop ? { opacity: 1 } : { scale: 1, y: 0, opacity: 1 }}
+      exit={isDesktop && inlineDesktop ? { opacity: 0 } : { scale: 0.95, y: 20, opacity: 0 }}
+      transition={{ duration: 0.18 }}
       className={`border shadow-2xl relative pointer-events-auto ${
         isLight ? 'bg-white border-black/10 text-[#1C1C1E]' : 'bg-[#1C1C1E] border-white/10 text-white'
       } ${
         isDesktop && inlineDesktop
-          ? 'w-full max-w-[420px] rounded-[32px] p-6'
+          ? 'w-full rounded-[32px] p-6'
           : isDesktop
           ? 'fixed right-10 top-1/2 -translate-y-1/2 w-[420px] max-w-[420px] rounded-[32px] p-6'
           : 'rounded-[28px] p-6 w-full max-w-sm'

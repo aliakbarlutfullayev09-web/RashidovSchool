@@ -225,19 +225,18 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
   };
 
   return (
-    <div className={`w-full pb-32 pt-2 px-4 transition-all duration-300 ${
-      isDesktop 
-        ? isAnyModalOpen
-          ? 'max-w-5xl mx-auto flex flex-row items-start justify-center gap-4 lg:gap-8' 
-          : 'max-w-3xl mx-auto flex flex-col items-center justify-center'
-        : 'max-w-5xl mx-auto space-y-5'
-    }`}>
-      {/* Profile Column (compresses fluidly when modal opens, stretches to full max-w-3xl otherwise) */}
-      <div className={`space-y-5 transition-all duration-300 ease-out ${
-        isDesktop 
-          ? isAnyModalOpen ? 'flex-1 min-w-[250px] max-w-[390px]' : 'w-full'
-          : 'w-full'
-      }`}>
+    <motion.div
+      initial={false}
+      animate={isDesktop ? { maxWidth: isAnyModalOpen ? 860 : 768 } : undefined}
+      transition={{ duration: 0.36, ease: [0.22, 1, 0.36, 1] }}
+      className={`w-full mx-auto px-4 flex flex-col ${
+        isDesktop ? 'pb-10 pt-4 items-center' : 'pb-32 pt-2 max-w-5xl'
+      }`}
+    >
+      {/* Dual-Column Row on Desktop (unified page scroll; left column smoothly expands rightward on close) */}
+      <div className={isDesktop ? 'w-full flex flex-row items-start justify-center' : 'w-full space-y-5'}>
+        {/* Profile Column */}
+        <div className={isDesktop ? 'flex-1 min-w-0 space-y-5' : 'w-full space-y-5'}>
         {/* Profile Header Card */}
       <div className={`border rounded-3xl p-6 relative overflow-hidden flex flex-col items-center text-center transition-colors ${
         isLight ? 'bg-white border-black/[0.06] shadow-lg' : 'bg-[#1C1C1E] border-white/5 shadow-2xl'
@@ -543,54 +542,78 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
 
       </div>
 
-      {/* Footer Branding */}
-      <p className="text-center text-[11px] text-[#8E8E93]/50 pt-2 pb-6 tracking-wider">
-        Rashidov School &nbsp;&bull;&nbsp; since 2023
-      </p>
+      </div>
+
+      {/* Desktop In-Flow Detail Panel (smoothly expands/collapses width; shares parent page scroll) */}
+      {isDesktop && (
+        <AnimatePresence initial={false}>
+          {isAnyModalOpen && (
+            <motion.div
+              key="desktop-detail-panel"
+              initial={{ width: 0, marginLeft: 0, opacity: 0 }}
+              animate={{ width: 420, marginLeft: 24, opacity: 1 }}
+              exit={{ width: 0, marginLeft: 0, opacity: 0 }}
+              transition={{ duration: 0.36, ease: [0.22, 1, 0.36, 1] }}
+              className="shrink-0 overflow-hidden"
+            >
+              <div className="w-[420px] min-w-[420px]">
+                <AnimatePresence mode="wait" initial={false}>
+                  {isSettingsOpen && (
+                    <SettingsModal
+                      key="settings"
+                      isOpen={isSettingsOpen}
+                      onClose={() => setIsSettingsOpen(false)}
+                      inlineDesktop={true}
+                    />
+                  )}
+                  {isSupportOpen && (
+                    <SupportModal
+                      key="support"
+                      isOpen={isSupportOpen}
+                      onClose={() => setIsSupportOpen(false)}
+                      inlineDesktop={true}
+                    />
+                  )}
+                  {isTopUpOpen && (
+                    <TopUpModal
+                      key="topup"
+                      isOpen={isTopUpOpen}
+                      onClose={() => setIsTopUpOpen(false)}
+                      user={user}
+                      onUpdateUser={onUpdateUser}
+                      inlineDesktop={true}
+                    />
+                  )}
+                  {isEditProfileOpen && (
+                    <Profile
+                      key="edit-profile"
+                      user={user}
+                      isOpen={isEditProfileOpen}
+                      onClose={() => {
+                        setPreviewProfileColor(null);
+                        setIsEditProfileOpen(false);
+                      }}
+                      onUpdateUser={onUpdateUser}
+                      onPreviewColor={setPreviewProfileColor}
+                      inlineDesktop={true}
+                    />
+                  )}
+                </AnimatePresence>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      )}
 
       </div>
 
-      {/* Desktop In-Flow Detail Panel (Opens on the Right side when item is clicked) */}
-      {isDesktop && isAnyModalOpen && (
-        <div className="flex-1 min-w-[260px] max-w-[420px] sticky top-4 animate-in fade-in slide-in-from-right-4 duration-300">
-          {isSettingsOpen && (
-            <SettingsModal
-              isOpen={isSettingsOpen}
-              onClose={() => setIsSettingsOpen(false)}
-              inlineDesktop={true}
-            />
-          )}
-          {isSupportOpen && (
-            <SupportModal
-              isOpen={isSupportOpen}
-              onClose={() => setIsSupportOpen(false)}
-              inlineDesktop={true}
-            />
-          )}
-          {isTopUpOpen && (
-            <TopUpModal
-              isOpen={isTopUpOpen}
-              onClose={() => setIsTopUpOpen(false)}
-              user={user}
-              onUpdateUser={onUpdateUser}
-              inlineDesktop={true}
-            />
-          )}
-          {isEditProfileOpen && (
-            <Profile
-              user={user}
-              isOpen={isEditProfileOpen}
-              onClose={() => {
-                setPreviewProfileColor(null);
-                setIsEditProfileOpen(false);
-              }}
-              onUpdateUser={onUpdateUser}
-              onPreviewColor={setPreviewProfileColor}
-              inlineDesktop={true}
-            />
-          )}
-        </div>
-      )}
+      {/* Always-Centered Footer Branding across single and dual-column layouts */}
+      <p
+        data-testid="profile-footer"
+        className="w-full text-center text-[11px] text-[#8E8E93]/50 pt-6 pb-4 tracking-wider"
+      >
+        Rashidov School &nbsp;&bull;&nbsp; since 2023
+      </p>
 
       {/* Mobile Modals (Fullscreen overlay on mobile) */}
       {!isDesktop && (
@@ -625,6 +648,6 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
         </>
       )}
 
-    </div>
+    </motion.div>
   );
 }

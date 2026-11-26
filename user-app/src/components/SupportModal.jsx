@@ -150,19 +150,19 @@ export default function SupportModal({ isOpen, onClose, inlineDesktop = false })
 
   const modalContent = (
     <motion.div
-      initial={{ opacity: 0, scale: 0.98, x: isDesktop ? 15 : 0 }}
-      animate={{ opacity: 1, scale: 1, x: 0 }}
-      exit={{ opacity: 0, scale: 0.98, x: isDesktop ? 15 : 0 }}
-      transition={{ duration: 0.2 }}
+      initial={isDesktop && inlineDesktop ? { opacity: 0 } : { opacity: 0, scale: 0.98, x: isDesktop ? 15 : 0 }}
+      animate={isDesktop && inlineDesktop ? { opacity: 1 } : { opacity: 1, scale: 1, x: 0 }}
+      exit={isDesktop && inlineDesktop ? { opacity: 0 } : { opacity: 0, scale: 0.98, x: isDesktop ? 15 : 0 }}
+      transition={{ duration: 0.18 }}
       className={`${
         isDesktop && inlineDesktop
-          ? 'w-full max-w-[420px] h-[min(720px,calc(100vh-48px))] rounded-[32px] border border-white/10 shadow-2xl overflow-hidden flex flex-col select-none'
+          ? 'w-full rounded-[32px] border border-white/10 shadow-2xl overflow-hidden flex flex-col select-none'
           : isDesktop
           ? 'fixed z-10 flex flex-col select-none pointer-events-auto right-10 top-1/2 -translate-y-1/2 w-[420px] max-w-[420px] h-[min(720px,calc(100vh-60px))] rounded-[32px] border border-white/10 shadow-2xl overflow-hidden'
           : 'fixed inset-0 z-10 flex flex-col select-none pointer-events-auto'
       } ${
         isLight 
-          ? 'bg-[#F2F2F7] text-gray-900' 
+          ? 'bg-[#F2F2F7] text-gray-900 border-black/10' 
           : 'bg-[#121214] text-white'
       }`}
     >
@@ -202,11 +202,11 @@ export default function SupportModal({ isOpen, onClose, inlineDesktop = false })
             )}
           </div>
 
-        {/* Scrollable Compact Cards Content */}
+        {/* Scrollable Compact Cards Content (unified page scroll when inlineDesktop) */}
         <div 
-          className="flex-1 overflow-y-auto p-4 space-y-3 no-scrollbar"
+          className={isDesktop && inlineDesktop ? 'p-4 space-y-3' : 'flex-1 overflow-y-auto p-4 space-y-3 no-scrollbar'}
           style={{
-            paddingBottom: 'max(calc(var(--safe-area-bottom, 0px) + 24px), 32px)'
+            paddingBottom: isDesktop && inlineDesktop ? '20px' : 'max(calc(var(--safe-area-bottom, 0px) + 24px), 32px)'
           }}
         >
           {categories.map((cat) => {
