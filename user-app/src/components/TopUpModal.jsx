@@ -312,48 +312,57 @@ export default function TopUpModal({ isOpen, onClose, user, onUpdateUser, inline
             </span>
           </p>
 
-          {/* Segmented 3 Tabs with SVG Icons Only */}
-          <div className={`grid grid-cols-3 gap-1.5 w-full p-1 rounded-2xl mt-4 ${
+          {/* Segmented 3 Tabs with Dock-Style Sliding Pill */}
+          <div className={`grid grid-cols-3 gap-1.5 w-full p-1 rounded-2xl mt-4 relative ${
             isLight ? 'bg-gray-100' : 'bg-[#242426]'
           }`}>
-            <button
-              type="button"
-              onClick={() => handleTabSwitch('stars')}
-              className={`py-2 px-1 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
-                activeTab === 'stars'
-                  ? 'bg-[#007AFF] text-white shadow-md'
-                  : isLight ? 'text-gray-500 hover:text-gray-900' : 'text-[#8E8E93] hover:text-white'
-              }`}
-            >
-              <span>Stars</span>
-              <TelegramStarIcon className={`w-3.5 h-3.5 shrink-0 ${activeTab === 'stars' ? 'text-amber-300' : 'text-amber-400'}`} />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleTabSwitch('promo')}
-              className={`py-2 px-1 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
-                activeTab === 'promo'
-                  ? 'bg-[#007AFF] text-white shadow-md'
-                  : isLight ? 'text-gray-500 hover:text-gray-900' : 'text-[#8E8E93] hover:text-white'
-              }`}
-            >
-              <span>{lang === 'ru' ? 'Промо' : 'Promo'}</span>
-              <Ticket className="w-3.5 h-3.5 shrink-0" />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleTabSwitch('quests')}
-              className={`py-2 px-1 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
-                activeTab === 'quests'
-                  ? 'bg-[#007AFF] text-white shadow-md'
-                  : isLight ? 'text-gray-500 hover:text-gray-900' : 'text-[#8E8E93] hover:text-white'
-              }`}
-            >
-              <span>{lang === 'ru' ? 'Бесплатно' : 'Bepul'}</span>
-              <Gift className="w-3.5 h-3.5 shrink-0" />
-            </button>
+            {[
+              {
+                id: 'stars',
+                label: 'Stars',
+                icon: (isActive) => (
+                  <TelegramStarIcon
+                    className={`relative z-10 w-3.5 h-3.5 shrink-0 transition-colors ${
+                      isActive ? 'text-amber-300' : 'text-amber-400'
+                    }`}
+                  />
+                ),
+              },
+              {
+                id: 'promo',
+                label: lang === 'ru' ? 'Промо' : 'Promo',
+                icon: () => <Ticket className="relative z-10 w-3.5 h-3.5 shrink-0" />,
+              },
+              {
+                id: 'quests',
+                label: lang === 'ru' ? 'Бесплатно' : 'Bepul',
+                icon: () => <Gift className="relative z-10 w-3.5 h-3.5 shrink-0" />,
+              },
+            ].map((tab) => {
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => handleTabSwitch(tab.id)}
+                  className={`relative py-2 px-1 text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${
+                    isActive
+                      ? 'text-white'
+                      : isLight ? 'text-gray-500 hover:text-gray-900' : 'text-[#8E8E93] hover:text-white'
+                  }`}
+                >
+                  {isActive && (
+                    <motion.div
+                      layoutId={inlineDesktop ? 'topUpTabPillDesktop' : 'topUpTabPillModal'}
+                      transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                      className="absolute inset-0 rounded-xl bg-[#007AFF] shadow-md"
+                    />
+                  )}
+                  <span className="relative z-10">{tab.label}</span>
+                  {tab.icon(isActive)}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -431,7 +440,7 @@ export default function TopUpModal({ isOpen, onClose, user, onUpdateUser, inline
                 type="text"
                 value={promoInput}
                 onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
-                placeholder="BIO2026"
+                placeholder={lang === 'ru' ? 'ПРОМО КОД' : 'PROMO KOD'}
                 className={`w-full border rounded-xl p-3.5 font-bold tracking-wider text-center text-lg outline-none focus:border-[#007AFF] ${
                   isLight
                     ? 'bg-gray-100 border-black/10 text-gray-900 placeholder-gray-400'
