@@ -1,7 +1,8 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Play, Pause, RotateCcw, Maximize, 
-  BookOpen, Clock, AlertCircle, RefreshCw, FileCheck2, CheckCircle2, 
+  BookOpen, Clock, Lock, AlertCircle, RefreshCw, FileCheck2, CheckCircle2, 
   X, ZoomIn, ZoomOut, ChevronDown 
 } from 'lucide-react';
 import CheckpointModal from './CheckpointModal';
@@ -11,6 +12,13 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useIsDesktop } from '../hooks/useIsDesktop';
 import { useLanguage } from '../context/LanguageContext';
 import { getWatchProgress, saveWatchProgress, incrementViewCount, saveLessonQuizProgress } from '../api/supabase';
+
+function parseTermTimestamp(term) {
+  const raw = term?.timestamp ?? term?.time_sec ?? term?.seconds;
+  if (raw === undefined || raw === null || raw === '') return null;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
 
 export default function VideoPlayer({ 
   videoUrl, 
@@ -62,10 +70,18 @@ export default function VideoPlayer({
   const [duration, setDuration] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [showControls, setShowControls] = useState(true);
+  const [isScrubbing, setIsScrubbing] = useState(false);
+  const [rewindPulseKey, setRewindPulseKey] = useState(0);
 
   // Watch Frontier state
   const [maxWatchedSeconds, setMaxWatchedSeconds] = useState(0);
   const [toastMessage, setToastMessage] = useState(null);
+
+  // Live top-right typewriter Termin popup state
+  const [activeTermPopup, setActiveTermPopup] = useState(null);
+  const [typedTermTitle, setTypedTermTitle] = useState('');
+  const [typedTermDef, setTypedTermDef] = useState('');
+  const [isTypingTerm, setIsTypingTerm] = useState(false);
 
   // Error / Loading state
   const [hasError, setHasError] = useState(false);
@@ -80,6 +96,28 @@ export default function VideoPlayer({
 
   // End state
   const [isEnded, setIsEnded] = useState(false);
+
+  // Normalized & sorted terms list
+  const normalizedTerms = useMemo(() => {
+    return (Array.isArray(terms) ? terms : [])
+      .map((t, idx) => ({
+        ...t,
+        _key: t?.id ?? `term-${idx}`,
+        _title: String(t?.term || t?.title || '').trim(),
+        _def: String(t?.definition || t?.description || '').trim(),
+        _ts: parseTermTimestamp(t),
+      }))
+      .sort((a, b) => {
+        if (a._ts === null && b._ts === null) return 0;
+        if (a._ts === null) return 1;
+        if (b._ts === null) return -1;
+        return a._ts - b._ts;
+      });
+  }, [terms]);
+
+  const unlockedTermsCount = useMemo(() => {
+    return normalizedTerms.filter((t) => isEnded || t._ts === null || t._ts <= maxWatchedSeconds).length;
+  }, [normalizedTerms, isEnded, maxWatchedSeconds]);
 
   // ── PINCH-TO-ZOOM & PAN STATE ──
   const [zoomScale, setZoomScale] = useState(1);
@@ -99,6 +137,9 @@ export default function VideoPlayer({
   const lastPlaybackTimeRef = useRef(0);
   const lastPlaybackWallClockRef = useRef(Date.now());
   const isSeekingRef = useRef(false);
+  const isScrubbingRef = useRef(false);
+  const scrubBlockedNotifiedRef = useRef(false);
+  const triggeredTermsRef = useRef(new Set());
   const maxWatchedRef = useRef(0);
   const isEndedRef = useRef(false);
   const pendingResumePosRef = useRef(0);
@@ -168,15 +209,56 @@ export default function VideoPlayer({
     };
   }, [userId, lessonId]);
 
+  // Typewriter effect for live top-right Termin popup
+  useEffect(() => {
+    if (!activeTermPopup) {
+      setTypedTermTitle('');
+      setTypedTermDef('');
+      setIsTypingTerm(false);
+      return;
+    }
+
+    const fullTitle = activeTermPopup._title || '';
+    const fullDef = activeTermPopup._def || '';
+    setTypedTermTitle('');
+    setTypedTermDef('');
+    setIsTypingTerm(true);
+
+    let titleIdx = 0;
+    let defIdx = 0;
+    let hideTimer = null;
+
+    const timer = setInterval(() => {
+      if (titleIdx < fullTitle.length) {
+        titleIdx += 1;
+        setTypedTermTitle(fullTitle.slice(0, titleIdx));
+      } else if (defIdx < fullDef.length) {
+        defIdx += 1;
+        setTypedTermDef(fullDef.slice(0, defIdx));
+      } else {
+        clearInterval(timer);
+        setIsTypingTerm(false);
+        hideTimer = setTimeout(() => {
+          setActiveTermPopup((curr) => (curr?._key === activeTermPopup._key ? null : curr));
+        }, 6500);
+      }
+    }, 28);
+
+    return () => {
+      clearInterval(timer);
+      if (hideTimer) clearTimeout(hideTimer);
+    };
+  }, [activeTermPopup]);
+
   // Auto-hide controls timer
   const resetControlsTimeout = useCallback(() => {
     if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
-    if (showControls && isPlaying && !isGlossaryOpen && !isEnded && !activeCheckpoint) {
+    if (showControls && isPlaying && !isGlossaryOpen && !isEnded && !activeCheckpoint && !isScrubbing) {
       controlsTimeoutRef.current = setTimeout(() => {
         setShowControls(false);
       }, 4000);
     }
-  }, [showControls, isPlaying, isGlossaryOpen, isEnded, activeCheckpoint]);
+  }, [showControls, isPlaying, isGlossaryOpen, isEnded, activeCheckpoint, isScrubbing]);
 
   useEffect(() => {
     resetControlsTimeout();
@@ -372,7 +454,7 @@ export default function VideoPlayer({
    * VERIFIED CONTINUOUS PLAYBACK ADVANCEMENT
    */
   const handleTimeUpdate = () => {
-    if (!videoRef.current) return;
+    if (!videoRef.current || isScrubbingRef.current) return;
     const time = videoRef.current.currentTime;
     setCurrentTime(time);
 
@@ -393,6 +475,24 @@ export default function VideoPlayer({
           setMaxWatchedSeconds(newFrontier);
           maxWatchedRef.current = newFrontier;
           saveWatchProgress(userId, lessonId, time, newFrontier, videoRef.current.duration || duration || 0);
+        }
+      }
+    }
+
+    // Trigger top-right typewriter Termin popup when playback reaches a term's second
+    if (normalizedTerms.length > 0 && !activeCheckpoint) {
+      for (const term of normalizedTerms) {
+        if (term._ts === null) continue;
+        if (time < term._ts - 1) {
+          triggeredTermsRef.current.delete(term._key);
+        } else if (
+          time >= term._ts &&
+          time <= term._ts + 5 &&
+          !triggeredTermsRef.current.has(term._key)
+        ) {
+          triggeredTermsRef.current.add(term._key);
+          setActiveTermPopup(term);
+          break;
         }
       }
     }
@@ -440,18 +540,74 @@ export default function VideoPlayer({
   const seekDelta = (deltaSec) => {
     if (!videoRef.current) return;
     impactLight();
+    if (deltaSec < 0) {
+      setRewindPulseKey((k) => k + 1);
+    }
     clampAndSeek(videoRef.current.currentTime + deltaSec);
     resetControlsTimeout();
   };
 
-  // Seekbar interactive scrub handling
-  const handleSeekbarInteraction = (clientX) => {
+  // Synchronous drag/hold scrubbing along the seekbar
+  const scrubToClientX = useCallback((clientX) => {
     if (!videoRef.current || !duration || !seekbarRef.current) return;
     const rect = seekbarRef.current.getBoundingClientRect();
+    if (!rect.width) return;
     const percent = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
     const targetTime = percent * duration;
-    clampAndSeek(targetTime);
-    resetControlsTimeout();
+    const frontier = maxWatchedRef.current;
+
+    let clampedTime = Math.max(0, targetTime);
+    if (targetTime > frontier + 0.5) {
+      clampedTime = frontier;
+      if (!scrubBlockedNotifiedRef.current) {
+        scrubBlockedNotifiedRef.current = true;
+        showSeekToast(
+          lang === 'ru'
+            ? 'Перемотка вперёд доступна только до просмотренной минуты'
+            : 'Oldinga faqat ko‘rilgan daqiqagacha o‘tkazish mumkin'
+        );
+      }
+    }
+
+    videoRef.current.currentTime = clampedTime;
+    setCurrentTime(clampedTime);
+    lastPlaybackTimeRef.current = clampedTime;
+    lastPlaybackWallClockRef.current = Date.now();
+  }, [duration, lang, showSeekToast]);
+
+  const handleSeekbarPointerDown = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!videoRef.current || !duration || !seekbarRef.current) return;
+
+    isScrubbingRef.current = true;
+    isSeekingRef.current = true;
+    scrubBlockedNotifiedRef.current = false;
+    setIsScrubbing(true);
+    setShowControls(true);
+    scrubToClientX(e.clientX);
+
+    const onPointerMove = (moveEvt) => {
+      moveEvt.preventDefault();
+      scrubToClientX(moveEvt.clientX);
+    };
+
+    const onPointerUp = (upEvt) => {
+      if (upEvt && typeof upEvt.clientX === 'number') {
+        scrubToClientX(upEvt.clientX);
+      }
+      isScrubbingRef.current = false;
+      isSeekingRef.current = false;
+      setIsScrubbing(false);
+      resetControlsTimeout();
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
+    };
+
+    window.addEventListener('pointermove', onPointerMove, { passive: false });
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
   };
 
   const togglePlay = () => {
@@ -748,6 +904,76 @@ export default function VideoPlayer({
           </div>
         )}
 
+        {/* Top-Right Typewriter Termin Popup (appears when video reaches a term's second) */}
+        <AnimatePresence>
+          {activeTermPopup && !activeCheckpoint && !isEnded && (
+            <motion.div
+              key={activeTermPopup._key}
+              data-testid="video-term-popup"
+              initial={{ opacity: 0, x: 18, scale: 0.96 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 14, scale: 0.96 }}
+              transition={{ type: 'spring', damping: 24, stiffness: 320 }}
+              onClick={(e) => {
+                e.stopPropagation();
+                impactLight();
+                setIsGlossaryOpen(true);
+                setActiveTermPopup(null);
+              }}
+              onTouchStart={(e) => e.stopPropagation()}
+              onTouchEnd={(e) => e.stopPropagation()}
+              className={`absolute z-30 right-3 sm:right-4 ${
+                isOverlayLayout ? 'top-16 sm:top-[68px]' : 'top-3'
+              } w-[min(310px,calc(100%-24px))] bg-[#121216]/88 backdrop-blur-xl border border-purple-400/40 rounded-2xl p-3 sm:p-3.5 shadow-[0_12px_36px_rgba(0,0,0,0.6)] cursor-pointer select-none`}
+            >
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-purple-500/20 border border-purple-400/30 text-purple-200">
+                  <BookOpen className="w-3 h-3 text-purple-300" />
+                  <span>
+                    {lang === 'ru' ? 'Термин' : 'Termin'} • {formatTime(activeTermPopup._ts ?? 0)}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveTermPopup(null);
+                  }}
+                  className="w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/75 hover:text-white transition-colors"
+                  aria-label="Close term"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <div className="font-bold text-xs sm:text-sm text-white leading-snug tracking-wide">
+                <span>{typedTermTitle}</span>
+                {isTypingTerm && typedTermTitle.length < activeTermPopup._title.length && (
+                  <span className="inline-block w-[2px] h-[1em] align-middle ml-0.5 bg-purple-400 animate-pulse" />
+                )}
+              </div>
+
+              {(typedTermDef || (isTypingTerm && typedTermTitle.length >= activeTermPopup._title.length && activeTermPopup._def)) && (
+                <p className="mt-1 text-[11px] sm:text-xs text-white/80 leading-relaxed">
+                  <span>{typedTermDef}</span>
+                  {isTypingTerm && typedTermTitle.length >= activeTermPopup._title.length && (
+                    <span className="inline-block w-[2px] h-[1em] align-middle ml-0.5 bg-purple-400 animate-pulse" />
+                  )}
+                </p>
+              )}
+
+              <div className="mt-2 pt-1.5 border-t border-white/10 flex items-center justify-between text-[10px] font-medium text-purple-300/90">
+                <span>
+                  {lang === 'ru'
+                    ? 'Сохранено во вкладке «Термины»'
+                    : '«Terminlar» bo‘limida saqlandi'}
+                </span>
+                <span>→</span>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Seek Lock Toast Notice */}
         {toastMessage && (
           <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-[#1C1C1E]/95 border border-amber-500/40 text-amber-300 px-4 py-2.5 rounded-2xl text-xs font-bold shadow-2xl flex items-center gap-2 pointer-events-none z-30 animate-in fade-in zoom-in-95 duration-200">
@@ -790,16 +1016,18 @@ export default function VideoPlayer({
           paddingRight: isOverlayLayout ? 'max(calc(var(--safe-area-right, 0px) + 20px), 24px)' : undefined
         }}
       >
-        {/* Seekbar Container with comfortable 32px touch target */}
+        {/* Seekbar Container with comfortable 32px touch/mouse scrub target */}
         <div 
           ref={seekbarRef}
-          onClick={(e) => handleSeekbarInteraction(e.clientX)}
-          onTouchStart={(e) => handleSeekbarInteraction(e.touches[0].clientX)}
-          onTouchMove={(e) => handleSeekbarInteraction(e.touches[0].clientX)}
+          data-testid="video-seekbar"
+          onPointerDown={handleSeekbarPointerDown}
+          onClick={(e) => e.stopPropagation()}
           className="relative w-full h-8 flex items-center cursor-pointer group touch-none select-none py-2"
         >
           {/* Base Track */}
-          <div className="w-full h-1.5 bg-[#2C2C2E] group-hover:h-2 transition-all rounded-full relative overflow-hidden">
+          <div className={`w-full rounded-full relative overflow-hidden bg-[#2C2C2E] ${
+            isScrubbing ? 'h-2.5' : 'h-1.5 group-hover:h-2 transition-all'
+          }`}>
             {/* Confirmed watch frontier indicator (Allowed Range) */}
             <div 
               className="absolute left-0 top-0 bottom-0 bg-white/25 rounded-full pointer-events-none"
@@ -807,14 +1035,18 @@ export default function VideoPlayer({
             />
             {/* Current playback progress (Neon Gradient) */}
             <div 
-              className="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-[#00C6FF] to-[#0072FF] rounded-full pointer-events-none shadow-[0_0_8px_rgba(0,198,255,0.7)]"
+              className={`absolute left-0 top-0 bottom-0 bg-gradient-to-r from-[#00C6FF] to-[#0072FF] rounded-full pointer-events-none shadow-[0_0_8px_rgba(0,198,255,0.7)] ${
+                isScrubbing ? 'transition-none' : ''
+              }`}
               style={{ width: `${currentPercent}%` }}
             />
           </div>
 
           {/* Comfortable Scrubber Thumb */}
           <div 
-            className="absolute w-4 h-4 bg-white rounded-full shadow-[0_2px_8px_rgba(0,0,0,0.6)] border border-white/60 pointer-events-none -translate-x-1/2 group-hover:scale-125 transition-transform"
+            className={`absolute w-4 h-4 bg-white rounded-full shadow-[0_2px_8px_rgba(0,0,0,0.6)] border border-white/60 pointer-events-none -translate-x-1/2 ${
+              isScrubbing ? 'scale-125 ring-4 ring-[#00C6FF]/35 transition-none' : 'group-hover:scale-125 transition-transform'
+            }`}
             style={{ left: `${currentPercent}%` }}
           />
 
@@ -847,14 +1079,40 @@ export default function VideoPlayer({
               {isPlaying ? <Pause className="w-4 h-4 fill-white" /> : <Play className="w-4 h-4 fill-white ml-0.5" />}
             </button>
 
-            {/* Rewind -10s */}
-            <button
+            {/* Rewind -10s with animated counter-clockwise spin & floating pulse */}
+            <motion.button
+              type="button"
+              data-testid="video-rewind-10"
               onClick={() => seekDelta(-10)}
-              className="w-9 h-9 rounded-full bg-[#1C1C1E] border border-white/10 flex items-center justify-center text-white/90 active:scale-95 transition-transform"
+              whileTap={{ scale: 0.88 }}
+              className="relative w-9 h-9 rounded-full bg-[#1C1C1E] hover:bg-[#2C2C2E] border border-white/10 flex items-center justify-center text-white/90 transition-colors cursor-pointer"
               title={lang === 'ru' ? '-10 секунд' : '-10 soniya'}
             >
-              <RotateCcw className="w-3.5 h-3.5" />
-            </button>
+              <motion.div
+                key={rewindPulseKey}
+                initial={rewindPulseKey > 0 ? { rotate: 0, scale: 1 } : false}
+                animate={rewindPulseKey > 0 ? { rotate: -360, scale: [1, 0.82, 1.12, 1] } : {}}
+                transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                className="flex items-center justify-center"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+              </motion.div>
+
+              <AnimatePresence>
+                {rewindPulseKey > 0 && (
+                  <motion.span
+                    key={`badge-${rewindPulseKey}`}
+                    initial={{ opacity: 0, y: 0, scale: 0.7 }}
+                    animate={{ opacity: [0, 1, 0], y: -22, scale: [0.85, 1.05, 0.95] }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.65, ease: 'easeOut' }}
+                    className="pointer-events-none absolute -top-2 left-1/2 -translate-x-1/2 text-[10px] font-extrabold text-[#00C6FF] whitespace-nowrap drop-shadow"
+                  >
+                    -10s
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </motion.button>
 
             {/* Time labels */}
             <div className="text-xs font-mono text-[#8E8E93] flex items-center gap-1 ml-1">
@@ -959,7 +1217,9 @@ export default function VideoPlayer({
                       {lang === 'ru' ? 'Термины урока' : 'Dars terminlari'}
                     </h3>
                     <span className="text-[10px] text-[#8E8E93]">
-                      {lang === 'ru' ? `Добавлено терминов: ${terms.length}` : `${terms.length} ta termin kiritilgan`}
+                      {lang === 'ru'
+                        ? `Открыто: ${unlockedTermsCount} из ${normalizedTerms.length}`
+                        : `Ochilgan: ${unlockedTermsCount} / ${normalizedTerms.length}`}
                     </span>
                   </div>
                 </div>
@@ -973,19 +1233,19 @@ export default function VideoPlayer({
                 </button>
               </div>
 
-              {terms.length > 0 ? (
+              {normalizedTerms.length > 0 ? (
                 <div className="space-y-2.5 flex-1 overflow-y-auto pt-1">
-                  {terms.map((term, idx) => {
-                    const hasTimestamp = term.timestamp !== undefined && term.timestamp !== null;
-                    const isUnlocked = hasTimestamp && term.timestamp <= maxWatchedSeconds;
+                  {normalizedTerms.map((term, idx) => {
+                    const hasTimestamp = term._ts !== null;
+                    const isUnlocked = isEnded || !hasTimestamp || term._ts <= maxWatchedSeconds;
 
                     return (
                       <div
-                        key={idx}
+                        key={term._key || idx}
                         onClick={() => {
                           if (hasTimestamp) {
                             if (isUnlocked) {
-                              clampAndSeek(term.timestamp);
+                              clampAndSeek(term._ts);
                             } else {
                               showSeekToast(
                                 lang === 'ru'
@@ -999,32 +1259,48 @@ export default function VideoPlayer({
                           hasTimestamp ? 'cursor-pointer active:scale-[0.98]' : ''
                         } ${
                           isUnlocked
-                            ? 'bg-[#1C1C1E] border-white/10 hover:border-purple-500/40'
-                            : 'bg-[#161618] border-white/5 opacity-80'
+                            ? 'bg-[#1C1C1E] border-purple-500/30 hover:border-purple-500/50'
+                            : 'bg-[#161618] border-white/5 opacity-75'
                         }`}
                       >
-                        <div className="flex items-start justify-between gap-2 mb-1">
-                          <span className="font-bold text-xs text-white leading-tight">
-                            {term.term || term.title}
-                          </span>
-                          {hasTimestamp && (
-                            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-md font-bold flex items-center gap-1 ${
-                              isUnlocked 
-                                ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' 
-                                : 'bg-white/5 text-[#8E8E93]'
-                            }`}>
-                              <Clock className="w-2.5 h-2.5" />
-                              <span>{formatTime(term.timestamp)}</span>
+                        {isUnlocked ? (
+                          <>
+                            <div className="flex items-start justify-between gap-2 mb-1">
+                              <span className="font-bold text-xs text-white leading-tight">
+                                {term._title}
+                              </span>
+                              {hasTimestamp && (
+                                <span className="text-[10px] font-mono px-2 py-0.5 rounded-md font-bold flex items-center gap-1 bg-purple-500/20 text-purple-300 border border-purple-500/30 shrink-0">
+                                  <Clock className="w-2.5 h-2.5" />
+                                  <span>{formatTime(term._ts)}</span>
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-[#8E8E93] leading-relaxed">
+                              {term._def || (
+                                lang === 'ru'
+                                  ? 'Подробное объяснение термина дано в видеоуроке.'
+                                  : 'Ushbu termin bo‘yicha qo‘shimcha izoh video darsda berilgan.'
+                              )}
+                            </p>
+                          </>
+                        ) : (
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div className="w-6 h-6 rounded-lg bg-amber-500/15 border border-amber-500/25 flex items-center justify-center shrink-0">
+                                <Lock className="w-3 h-3 text-amber-400" />
+                              </div>
+                              <span className="text-[11px] font-medium text-[#8E8E93] truncate">
+                                {lang === 'ru'
+                                  ? `Термин откроется на ${formatTime(term._ts)}`
+                                  : `Termin ${formatTime(term._ts)} da ochiladi`}
+                              </span>
+                            </div>
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-white/5 text-[#8E8E93] shrink-0">
+                              {formatTime(term._ts)}
                             </span>
-                          )}
-                        </div>
-                        <p className="text-[11px] text-[#8E8E93] leading-relaxed">
-                          {term.definition || term.description || (
-                            lang === 'ru'
-                              ? 'Подробное объяснение термина дано в видеоуроке.'
-                              : 'Ushbu termin bo‘yicha qo‘shimcha izoh video darsda berilgan.'
-                          )}
-                        </p>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -1050,7 +1326,9 @@ export default function VideoPlayer({
                   <span>{lang === 'ru' ? 'Список терминов урока' : 'Dars terminlari ro‘yxati'}</span>
                 </div>
                 <span className="bg-purple-500/20 text-purple-200 text-[10px] px-2 py-0.5 rounded-full">
-                  {lang === 'ru' ? `${terms.length} терм.` : `${terms.length} ta termin`}
+                  {lang === 'ru'
+                    ? `${unlockedTermsCount}/${normalizedTerms.length} терм.`
+                    : `${unlockedTermsCount}/${normalizedTerms.length} ta termin`}
                 </span>
               </button>
             </div>
@@ -1065,6 +1343,7 @@ export default function VideoPlayer({
           onClose={() => setIsGlossaryOpen(false)}
           terms={terms}
           maxWatchedSeconds={maxWatchedSeconds}
+          isEnded={isEnded}
           onSeekToTimestamp={(time) => {
             clampAndSeek(time);
           }}
