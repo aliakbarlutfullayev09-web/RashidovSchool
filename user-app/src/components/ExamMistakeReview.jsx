@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useId } from 'react';
+import { motion } from 'framer-motion';
 import { CheckCircle2, XCircle, BookOpen, AlertCircle } from 'lucide-react';
 import { isUzbekMatch } from '../utils/uzbekFuzzy';
 
@@ -61,6 +62,7 @@ export function formatOptionText(q, answerValue, lang = 'uz') {
 
 export default function ExamMistakeReview({ questions = [], userAnswers = {}, isLight = false, lang = 'uz' }) {
   const [filterMode, setFilterMode] = useState('mistakes'); // 'mistakes' | 'all'
+  const pillLayoutId = useId();
 
   const evaluated = questions.map((q, idx) => {
     const userAns = userAnswers[idx];
@@ -96,29 +98,40 @@ export default function ExamMistakeReview({ questions = [], userAnswers = {}, is
           </h4>
         </div>
 
-        <div className={`inline-flex p-1 rounded-xl ${isLight ? 'bg-[#F2F2F7]' : 'bg-[#2C2C2E]'}`}>
-          <button
-            type="button"
-            onClick={() => setFilterMode('mistakes')}
-            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-              filterMode === 'mistakes'
-                ? 'bg-[#007AFF] text-white shadow-sm'
-                : isLight ? 'text-gray-600 hover:text-[#1C1C1E]' : 'text-[#8E8E93] hover:text-white'
-            }`}
-          >
-            {lang === 'ru' ? `Ошибки (${mistakes.length})` : `Xatolar (${mistakes.length})`}
-          </button>
-          <button
-            type="button"
-            onClick={() => setFilterMode('all')}
-            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-              filterMode === 'all'
-                ? 'bg-[#007AFF] text-white shadow-sm'
-                : isLight ? 'text-gray-600 hover:text-[#1C1C1E]' : 'text-[#8E8E93] hover:text-white'
-            }`}
-          >
-            {lang === 'ru' ? `Все (${evaluated.length})` : `Barchasi (${evaluated.length})`}
-          </button>
+        <div className={`inline-flex p-1 rounded-xl relative ${isLight ? 'bg-[#F2F2F7]' : 'bg-[#2C2C2E]'}`}>
+          {[
+            {
+              id: 'mistakes',
+              label: lang === 'ru' ? `Ошибки (${mistakes.length})` : `Xatolar (${mistakes.length})`,
+            },
+            {
+              id: 'all',
+              label: lang === 'ru' ? `Все (${evaluated.length})` : `Barchasi (${evaluated.length})`,
+            },
+          ].map((tab) => {
+            const isActive = filterMode === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setFilterMode(tab.id)}
+                className={`relative px-3 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                  isActive
+                    ? 'text-white'
+                    : isLight ? 'text-gray-600 hover:text-[#1C1C1E]' : 'text-[#8E8E93] hover:text-white'
+                }`}
+              >
+                {isActive && (
+                  <motion.div
+                    layoutId={`mistakeFilterPill_${pillLayoutId}`}
+                    transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                    className="absolute inset-0 rounded-lg bg-[#007AFF] shadow-sm"
+                  />
+                )}
+                <span className="relative z-10">{tab.label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 

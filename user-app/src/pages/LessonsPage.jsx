@@ -317,7 +317,6 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
         });
         const ratio = correctCount / (lessonQuiz.questions.length || 1);
         const stars = ratio >= 0.8 ? 3 : ratio >= 0.5 ? 2 : 1;
-        const rewardNeyrons = stars === 3 ? 100 : stars === 2 ? 60 : 30;
         const uid = user?.telegram_id || user?.id;
 
         setLessonQuiz({
@@ -326,12 +325,11 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
           finished: true,
           correctCount,
           stars,
-          rewardNeyrons,
           pct: Math.round(ratio * 100),
         });
 
         if (uid) {
-          await saveLessonQuizProgress(uid, lessonQuiz.lesson.id, stars, Math.round(ratio * 100));
+          await saveLessonQuizProgress(uid, lessonQuiz.lesson.id, stars, Math.round(ratio * 100), false);
           const prog = await getProgress(uid);
           const pMap = {};
           (prog || []).forEach(p => { pMap[p.lesson_id] = p; });
@@ -344,8 +342,6 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
       const totalQ = lessonQuiz.questions.length || 1;
       const cCount = lessonQuiz.correctCount ?? 0;
       const pct = lessonQuiz.pct ?? Math.round((cCount / totalQ) * 100);
-      const stars = lessonQuiz.stars ?? 1;
-      const reward = lessonQuiz.rewardNeyrons ?? 30;
 
       return (
         <div
@@ -379,7 +375,7 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
                 </p>
               </div>
 
-              <div className="grid grid-cols-3 gap-2 sm:gap-4 pt-2 max-w-2xl mx-auto">
+              <div className="grid grid-cols-2 gap-3 pt-2 max-w-md mx-auto">
                 <div className={`p-3 sm:p-4 rounded-2xl ${isLight ? 'bg-[#F2F2F7]' : 'bg-[#2C2C2E]'}`}>
                   <span className={`text-[10px] block ${isLight ? 'text-gray-500' : 'text-[#8E8E93]'}`}>
                     {lang === 'ru' ? 'Верно:' : "To'g'ri:"}
@@ -394,14 +390,6 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
                   </span>
                   <span className={`font-bold text-lg ${isLight ? 'text-blue-600' : 'text-blue-400'}`}>
                     {pct}%
-                  </span>
-                </div>
-                <div className={`p-3 sm:p-4 rounded-2xl ${isLight ? 'bg-[#F2F2F7]' : 'bg-[#2C2C2E]'}`}>
-                  <span className={`text-[10px] block ${isLight ? 'text-gray-500' : 'text-[#8E8E93]'}`}>
-                    {lang === 'ru' ? 'Награда:' : 'Mukofot:'}
-                  </span>
-                  <span className={`font-bold text-lg ${isLight ? 'text-amber-600' : 'text-amber-400'}`}>
-                    +{reward} ({stars}★)
                   </span>
                 </div>
               </div>

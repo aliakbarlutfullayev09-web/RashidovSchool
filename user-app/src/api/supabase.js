@@ -651,7 +651,7 @@ export const getQuestions = async (lessonId) => {
 /**
  * Saves lesson quiz completion, awards stars and Neyrons (+XP), and updates progress.
  */
-export const saveLessonQuizProgress = async (userId, lessonId, stars = 3, score = 100) => {
+export const saveLessonQuizProgress = async (userId, lessonId, stars = 3, score = 100, awardPrize = false) => {
   if (!userId || !lessonId) return { success: false };
 
   try {
@@ -663,27 +663,27 @@ export const saveLessonQuizProgress = async (userId, lessonId, stars = 3, score 
       is_unlocked: true
     }, { onConflict: 'user_id,lesson_id' });
 
-    // 2. Award Neyrons & XP
-    const rewardNeyrons = stars === 3 ? 100 : stars === 2 ? 60 : 30;
-    const rewardXp = stars === 3 ? 50 : 25;
+    if (awardPrize) {
+      const rewardNeyrons = stars === 3 ? 100 : stars === 2 ? 60 : 30;
+      const { data: user } = await supabase.from('users').select('balance').eq('telegram_id', userId).single();
+      if (user) {
+        await supabase.from('users').update({
+          balance: (user.balance || 0) + rewardNeyrons
+        }).eq('telegram_id', userId);
 
-    const { data: user } = await supabase.from('users').select('balance').eq('telegram_id', userId).single();
-    if (user) {
-      await supabase.from('users').update({
-        balance: (user.balance || 0) + rewardNeyrons
-      }).eq('telegram_id', userId);
-
-      try {
-        await supabase.from('transactions').insert([{
-          user_id: userId,
-          amount: rewardNeyrons,
-          type: 'gift',
-          description: `Dars testi yakunlandi (#${lessonId}): +${rewardNeyrons} 🧠`
-        }]);
-      } catch {}
+        try {
+          await supabase.from('transactions').insert([{
+            user_id: userId,
+            amount: rewardNeyrons,
+            type: 'gift',
+            description: `Dars testi yakunlandi (#${lessonId}): +${rewardNeyrons} 🧠`
+          }]);
+        } catch {}
+      }
+      return { success: true, rewardNeyrons };
     }
 
-    return { success: true, rewardNeyrons, rewardXp };
+    return { success: true, rewardNeyrons: 0 };
   } catch (e) {
     console.error('saveLessonQuizProgress error:', e);
     return { success: false, error: e.message };
