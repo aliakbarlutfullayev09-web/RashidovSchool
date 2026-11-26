@@ -12,7 +12,7 @@ import {
   saveProfileColor,
 } from '../utils/profileColors';
 
-export default function Profile({ user, isOpen, onClose, onUpdateUser, inlineDesktop = false }) {
+export default function Profile({ user, isOpen, onClose, onUpdateUser, onPreviewColor, inlineDesktop = false }) {
   const isDesktop = useIsDesktop();
   const { lang } = useLanguage();
   const { resolvedTheme } = useTheme();
@@ -171,6 +171,9 @@ export default function Profile({ user, isOpen, onClose, onUpdateUser, inlineDes
                     if (selectedColor !== preset.id) {
                       selectionChanged();
                       setSelectedColor(preset.id);
+                    }
+                    if (onPreviewColor) {
+                      onPreviewColor(preset.id);
                     }
                   }}
                   title={lang === 'ru' ? preset.labelRu : preset.labelUz}

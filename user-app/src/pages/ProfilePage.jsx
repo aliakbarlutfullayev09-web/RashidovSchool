@@ -84,6 +84,13 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
   const [isTopUpOpen, setIsTopUpOpen] = useState(false);
   const [isSupportOpen, setIsSupportOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [previewProfileColor, setPreviewProfileColor] = useState(null);
+
+  useEffect(() => {
+    if (!isEditProfileOpen) {
+      setPreviewProfileColor(null);
+    }
+  }, [isEditProfileOpen]);
 
   // Avatar image fallback state
   const [imgError, setImgError] = useState(false);
@@ -187,9 +194,11 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
   const firstLetter = (fullName.trim().charAt(0) || 'A').toUpperCase();
   const hasPhoto = Boolean(user?.photo_url) && !imgError;
 
-  const profilePreset = getProfileColorPreset(
-    user?.profile_color || getSavedProfileColor(user?.telegram_id)
-  );
+  const activeProfileColor =
+    (isEditProfileOpen && previewProfileColor) ||
+    user?.profile_color ||
+    getSavedProfileColor(user?.telegram_id);
+  const profilePreset = getProfileColorPreset(activeProfileColor);
   const randomAvatarBg = getOrCreateRandomAvatarGradient(user?.telegram_id || user?.id);
 
   const handleOpenChannel = () => {
@@ -236,15 +245,26 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
         {/* Telegram-Style Colored Profile Header Backdrop behind/around Avatar */}
         <div
           data-profile-color={profilePreset.id}
-          className="absolute inset-x-0 top-0 h-56 pointer-events-none transition-all duration-300"
+          className="absolute inset-x-0 top-0 h-60 pointer-events-none transition-all duration-300"
           style={{
             background: isLight
-              ? `radial-gradient(ellipse 100% 90% at 50% 0%, ${profilePreset.hex}BD 0%, ${profilePreset.accent}5C 48%, ${profilePreset.hex}18 76%, transparent 100%)`
-              : `radial-gradient(ellipse 100% 90% at 50% 0%, ${profilePreset.hex}99 0%, ${profilePreset.accent}42 52%, transparent 100%)`,
+              ? `radial-gradient(ellipse 95% 88% at 50% 22%, ${profilePreset.hex}EB 0%, ${profilePreset.accent}94 46%, ${profilePreset.hex}2E 74%, transparent 100%)`
+              : `radial-gradient(ellipse 95% 88% at 50% 22%, ${profilePreset.hex}D9 0%, ${profilePreset.accent}6E 48%, ${profilePreset.hex}24 76%, transparent 100%)`,
           }}
         >
+          {/* Ambient glow halo centered directly behind/around the avatar */}
+          <div
+            aria-hidden="true"
+            className="absolute left-1/2 top-[76px] -translate-x-1/2 -translate-y-1/2 w-44 h-44 rounded-full blur-2xl pointer-events-none transition-all duration-300"
+            style={{
+              background: `radial-gradient(circle, ${profilePreset.accent}${isLight ? 'A6' : '88'} 0%, ${profilePreset.hex}${isLight ? '73' : '54'} 55%, transparent 78%)`,
+            }}
+          />
           {/* Subtle Telegram-style floating background pattern icons around the avatar */}
-          <div className={`relative w-full h-full max-w-xs mx-auto ${isLight ? 'opacity-[0.38]' : 'opacity-[0.22]'}`} style={{ color: profilePreset.accent }}>
+          <div
+            className={`relative w-full h-full max-w-xs mx-auto transition-colors duration-300 ${isLight ? 'opacity-[0.46]' : 'opacity-[0.34]'}`}
+            style={{ color: isLight ? profilePreset.hex : profilePreset.accent }}
+          >
             <Dna className="w-5 h-5 absolute top-5 left-12 -rotate-12" />
             <Sparkles className="w-4 h-4 absolute top-14 left-5 rotate-12" />
             <Atom className="w-5 h-5 absolute top-24 left-14 rotate-45" />
@@ -560,8 +580,12 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
             <Profile
               user={user}
               isOpen={isEditProfileOpen}
-              onClose={() => setIsEditProfileOpen(false)}
+              onClose={() => {
+                setPreviewProfileColor(null);
+                setIsEditProfileOpen(false);
+              }}
               onUpdateUser={onUpdateUser}
+              onPreviewColor={setPreviewProfileColor}
               inlineDesktop={true}
             />
           )}
@@ -574,8 +598,12 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
           <Profile
             user={user}
             isOpen={isEditProfileOpen}
-            onClose={() => setIsEditProfileOpen(false)}
+            onClose={() => {
+              setPreviewProfileColor(null);
+              setIsEditProfileOpen(false);
+            }}
             onUpdateUser={onUpdateUser}
+            onPreviewColor={setPreviewProfileColor}
           />
 
           <TopUpModal
