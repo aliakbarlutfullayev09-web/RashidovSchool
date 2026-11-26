@@ -820,7 +820,9 @@ export default function VideoPlayer({
         <video
           ref={videoRef}
           src={videoUrl || "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"}
-          className="w-full h-full object-contain transition-transform duration-75 select-none pointer-events-auto"
+          className={`w-full h-full transition-transform duration-75 select-none pointer-events-auto ${
+            isOverlayLayout || isTablet ? 'object-cover' : 'object-contain'
+          }`}
           style={{
             transform: `translate3d(${panOffset.x}px, ${panOffset.y}px, 0) scale(${zoomScale})`,
             transformOrigin: 'center center',
