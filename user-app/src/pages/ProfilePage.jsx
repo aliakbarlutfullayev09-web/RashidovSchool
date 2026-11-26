@@ -241,14 +241,14 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
       <div className={`border rounded-3xl p-6 relative overflow-hidden flex flex-col items-center text-center transition-colors ${
         isLight ? 'bg-white border-black/[0.06] shadow-lg' : 'bg-[#1C1C1E] border-white/5 shadow-2xl'
       }`}>
-        {/* Telegram-Style Colored Profile Header Backdrop behind/around Avatar */}
+        {/* Telegram-Style Colored Profile Header Backdrop behind/around Avatar (full-card inset-0 prevents any horizontal seam) */}
         <div
           data-profile-color={profilePreset.id}
-          className="absolute inset-x-0 top-0 h-60 pointer-events-none transition-all duration-300"
+          className="absolute inset-0 pointer-events-none transition-all duration-300"
           style={{
             background: isLight
-              ? `radial-gradient(ellipse 95% 88% at 50% 22%, ${profilePreset.hex}EB 0%, ${profilePreset.accent}94 46%, ${profilePreset.hex}2E 74%, transparent 100%)`
-              : `radial-gradient(ellipse 95% 88% at 50% 22%, ${profilePreset.hex}D9 0%, ${profilePreset.accent}6E 48%, ${profilePreset.hex}24 76%, transparent 100%)`,
+              ? `radial-gradient(ellipse 100% 56% at 50% 14%, ${profilePreset.hex}EB 0%, ${profilePreset.accent}88 38%, ${profilePreset.hex}24 68%, transparent 100%)`
+              : `radial-gradient(ellipse 100% 56% at 50% 14%, ${profilePreset.hex}D9 0%, ${profilePreset.accent}66 38%, ${profilePreset.hex}1F 68%, transparent 100%)`,
           }}
         >
           {/* Ambient glow halo centered directly behind/around the avatar */}
@@ -261,7 +261,7 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
           />
           {/* Subtle Telegram-style floating background pattern icons around the avatar */}
           <div
-            className={`relative w-full h-full max-w-xs mx-auto transition-colors duration-300 ${isLight ? 'opacity-[0.46]' : 'opacity-[0.34]'}`}
+            className={`relative w-full h-56 max-w-xs mx-auto transition-colors duration-300 ${isLight ? 'opacity-[0.46]' : 'opacity-[0.34]'}`}
             style={{ color: isLight ? profilePreset.hex : profilePreset.accent }}
           >
             <Dna className="w-5 h-5 absolute top-5 left-12 -rotate-12" />
@@ -544,17 +544,17 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
 
       </div>
 
-      {/* Desktop In-Flow Detail Panel (smoothly expands/collapses width; shares parent page scroll) */}
+      {/* Desktop In-Flow Detail Panel (smoothly expands/collapses width; padded inset prevents corner shadow clipping) */}
       {isDesktop && (
         <AnimatePresence initial={false}>
           {isAnyModalOpen && (
             <motion.div
               key="desktop-detail-panel"
               initial={{ width: 0, marginLeft: 0, opacity: 0 }}
-              animate={{ width: 420, marginLeft: 24, opacity: 1 }}
+              animate={{ width: 444, marginLeft: 12, opacity: 1 }}
               exit={{ width: 0, marginLeft: 0, opacity: 0 }}
               transition={{ duration: 0.36, ease: [0.22, 1, 0.36, 1] }}
-              className="shrink-0 overflow-hidden"
+              className="shrink-0 overflow-hidden px-3 py-4 -my-4 -mr-3"
             >
               <div className="w-[420px] min-w-[420px]">
                 <AnimatePresence mode="wait" initial={false}>

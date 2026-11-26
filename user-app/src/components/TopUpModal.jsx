@@ -239,7 +239,7 @@ export default function TopUpModal({ isOpen, onClose, user, onUpdateUser, inline
       transition={{ duration: 0.18 }}
       className={`${
         isDesktop && inlineDesktop
-          ? 'w-full rounded-[32px] border shadow-2xl overflow-hidden flex flex-col select-none'
+          ? 'w-full rounded-[32px] border shadow-lg overflow-hidden flex flex-col select-none'
           : isDesktop
           ? 'fixed z-10 flex flex-col select-none pointer-events-auto right-10 top-1/2 -translate-y-1/2 w-[420px] max-w-[420px] h-[min(720px,calc(100vh-60px))] rounded-[32px] border shadow-2xl overflow-hidden'
           : 'fixed inset-0 z-10 flex flex-col select-none pointer-events-auto'
@@ -393,7 +393,7 @@ export default function TopUpModal({ isOpen, onClose, user, onUpdateUser, inline
                     type="button"
                     disabled={buyingStars !== null}
                     onClick={() => handleBuyStars(pkg)}
-                    className={`border p-4 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all active:scale-95 relative disabled:opacity-70 ${
+                    className={`border p-4 rounded-2xl overflow-hidden flex flex-col items-center justify-center gap-2 transition-all active:scale-95 relative disabled:opacity-70 ${
                       isLight
                         ? 'bg-white hover:bg-gray-50 border-black/5 shadow-sm'
                         : 'bg-[#1C1C1E] hover:bg-[#242426] border-white/5 shadow-md'
