@@ -15,7 +15,7 @@ const translations = {
     neyron: 'Neyron',
     rashidov_school: 'Rashidov School',
     darslar_kutubxonasi: 'Video darslar kutubxonasi',
-    streak_tooltip: 'Har kuni dars ko‘ring va test ishlang! Strikingiz qancha ko‘p bo‘lsa, shuncha ko‘p bonus Neyronlar beriladi.',
+    streak_tooltip: 'Har kuni dars ko‘ring va test ishlang! Strikingizni saqlab qolish uchun muntazam shug‘ullaning.',
     
     // Subjects
     biologiya: 'Biologiya',
@@ -85,7 +85,7 @@ const translations = {
     neyron: 'Нейронов',
     rashidov_school: 'Rashidov School',
     darslar_kutubxonasi: 'Библиотека видеоуроков',
-    streak_tooltip: 'Занимайтесь каждый день! Чем дольше ударный режим, тем больше бонусных Нейронов.',
+    streak_tooltip: 'Занимайтесь каждый день! Проходите уроки и тесты, чтобы поддерживать серию.',
     
     // Subjects
     biologiya: 'Биология',

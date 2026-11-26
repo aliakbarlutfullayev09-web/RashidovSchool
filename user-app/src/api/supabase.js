@@ -70,7 +70,7 @@ export async function syncUserSession(rawUser) {
       role: 'student',
       full_name: firstName,
       class_group: '11-A',
-      balance: 1000, // Welcome bonus
+      balance: 0,
       streak_days: 1,
       last_active_date: todayStr,
       language: 'uz'
@@ -91,7 +91,7 @@ export async function syncUserSession(rawUser) {
     return {
       telegram_id: telegramId,
       full_name: firstName,
-      balance: 1000,
+      balance: 0,
       streak_days: 1,
       class_group: '11-A',
       language: 'uz',
@@ -438,12 +438,33 @@ export const getWatchProgress = async (userId, lessonId) => {
   return { maxWatchedSeconds: 0, lastPosition: 0 };
 };
 
-export const saveWatchProgress = async (userId, lessonId, currentPosition, maxWatchedSeconds) => {
+export const saveWatchProgress = async (
+  userId,
+  lessonId,
+  currentPosition,
+  maxWatchedSeconds,
+  durationSeconds = 0,
+  completed = undefined
+) => {
   const key = `rb_watch_progress_${userId || 'guest'}_${lessonId}`;
+  let existing = {};
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw) existing = JSON.parse(raw) || {};
+  } catch {}
+
+  const resolvedDuration = Math.floor(durationSeconds || 0) || Math.floor(existing.duration || 0) || 0;
+  const maxWatched = Math.floor(maxWatchedSeconds || 0);
+  const isCompleted = completed !== undefined
+    ? Boolean(completed)
+    : Boolean(existing.completed) || (resolvedDuration > 0 && maxWatched >= Math.max(1, resolvedDuration - 2));
+
   const payload = {
     lessonId,
     lastPosition: Math.floor(currentPosition || 0),
-    maxWatchedSeconds: Math.floor(maxWatchedSeconds || 0),
+    maxWatchedSeconds: maxWatched,
+    duration: resolvedDuration,
+    completed: isCompleted,
     updatedAt: new Date().toISOString()
   };
   try {
@@ -649,39 +670,18 @@ export const getQuestions = async (lessonId) => {
 };
 
 /**
- * Saves lesson quiz completion, awards stars and Neyrons (+XP), and updates progress.
+ * Saves lesson quiz / video completion progress (stars & unlock state; no Neyron payout).
  */
-export const saveLessonQuizProgress = async (userId, lessonId, stars = 3, score = 100, awardPrize = false) => {
+export const saveLessonQuizProgress = async (userId, lessonId, stars = 3, score = 100) => {
   if (!userId || !lessonId) return { success: false };
 
   try {
-    // 1. Update progress
     await supabase.from('progress').upsert({
       user_id: userId,
       lesson_id: lessonId,
       stars: Math.max(1, Math.min(3, stars)),
       is_unlocked: true
     }, { onConflict: 'user_id,lesson_id' });
-
-    if (awardPrize) {
-      const rewardNeyrons = stars === 3 ? 100 : stars === 2 ? 60 : 30;
-      const { data: user } = await supabase.from('users').select('balance').eq('telegram_id', userId).single();
-      if (user) {
-        await supabase.from('users').update({
-          balance: (user.balance || 0) + rewardNeyrons
-        }).eq('telegram_id', userId);
-
-        try {
-          await supabase.from('transactions').insert([{
-            user_id: userId,
-            amount: rewardNeyrons,
-            type: 'gift',
-            description: `Dars testi yakunlandi (#${lessonId}): +${rewardNeyrons} 🧠`
-          }]);
-        } catch {}
-      }
-      return { success: true, rewardNeyrons };
-    }
 
     return { success: true, rewardNeyrons: 0 };
   } catch (e) {
@@ -691,36 +691,11 @@ export const saveLessonQuizProgress = async (userId, lessonId, stars = 3, score 
 };
 
 /**
- * Saves exam test completion (DTM / Milliy sertifikat) to update stats and award student.
+ * Exam completion hook (DTM / Milliy sertifikat). Neyrons are never awarded for exams.
  */
 export const saveExamProgress = async (userId, subjectKey, mode, testId, score, stars = 3) => {
   if (!userId) return { success: false };
-
-  try {
-    const rewardNeyrons = mode === 'dtm' ? 120 : 150;
-    const rewardXp = mode === 'dtm' ? 60 : 80;
-
-    const { data: user } = await supabase.from('users').select('balance').eq('telegram_id', userId).single();
-    if (user) {
-      await supabase.from('users').update({
-        balance: (user.balance || 0) + rewardNeyrons
-      }).eq('telegram_id', userId);
-
-      try {
-        await supabase.from('transactions').insert([{
-          user_id: userId,
-          amount: rewardNeyrons,
-          type: 'gift',
-          description: `${mode.toUpperCase()} Imtihon yakunlandi (${testId}): +${rewardNeyrons} 🧠`
-        }]);
-      } catch {}
-    }
-
-    return { success: true, rewardNeyrons, rewardXp };
-  } catch (e) {
-    console.error('saveExamProgress error:', e);
-    return { success: false };
-  }
+  return { success: true, rewardNeyrons: 0 };
 };
 
 export const getDailyQuests = async (userId, date) => {

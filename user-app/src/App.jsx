@@ -154,7 +154,7 @@ function MainApp() {
         full_name: firstName,
         photo_url: photoUrl,
         profile_color: getSavedProfileColor(resolvedId),
-        balance: 1000,
+        balance: 0,
         streak_days: 1,
         class_group: '11-A',
         language: 'uz',

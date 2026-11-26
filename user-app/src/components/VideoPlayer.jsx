@@ -100,6 +100,8 @@ export default function VideoPlayer({
   const lastPlaybackWallClockRef = useRef(Date.now());
   const isSeekingRef = useRef(false);
   const maxWatchedRef = useRef(0);
+  const isEndedRef = useRef(false);
+  const pendingResumePosRef = useRef(0);
   const controlsTimeoutRef = useRef(null);
   const singleTapTimerRef = useRef(null);
   const ignoreNextClickUntilRef = useRef(0);
@@ -111,12 +113,16 @@ export default function VideoPlayer({
     return () => { window.__rb_exit_video = null; };
   }, [onBack]);
 
-  // Keep maxWatchedRef in sync
+  // Keep maxWatchedRef & isEndedRef in sync
   useEffect(() => {
     maxWatchedRef.current = maxWatchedSeconds;
   }, [maxWatchedSeconds]);
 
-  // Load saved watch frontier on mount
+  useEffect(() => {
+    isEndedRef.current = isEnded;
+  }, [isEnded]);
+
+  // Load saved watch frontier on mount & persist lastPosition on unmount
   useEffect(() => {
     let mounted = true;
     async function loadProgress() {
@@ -127,10 +133,17 @@ export default function VideoPlayer({
           setMaxWatchedSeconds(initSec);
           maxWatchedRef.current = initSec;
 
-          if (saved.lastPosition && saved.lastPosition <= initSec && videoRef.current) {
-            videoRef.current.currentTime = saved.lastPosition;
-            setCurrentTime(saved.lastPosition);
-            lastPlaybackTimeRef.current = saved.lastPosition;
+          const resumePos = Number(saved.lastPosition) || 0;
+          const savedDur = Number(saved.duration) || 0;
+          const alreadyCompleted = Boolean(saved.completed) || (savedDur > 0 && initSec >= savedDur - 2);
+          if (!alreadyCompleted && resumePos > 0 && resumePos <= initSec) {
+            pendingResumePosRef.current = resumePos;
+            if (videoRef.current && videoRef.current.readyState >= 1) {
+              videoRef.current.currentTime = resumePos;
+              setCurrentTime(resumePos);
+              lastPlaybackTimeRef.current = resumePos;
+              pendingResumePosRef.current = 0;
+            }
           }
         }
       } catch (e) {
@@ -141,7 +154,18 @@ export default function VideoPlayer({
     if (lessonId) {
       incrementViewCount(lessonId).catch(() => {});
     }
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+      if (!isEndedRef.current && maxWatchedRef.current > 0 && videoRef.current) {
+        saveWatchProgress(
+          userId,
+          lessonId,
+          videoRef.current.currentTime || 0,
+          maxWatchedRef.current,
+          videoRef.current.duration || 0
+        );
+      }
+    };
   }, [userId, lessonId]);
 
   // Auto-hide controls timer
@@ -368,7 +392,7 @@ export default function VideoPlayer({
           const newFrontier = time;
           setMaxWatchedSeconds(newFrontier);
           maxWatchedRef.current = newFrontier;
-          saveWatchProgress(userId, lessonId, time, newFrontier);
+          saveWatchProgress(userId, lessonId, time, newFrontier, videoRef.current.duration || duration || 0);
         }
       }
     }
@@ -457,7 +481,7 @@ export default function VideoPlayer({
       const full = videoRef.current.duration || maxWatchedRef.current;
       setMaxWatchedSeconds(full);
       maxWatchedRef.current = full;
-      saveWatchProgress(userId, lessonId, full, full);
+      saveWatchProgress(userId, lessonId, full, full, full, true);
     }
     if (userId && lessonId) {
       saveLessonQuizProgress(userId, lessonId, 3, 100);
@@ -485,7 +509,7 @@ export default function VideoPlayer({
       setCurrentTime(rewindTime);
       lastPlaybackTimeRef.current = rewindTime;
       lastPlaybackWallClockRef.current = Date.now();
-      saveWatchProgress(userId, lessonId, rewindTime, rewindTime);
+      saveWatchProgress(userId, lessonId, rewindTime, rewindTime, videoRef.current?.duration || duration || 0, false);
 
       // Mark this checkpoint (and any checkpoints after rewindTime) unanswered so they must pass again
       setAnsweredCheckpoints(prev => {
@@ -650,7 +674,17 @@ export default function VideoPlayer({
           webkit-playsinline="true"
           x-webkit-airplay="allow"
           onTimeUpdate={handleTimeUpdate}
-          onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}
+          onLoadedMetadata={(e) => {
+            const metaDur = e.currentTarget.duration || 0;
+            setDuration(metaDur);
+            if (pendingResumePosRef.current > 0 && metaDur > 0 && pendingResumePosRef.current < metaDur - 2) {
+              const pos = pendingResumePosRef.current;
+              pendingResumePosRef.current = 0;
+              e.currentTarget.currentTime = pos;
+              setCurrentTime(pos);
+              lastPlaybackTimeRef.current = pos;
+            }
+          }}
           onEnded={handleEnded}
           onWaiting={() => setIsBuffering(true)}
           onPlaying={() => setIsBuffering(false)}

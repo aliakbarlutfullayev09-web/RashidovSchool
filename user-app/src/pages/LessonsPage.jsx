@@ -20,6 +20,62 @@ import DesktopSubjectCarousel from '../components/DesktopSubjectCarousel';
 
 const DEFAULT_COVER_IMAGE = 'https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?auto=format&fit=crop&w=800&q=80';
 
+function parseDurationToSeconds(dur) {
+  if (!dur) return 0;
+  if (typeof dur === 'number' && Number.isFinite(dur)) return Math.max(0, Math.floor(dur));
+  const str = String(dur).trim();
+  if (!str) return 0;
+  if (str.includes(':')) {
+    const parts = str.split(':').map((n) => parseInt(n, 10));
+    if (parts.some((n) => Number.isNaN(n))) return 0;
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  }
+  const num = parseFloat(str);
+  if (!Number.isNaN(num) && /daq|min|м/i.test(str)) return Math.round(num * 60);
+  if (!Number.isNaN(num)) return Math.round(num);
+  return 0;
+}
+
+function getLessonWatchState(lesson, uid, progressMap = {}, durationsById = {}) {
+  const prog = progressMap[lesson?.id];
+  const isCompletedByStars = Boolean(prog && prog.stars > 0);
+
+  let parsed = null;
+  try {
+    const raw = localStorage.getItem(`rb_watch_progress_${uid || 'guest'}_${lesson?.id}`);
+    if (raw) parsed = JSON.parse(raw);
+  } catch {}
+
+  const maxWatchedSeconds = Number(parsed?.maxWatchedSeconds) || 0;
+  const storedDuration = Number(parsed?.duration) || 0;
+  const resolvedDuration = storedDuration > 0
+    ? storedDuration
+    : parseDurationToSeconds(durationsById[lesson?.id] || lesson?.duration);
+
+  const isCompletedByWatch = Boolean(parsed?.completed)
+    || (resolvedDuration > 0 && maxWatchedSeconds >= Math.max(1, resolvedDuration - 2));
+
+  const isCompleted = isCompletedByStars || isCompletedByWatch;
+  const hasStarted = maxWatchedSeconds > 0;
+  const isInProgress = hasStarted && !isCompleted;
+
+  const pct = resolvedDuration > 0
+    ? Math.max(1, Math.min(99, Math.round((maxWatchedSeconds / resolvedDuration) * 100)))
+    : Math.max(1, Math.min(99, Math.round((maxWatchedSeconds / 600) * 100)));
+
+  const updatedAtMs = parsed?.updatedAt ? (Date.parse(parsed.updatedAt) || 0) : 0;
+
+  return {
+    lesson,
+    hasStarted,
+    isCompleted,
+    isInProgress,
+    pct,
+    updatedAtMs,
+  };
+}
+
 export default function LessonsPage({ user, onPlayingChange, onRegisterBackAction }) {
   const { t, lang } = useLanguage();
   const { resolvedTheme } = useTheme();
@@ -141,24 +197,26 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
 
   const loadData = async () => {
     setLoading(true);
+    setLastWatchedLesson(null);
+    setLastWatchedPct(0);
     try {
       const { courses: dbCourses, lessons: allLessons } = await getCoursesAndLessons(activeSubject.id);
       setCourses(dbCourses || []);
       setLessons(allLessons || []);
 
       // User progress
+      let pMap = {};
       const userUid = user?.telegram_id || user?.id;
       if (userUid) {
         const prog = await getProgress(userUid);
-        const pMap = {};
         if (prog && prog.length > 0) {
           prog.forEach(p => { pMap[p.lesson_id] = p; });
         }
         setProgressMap(pMap);
       }
 
-      // Check last watched lesson in localStorage
-      findLastWatchedLesson(allLessons);
+      // Check most recent unfinished watched lesson
+      findLastWatchedLesson(allLessons, pMap, durationsById);
     } catch (err) {
       console.error("Error loading subject data:", err);
     } finally {
@@ -166,26 +224,39 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
     }
   };
 
-  const findLastWatchedLesson = (allLessons) => {
-    if (!allLessons || allLessons.length === 0) return;
+  const findLastWatchedLesson = (allLessons, pMap = progressMap, dMap = durationsById) => {
+    if (!allLessons || allLessons.length === 0) {
+      setLastWatchedLesson(null);
+      setLastWatchedPct(0);
+      return;
+    }
+
+    const uid = user?.telegram_id || user?.id || 'guest';
+    let latestCandidate = null;
+
     for (const l of allLessons) {
-      const raw = localStorage.getItem(`rb_watch_progress_${user?.telegram_id || 'guest'}_${l.id}`);
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw);
-          if (parsed.maxWatchedSeconds > 0) {
-            setLastWatchedLesson(l);
-            setLastWatchedPct(Math.min(100, Math.round((parsed.maxWatchedSeconds / 600) * 100)));
-            return;
-          }
-        } catch {}
+      const state = getLessonWatchState(l, uid, pMap, dMap);
+      if (!state.isInProgress) continue;
+      if (!latestCandidate || state.updatedAtMs >= latestCandidate.updatedAtMs) {
+        latestCandidate = state;
       }
     }
-    if (allLessons.length > 0) {
-      setLastWatchedLesson(allLessons[0]);
-      setLastWatchedPct(40);
+
+    if (latestCandidate) {
+      setLastWatchedLesson(latestCandidate.lesson);
+      setLastWatchedPct(latestCandidate.pct);
+    } else {
+      setLastWatchedLesson(null);
+      setLastWatchedPct(0);
     }
   };
+
+  // Re-evaluate continue-watching card whenever durations/progress resolve or after returning from video/quiz
+  useEffect(() => {
+    if (!playingLesson && !lessonQuiz) {
+      findLastWatchedLesson(lessons, progressMap, durationsById);
+    }
+  }, [lessons, progressMap, durationsById, playingLesson, lessonQuiz, user]);
 
   const handleNextSubject = () => {
     impactLight();
@@ -225,8 +296,17 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
     setPlayingLesson(lesson);
   };
 
-  const handleBackFromPlayer = () => {
+  const handleBackFromPlayer = async () => {
     setPlayingLesson(null);
+    const userUid = user?.telegram_id || user?.id;
+    if (userUid) {
+      try {
+        const prog = await getProgress(userUid);
+        const pMap = {};
+        (prog || []).forEach(p => { pMap[p.lesson_id] = p; });
+        setProgressMap(pMap);
+      } catch {}
+    }
     setTimeout(() => {
       window.scrollTo({ top: savedScrollPositionRef.current, behavior: 'instant' });
     }, 50);
@@ -283,15 +363,12 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
         return false;
       }
     }
-    const prog = progressMap[lesson.id];
-    const hasWatched = prog && prog.stars > 0;
+    const uid = user?.telegram_id || user?.id || 'guest';
+    const watchState = getLessonWatchState(lesson, uid, progressMap, durationsById);
     const isSaved = savedLessonIds.includes(lesson.id);
 
-    if (activeFilter === 'unwatched') return !hasWatched;
-    if (activeFilter === 'continue') {
-      const local = localStorage.getItem(`rb_watch_progress_${user?.telegram_id || 'guest'}_${lesson.id}`);
-      return !!local && !hasWatched;
-    }
+    if (activeFilter === 'unwatched') return !watchState.isCompleted;
+    if (activeFilter === 'continue') return watchState.isInProgress;
     if (activeFilter === 'saved') return isSaved;
 
     return true;
@@ -329,7 +406,7 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
         });
 
         if (uid) {
-          await saveLessonQuizProgress(uid, lessonQuiz.lesson.id, stars, Math.round(ratio * 100), false);
+          await saveLessonQuizProgress(uid, lessonQuiz.lesson.id, stars, Math.round(ratio * 100));
           const prog = await getProgress(uid);
           const pMap = {};
           (prog || []).forEach(p => { pMap[p.lesson_id] = p; });
@@ -905,8 +982,8 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
 
                     <div className={`w-full h-1 rounded-full overflow-hidden ${isLight ? 'bg-black/10' : 'bg-white/10'}`}>
                       <div 
-                        className="h-full bg-emerald-500 rounded-full" 
-                        style={{ width: `${lastWatchedPct || 40}%` }} 
+                        className="h-full bg-emerald-500 rounded-full transition-all duration-300" 
+                        style={{ width: `${lastWatchedPct}%` }} 
                       />
                     </div>
                   </div>

@@ -30,7 +30,7 @@ export default function BottomSheet({
   const handleCheckSubscription = () => {
     impactMedium();
     notificationSuccess();
-    alert("A'zolik tasdiqlandi! +100 Neyron hisobingizga qo'shildi.");
+    alert("A'zolik tasdiqlandi!");
     if (onWatch) onWatch(lesson);
   };
 
@@ -146,7 +146,7 @@ export default function BottomSheet({
                       className="w-full bg-[#2C2C2E] hover:bg-[#3A3A3C] text-white font-bold py-3.5 px-4 rounded-xl text-sm flex items-center justify-center gap-2 active:scale-95 transition-all"
                     >
                       <CheckCircle className="w-4 h-4 text-emerald-400" />
-                      <span>A'zolikni tekshirish (+100 Neyron)</span>
+                      <span>A'zolikni tekshirish</span>
                     </button>
                   </div>
                 </div>
