@@ -1,12 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Trophy, Clock, AlertTriangle, CheckCircle2, XCircle, ArrowLeft, 
+  Trophy, Clock, AlertTriangle, CheckCircle2, XCircle, ArrowLeft, ArrowRight,
   RotateCcw, BookOpen, Search, Sparkles, ChevronRight, Check,
   Award, Zap, UserCheck, FileText, CheckCircle,
   Dna, FlaskConical, Calculator
 } from 'lucide-react';
 import SubjectBannerEffects from '../components/SubjectBannerEffects';
+import ConfettiBurst from '../components/ConfettiBurst';
+import ExamMistakeReview, {
+  buildExamResultKey,
+  evaluateQuestionAnswer,
+  loadSavedExamResults,
+  saveExamResultLocal
+} from '../components/ExamMistakeReview';
 import { getSubjects, getExamPortalData, saveExamProgress } from '../api/supabase';
 import { mockSubjects } from '../mock/data';
 import {
@@ -67,9 +74,19 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
   const [showWarningModal, setShowWarningModal] = useState(false);
   const [visitedQuestions, setVisitedQuestions] = useState(new Set([0]));
 
-  // Results & Tahlil State
+  // Results & Mistake Review State
   const [examFinished, setExamFinished] = useState(false);
-  const [showTahlil, setShowTahlil] = useState(false);
+  const [confettiKey, setConfettiKey] = useState(0);
+  const [savedResultsMap, setSavedResultsMap] = useState(() =>
+    loadSavedExamResults(user?.telegram_id || user?.id)
+  );
+  const [reviewEntry, setReviewEntry] = useState(null);
+  const userAnswersRef = useRef({});
+  const finishedOnceRef = useRef(false);
+
+  useEffect(() => {
+    setSavedResultsMap(loadSavedExamResults(user?.telegram_id || user?.id));
+  }, [user?.telegram_id, user?.id]);
 
   // Touch handling for carousel
   const touchStartXRef = useRef(0);
@@ -197,13 +214,15 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
       return;
     }
     impactMedium();
+    userAnswersRef.current = {};
+    finishedOnceRef.current = false;
+    setReviewEntry(null);
     setSelectedTest(test);
     setCurrentQIndex(0);
     setUserAnswers({});
     setTimeLeft((test?.durationMinutes || activeModeConfig?.durationMinutes || 100) * 60);
     setCheatWarnings(0);
     setShowWarningModal(false);
-    setShowTahlil(false);
     setVisitedQuestions(new Set([0]));
     setExamActive(true);
     setExamFinished(false);
@@ -225,29 +244,51 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
 
   // Finish Exam Handler
   const handleFinishExam = () => {
+    if (finishedOnceRef.current) return;
+    finishedOnceRef.current = true;
+
+    const latestAnswers = userAnswersRef.current || userAnswers;
     impactMedium();
     setExamActive(false);
     setExamFinished(true);
+    setConfettiKey(prev => prev + 1);
     notificationSuccess();
 
     const uid = user?.telegram_id || user?.id;
-    if (uid) {
-      const targetMaxScore = selectedTest?.maxScore || activeModeConfig?.maxScore || (selectedMode === 'dtm' ? 93 : 75);
-      const qWeight = selectedMode === 'dtm' ? 3.1 : (targetMaxScore / (activeQuestions.length || 1));
-      let cCount = 0;
-      activeQuestions.forEach((q, idx) => {
-        const userAns = userAnswers[idx];
-        if (q.type === 'input') {
-          if (userAns && isUzbekMatch(userAns, q.correctAnswer)) cCount++;
-        } else {
-          if (userAns === q.correctIndex) cCount++;
-        }
-      });
-      const score = (cCount * qWeight).toFixed(1);
-      const ratio = cCount / (activeQuestions.length || 1);
-      const stars = ratio >= 0.8 ? 3 : ratio >= 0.5 ? 2 : 1;
+    const targetMaxScore = selectedTest?.maxScore || activeModeConfig?.maxScore || (selectedMode === 'dtm' ? 93 : 75);
+    const qWeight = selectedMode === 'dtm' ? 3.1 : (targetMaxScore / (activeQuestions.length || 1));
+    let cCount = 0;
+    activeQuestions.forEach((q, idx) => {
+      if (evaluateQuestionAnswer(q, latestAnswers[idx])) cCount++;
+    });
+    const score = (cCount * qWeight).toFixed(1);
+    const ratio = cCount / (activeQuestions.length || 1);
+    const percentage = Math.min(100, Math.round(ratio * 100));
+    const stars = ratio >= 0.8 ? 3 : ratio >= 0.5 ? 2 : 1;
+    let grade = 'C';
+    if (percentage >= 90) grade = 'A+';
+    else if (percentage >= 80) grade = 'A';
+    else if (percentage >= 70) grade = 'B+';
+    else if (percentage >= 60) grade = 'B';
 
-      saveExamProgress(uid, selectedSubjectKey, selectedMode, selectedTest?.id || 'exam-1', score, stars);
+    const testId = selectedTest?.id || 'exam-1';
+    const nextMap = saveExamResultLocal(uid, selectedSubjectKey, selectedMode, testId, {
+      testId,
+      subjectKey: selectedSubjectKey,
+      mode: selectedMode,
+      score,
+      maxScore: targetMaxScore,
+      correctCount: cCount,
+      totalQuestions: activeQuestions.length,
+      percentage,
+      certGrade: grade,
+      userAnswers: { ...latestAnswers },
+      completedAt: new Date().toISOString(),
+    });
+    setSavedResultsMap(nextMap);
+
+    if (uid) {
+      saveExamProgress(uid, selectedSubjectKey, selectedMode, testId, score, stars);
     }
   };
 
@@ -262,6 +303,11 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
         impactLight();
         setExamFinished(false);
         setCurrentView('test_list');
+      });
+    } else if (reviewEntry) {
+      onRegisterBackAction(() => {
+        impactLight();
+        setReviewEntry(null);
       });
     } else if (currentView === 'test_list') {
       onRegisterBackAction(() => {
@@ -279,7 +325,7 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
     return () => {
       onRegisterBackAction?.(null);
     };
-  }, [examActive, examFinished, currentView, onRegisterBackAction]);
+  }, [examActive, examFinished, reviewEntry, currentView, onRegisterBackAction]);
 
   // Notify App whether an actual exam session is actively running
   useEffect(() => {
@@ -353,7 +399,11 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
   // Answering
   const handleSelectAnswer = (qIndex, ans) => {
     impactLight();
-    setUserAnswers(prev => ({ ...prev, [qIndex]: ans }));
+    setUserAnswers(prev => {
+      const next = { ...prev, [qIndex]: ans };
+      userAnswersRef.current = next;
+      return next;
+    });
   };
 
   // Results Calculation
@@ -404,16 +454,16 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
           isLight ? 'bg-[#F2F2F7] text-[#1C1C1E]' : 'bg-[#000000] text-white'
         }`}>
           {/* Top CAT Header Bar */}
-          <div className={`max-w-7xl mx-auto flex items-center justify-between py-2.5 px-5 mb-4 rounded-2xl border shadow-lg ${
-            isLight ? 'bg-white border-teal-600/20' : 'bg-[#091012] border-teal-500/20'
+          <div className={`max-w-7xl mx-auto flex items-center justify-between py-2.5 px-5 mb-4 rounded-2xl border shadow-sm ${
+            isLight ? 'bg-white border-black/[0.08]' : 'bg-[#1C1C1E] border-white/[0.08]'
           }`}>
             <div className="flex items-center gap-4">
               <button
                 onClick={handleExitExam}
                 className={`w-9 h-9 rounded-xl border flex items-center justify-center active:scale-95 transition-all cursor-pointer ${
                   isLight
-                    ? 'bg-teal-50 hover:bg-teal-100 border-teal-600/20 text-teal-700'
-                    : 'bg-[#152327] hover:bg-[#1d3137] border-teal-500/20 text-teal-300'
+                    ? 'bg-[#F2F2F7] hover:bg-gray-200 border-black/10 text-[#1C1C1E]'
+                    : 'bg-[#2C2C2E] hover:bg-[#3A3A3C] border-white/10 text-white/90'
                 }`}
                 title={lang === 'ru' ? 'Выйти' : 'Chiqish'}
                 aria-label={lang === 'ru' ? 'Выйти из теста' : 'Testdan chiqish'}
@@ -425,11 +475,11 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
                 <div className="flex items-center gap-2">
                   <span className={`text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${
                     isLight
-                      ? 'bg-teal-500/15 text-teal-700 border-teal-500/30'
-                      : 'bg-teal-500/20 text-teal-300 border-teal-500/30'
+                      ? 'bg-blue-500/10 text-blue-700 border-blue-500/25'
+                      : 'bg-blue-500/15 text-blue-400 border-blue-500/25'
                   }`}>
                     {selectedMode === 'dtm'
-                      ? (lang === 'ru' ? 'ДТМ Мок-тест' : 'DTM Mock Exam')
+                      ? (lang === 'ru' ? 'ДТМ Мок-тест' : 'DTM mock test')
                       : (lang === 'ru' ? 'Национальный сертификат' : 'Milliy Sertifikat')}
                   </span>
                   <span className={`text-xs ${isLight ? 'text-gray-500' : 'text-[#8E8E93]'}`}>
@@ -444,12 +494,12 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
 
             {/* Timer Capsule & Finish Button */}
             <div className="flex items-center gap-4">
-              <div className={`flex items-center gap-2 border px-4 py-2 rounded-2xl text-sm font-mono font-bold shadow-md ${
+              <div className={`flex items-center gap-2 border px-4 py-2 rounded-2xl text-sm font-mono font-bold shadow-sm ${
                 isLight
-                  ? 'bg-amber-50 border-amber-500/40 text-amber-700'
-                  : 'bg-[#152327] border-amber-500/40 text-amber-300'
+                  ? 'bg-amber-50 border-amber-500/35 text-amber-700'
+                  : 'bg-[#2C2C2E] border-white/10 text-amber-400'
               }`}>
-                <Clock className={`w-4 h-4 animate-pulse ${isLight ? 'text-amber-600' : 'text-amber-400'}`} />
+                <Clock className={`w-4 h-4 ${isLight ? 'text-amber-600' : 'text-amber-400'}`} />
                 <span>{minutes.toString().padStart(2, '0')}:{seconds.toString().padStart(2, '0')}</span>
               </div>
 
@@ -463,7 +513,7 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
                 className={`border px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer ${
                   isLight
                     ? 'bg-red-50 hover:bg-red-100 border-red-500/30 text-red-600'
-                    : 'bg-red-500/20 hover:bg-red-500/30 border-red-500/30 text-red-300 hover:text-white'
+                    : 'bg-red-500/15 hover:bg-red-500/25 border-red-500/25 text-red-400 hover:text-red-300'
                 }`}
               >
                 {lang === 'ru' ? 'Завершить тест' : 'Testni yakunlash'}
@@ -475,36 +525,24 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
           <div className="max-w-7xl mx-auto flex flex-row gap-6 items-start">
             
             {/* Left Column: Question area and Options */}
-            <div className={`flex-1 min-w-0 flex flex-col justify-between border rounded-3xl p-6 shadow-2xl relative min-h-[450px] ${
-              isLight ? 'bg-white border-black/[0.08]' : 'bg-[#091012] border-teal-500/20'
+            <div className={`flex-1 min-w-0 flex flex-col justify-between border rounded-3xl p-6 shadow-lg relative min-h-[450px] ${
+              isLight ? 'bg-white border-black/[0.08]' : 'bg-[#1C1C1E] border-white/[0.08]'
             }`}>
               
               <div>
                 {/* Question Info Bar */}
                 <div className={`flex items-center justify-between text-xs pb-3 mb-3 border-b ${
-                  isLight ? 'text-gray-500 border-black/10' : 'text-[#8E8E93] border-white/5'
+                  isLight ? 'text-gray-500 border-black/10' : 'text-[#8E8E93] border-white/[0.06]'
                 }`}>
-                  <div className="flex items-center gap-2">
-                    <span className={`font-extrabold text-base ${isLight ? 'text-[#1C1C1E]' : 'text-white'}`}>
-                      {lang === 'ru' ? `Вопрос ${currentQIndex + 1}` : `${currentQIndex + 1}-Savol`}
-                    </span>
-                    <span className={`text-xs ${isLight ? 'text-gray-500' : 'text-[#8E8E93]'}`}>
-                      / {activeQuestions.length}
-                    </span>
-                  </div>
-                  <span className={`font-bold text-xs px-2.5 py-1 rounded-lg border ${
-                    isLight
-                      ? 'text-teal-700 bg-teal-500/10 border-teal-500/25'
-                      : 'text-teal-400 bg-teal-500/10 border-teal-500/20'
-                  }`}>
-                    +{questionWeight.toFixed(1)} {lang === 'ru' ? 'б.' : 'ball'}
+                  <span className={`font-extrabold text-base ${isLight ? 'text-[#1C1C1E]' : 'text-white'}`}>
+                    {lang === 'ru' ? `Вопрос ${currentQIndex + 1}` : `${currentQIndex + 1}-Savol`}
                   </span>
                 </div>
 
                 {/* Optional Illustration centered */}
                 {currentQ?.imageUrl && (
                   <div className={`w-full max-h-60 rounded-2xl overflow-hidden border mb-4 flex items-center justify-center p-2 ${
-                    isLight ? 'bg-gray-100 border-black/10' : 'bg-black/50 border-teal-500/20'
+                    isLight ? 'bg-gray-100 border-black/10' : 'bg-[#2C2C2E] border-white/10'
                   }`}>
                     <img 
                       src={currentQ.imageUrl} 
@@ -524,7 +562,7 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
                 {/* Options List in Single Column */}
                 {currentQ?.type === 'input' ? (
                   <div className="pt-2">
-                    <label className={`text-xs font-medium block mb-2 ${isLight ? 'text-teal-700' : 'text-teal-300'}`}>
+                    <label className={`text-xs font-medium block mb-2 ${isLight ? 'text-gray-600' : 'text-[#8E8E93]'}`}>
                       {lang === 'ru' ? 'Введите ваш ответ:' : 'Javobingizni yozing:'}
                     </label>
                     <input
@@ -534,8 +572,8 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
                       placeholder={lang === 'ru' ? 'Введите ответ...' : 'Javobni kiriting...'}
                       className={`w-full border rounded-2xl p-4 text-base font-bold outline-none transition-colors ${
                         isLight
-                          ? 'bg-[#F2F2F7] border-teal-600/30 text-[#1C1C1E] focus:border-teal-600'
-                          : 'bg-[#152327] border-teal-500/30 text-white focus:border-teal-400'
+                          ? 'bg-[#F2F2F7] border-black/10 text-[#1C1C1E] focus:border-[#007AFF]'
+                          : 'bg-[#2C2C2E] border-white/10 text-white focus:border-[#007AFF]'
                       }`}
                     />
                   </div>
@@ -550,23 +588,23 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
                           key={oIdx}
                           type="button"
                           onClick={() => handleSelectAnswer(currentQIndex, oIdx)}
-                          className={`w-full p-3.5 rounded-2xl border text-left text-sm font-semibold flex items-center justify-between transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 ${
+                          className={`w-full p-3.5 rounded-2xl border text-left text-sm font-semibold flex items-center justify-between transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF] ${
                             isSelected
                               ? isLight
-                                ? 'bg-teal-50 border-teal-500 text-teal-950 shadow-md shadow-teal-500/15'
-                                : 'bg-teal-500/20 border-teal-400 text-white shadow-lg shadow-teal-500/20'
+                                ? 'bg-blue-50 border-[#007AFF] text-blue-950 shadow-sm'
+                                : 'bg-[#007AFF]/15 border-[#007AFF] text-white'
                               : isLight
-                              ? 'bg-[#F2F2F7] hover:bg-gray-200/80 border-black/[0.06] text-[#1C1C1E] hover:border-teal-500/40'
-                              : 'bg-[#152327]/80 hover:bg-[#1c3035] border-white/5 text-white/90 hover:border-teal-500/30'
+                              ? 'bg-[#F2F2F7] hover:bg-gray-200/80 border-black/[0.06] text-[#1C1C1E]'
+                              : 'bg-[#2C2C2E] hover:bg-[#3A3A3C] border-white/[0.06] text-white/90'
                           }`}
                         >
                           <div className="flex items-center gap-3.5 min-w-0 pr-3">
                             <span className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 transition-colors ${
                               isSelected
-                                ? 'bg-teal-500 text-white font-black'
+                                ? 'bg-[#007AFF] text-white font-black'
                                 : isLight
-                                ? 'bg-white text-teal-700 border border-black/10'
-                                : 'bg-black/40 text-teal-300/80 border border-white/10'
+                                ? 'bg-white text-gray-700 border border-black/10'
+                                : 'bg-[#1C1C1E] text-white/80 border border-white/10'
                             }`}>
                               {letter}
                             </span>
@@ -575,7 +613,7 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
 
                           <div className={`w-6 h-6 rounded-full border flex items-center justify-center shrink-0 transition-all ${
                             isSelected
-                              ? 'border-teal-500 bg-teal-500 text-white'
+                              ? 'border-[#007AFF] bg-[#007AFF] text-white'
                               : isLight ? 'border-black/20' : 'border-white/20'
                           }`}>
                             {isSelected && <Check className="w-4 h-4 stroke-[3]" />}
@@ -589,19 +627,20 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
 
               {/* Pinned Bottom Actions Bar */}
               <div className={`flex items-center justify-between gap-4 pt-5 mt-5 border-t ${
-                isLight ? 'border-black/10' : 'border-white/5'
+                isLight ? 'border-black/10' : 'border-white/[0.06]'
               }`}>
                 <button
                   type="button"
                   onClick={() => setCurrentQIndex(prev => Math.max(0, prev - 1))}
                   disabled={currentQIndex === 0}
-                  className={`px-6 py-3 rounded-2xl disabled:opacity-30 border font-bold text-xs transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed ${
+                  className={`px-6 py-3 rounded-2xl disabled:opacity-30 border font-bold text-xs inline-flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed ${
                     isLight
                       ? 'bg-[#F2F2F7] hover:bg-gray-200 border-black/10 text-[#1C1C1E]'
-                      : 'bg-[#152327] hover:bg-[#1c3035] border-white/5 text-white'
+                      : 'bg-[#2C2C2E] hover:bg-[#3A3A3C] border-white/[0.08] text-white'
                   }`}
                 >
-                  {lang === 'ru' ? '← Предыдущий' : '← Oldingi'}
+                  <ArrowLeft className="w-4 h-4 shrink-0" />
+                  <span>{lang === 'ru' ? 'Предыдущий' : 'Oldingi'}</span>
                 </button>
 
                 <div className="flex items-center gap-3">
@@ -619,43 +658,42 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
                         }
                       }
                     }}
-                    className={`px-8 py-3 rounded-2xl font-extrabold text-xs transition-all active:scale-95 shadow-lg cursor-pointer ${
-                      isLight
-                        ? 'bg-teal-600 hover:bg-teal-500 text-white shadow-teal-600/25'
-                        : 'bg-teal-500 hover:bg-teal-400 text-black shadow-teal-500/25'
-                    }`}
+                    className="px-8 py-3 rounded-2xl font-extrabold text-xs inline-flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow-sm cursor-pointer bg-[#007AFF] hover:bg-[#0066D6] text-white"
                   >
-                    {currentQIndex === activeQuestions.length - 1
-                      ? (lang === 'ru' ? 'Завершить тест ✓' : 'Testni yakunlash ✓')
-                      : (lang === 'ru' ? 'Следующий →' : 'Keyingi →')}
+                    {currentQIndex === activeQuestions.length - 1 ? (
+                      <>
+                        <span>{lang === 'ru' ? 'Завершить тест' : 'Testni yakunlash'}</span>
+                        <Check className="w-4 h-4 shrink-0" />
+                      </>
+                    ) : (
+                      <>
+                        <span>{lang === 'ru' ? 'Следующий' : 'Keyingi'}</span>
+                        <ArrowRight className="w-4 h-4 shrink-0" />
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
 
             </div>
 
-            {/* Right Sticky Sidebar: Timer, Grid, Legend */}
+            {/* Right Sticky Sidebar: Grid & Legend */}
             <div className="w-80 shrink-0 sticky top-4 flex flex-col gap-4">
               
               {/* Question Map Card */}
-              <div className={`border rounded-3xl p-5 shadow-2xl flex flex-col ${
-                isLight ? 'bg-white border-black/[0.08]' : 'bg-[#091012] border-teal-500/20'
+              <div className={`border rounded-3xl p-5 shadow-lg flex flex-col ${
+                isLight ? 'bg-white border-black/[0.08]' : 'bg-[#1C1C1E] border-white/[0.08]'
               }`}>
-                <div className={`flex items-center justify-between mb-3 pb-2 border-b ${
-                  isLight ? 'border-black/10' : 'border-white/5'
+                <div className={`flex items-center justify-end mb-3 pb-2 border-b ${
+                  isLight ? 'border-black/10' : 'border-white/[0.06]'
                 }`}>
-                  <span className={`text-xs font-bold uppercase tracking-wider ${
-                    isLight ? 'text-teal-700' : 'text-teal-300'
-                  }`}>
-                    {lang === 'ru' ? 'Карта вопросов' : 'Savollar xaritasi'}
-                  </span>
                   <span className={`text-[11px] font-mono ${isLight ? 'text-gray-500' : 'text-[#8E8E93]'}`}>
                     {Object.keys(userAnswers).length} / {activeQuestions.length}
                   </span>
                 </div>
 
-                {/* 5-Column Question Grid */}
-                <div className="grid grid-cols-5 gap-2 max-h-[360px] overflow-y-auto no-scrollbar py-1">
+                {/* 5-Column Question Grid (padded inner box prevents corner highlight clipping) */}
+                <div className="grid grid-cols-5 gap-2 max-h-[360px] overflow-y-auto no-scrollbar p-1">
                   {activeQuestions.map((_, idx) => {
                     const isAnswered = userAnswers[idx] !== undefined;
                     const isCurrent = idx === currentQIndex;
@@ -664,22 +702,20 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
 
                     let statusClass = isLight
                       ? 'bg-[#F2F2F7] border border-black/10 text-gray-600 hover:border-black/25'
-                      : 'bg-[#152327]/60 border border-white/5 text-[#8E8E93] hover:border-white/20';
+                      : 'bg-[#2C2C2E] border border-white/[0.06] text-[#8E8E93] hover:border-white/20';
                     let icon = null;
 
                     if (isCurrent) {
-                      statusClass = isLight
-                        ? 'bg-teal-50 text-teal-900 ring-2 ring-teal-500 border-teal-500 font-black shadow scale-105 z-10'
-                        : 'bg-teal-500/25 text-white ring-2 ring-teal-400 border-teal-400 font-black shadow-[0_0_12px_rgba(45,212,191,0.4)] scale-105 z-10';
+                      statusClass = 'bg-[#007AFF] text-white border border-[#007AFF] font-black shadow-sm';
                     } else if (isAnswered) {
                       statusClass = isLight
                         ? 'bg-emerald-500/15 text-emerald-700 border border-emerald-500/35 font-bold'
-                        : 'bg-emerald-500/25 text-emerald-300 border border-emerald-400/40 font-bold';
+                        : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/35 font-bold';
                       icon = <Check className="w-2.5 h-2.5 stroke-[3] inline ml-0.5" />;
                     } else if (isSkipped) {
                       statusClass = isLight
                         ? 'bg-amber-500/10 text-amber-700 border border-amber-500/40 border-dashed font-bold'
-                        : 'bg-amber-500/15 text-amber-300 border border-amber-400/50 border-dashed font-bold';
+                        : 'bg-amber-500/15 text-amber-300 border border-amber-500/40 border-dashed font-bold';
                     }
 
                     return (
@@ -689,7 +725,7 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
                         onClick={() => setCurrentQIndex(idx)}
                         title={lang === 'ru' ? `Вопрос ${idx + 1}` : `Savol ${idx + 1}`}
                         aria-label={lang === 'ru' ? `Вопрос ${idx + 1}` : `Savol ${idx + 1}`}
-                        className={`h-10 rounded-xl flex items-center justify-center font-mono text-xs transition-all cursor-pointer ${statusClass}`}
+                        className={`h-10 rounded-xl flex items-center justify-center font-mono text-xs transition-colors cursor-pointer ${statusClass}`}
                       >
                         <span>{idx + 1}</span>
                         {icon}
@@ -700,25 +736,25 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
 
                 {/* Status Legend */}
                 <div className={`mt-4 pt-4 border-t grid grid-cols-2 gap-2 text-[11px] ${
-                  isLight ? 'border-black/10 text-gray-600' : 'border-white/5 text-[#8E8E93]'
+                  isLight ? 'border-black/10 text-gray-600' : 'border-white/[0.06] text-[#8E8E93]'
                 }`}>
                   <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-md ring-2 ring-teal-400 bg-teal-500/30 shrink-0" />
+                    <span className="w-3 h-3 rounded-md bg-[#007AFF] shrink-0" />
                     <span>{lang === 'ru' ? 'Текущий' : 'Hozirgi'}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-md bg-emerald-500/30 border border-emerald-400/50 flex items-center justify-center text-emerald-500 shrink-0">
+                    <span className="w-3 h-3 rounded-md bg-emerald-500/25 border border-emerald-500/45 flex items-center justify-center text-emerald-500 shrink-0">
                       <Check className="w-2 h-2 stroke-[3]" />
                     </span>
                     <span>{lang === 'ru' ? 'Отвечен' : 'Javob berilgan'}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-md bg-amber-500/15 border border-amber-400/50 border-dashed shrink-0" />
+                    <span className="w-3 h-3 rounded-md bg-amber-500/15 border border-amber-500/45 border-dashed shrink-0" />
                     <span>{lang === 'ru' ? 'Пропущен' : "O'tkazilgan"}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className={`w-3 h-3 rounded-md border shrink-0 ${
-                      isLight ? 'bg-[#F2F2F7] border-black/15' : 'bg-[#152327] border-white/10'
+                      isLight ? 'bg-[#F2F2F7] border-black/15' : 'bg-[#2C2C2E] border-white/10'
                     }`} />
                     <span>{lang === 'ru' ? 'Не открыт' : 'Ochilmagan'}</span>
                   </div>
@@ -792,7 +828,7 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
         </div>
 
         {/* Question Grid Navigator */}
-        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-2 mb-4">
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-2 px-1 mb-4">
           {activeQuestions.map((_, idx) => {
             const isAnswered = userAnswers[idx] !== undefined;
             const isCurrent = idx === currentQIndex;
@@ -802,7 +838,7 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
                 onClick={() => setCurrentQIndex(idx)}
                 className={`w-9 h-9 rounded-xl flex-shrink-0 font-bold text-xs transition-all ${
                   isCurrent
-                    ? 'bg-[#007AFF] text-white ring-2 ring-blue-400'
+                    ? 'bg-[#007AFF] text-white border border-[#007AFF] shadow-sm'
                     : isAnswered
                     ? isLight
                       ? 'bg-emerald-500/15 text-emerald-700 border border-emerald-500/35'
@@ -823,13 +859,10 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
           isLight ? 'bg-white border-black/[0.08] shadow-md' : 'bg-[#1C1C1E] border-white/5'
         }`}>
           <div className={`flex items-center justify-between text-xs ${isLight ? 'text-gray-500' : 'text-[#8E8E93]'}`}>
-            <span>
+            <span className={`font-bold ${isLight ? 'text-[#1C1C1E]' : 'text-white'}`}>
               {lang === 'ru'
-                ? `Вопрос ${currentQIndex + 1} / ${activeQuestions.length}`
-                : `Savol ${currentQIndex + 1} / ${activeQuestions.length}`}
-            </span>
-            <span className="text-blue-500 font-bold">
-              +{questionWeight.toFixed(1)} {lang === 'ru' ? 'б.' : 'ball'}
+                ? `Вопрос ${currentQIndex + 1}`
+                : `${currentQIndex + 1}-Savol`}
             </span>
           </div>
 
@@ -897,11 +930,12 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
           <button
             onClick={() => setCurrentQIndex(prev => Math.max(0, prev - 1))}
             disabled={currentQIndex === 0}
-            className={`flex-1 border disabled:opacity-40 py-3.5 rounded-2xl font-bold text-xs active:scale-95 transition-transform ${
+            className={`flex-1 border disabled:opacity-40 py-3.5 rounded-2xl font-bold text-xs inline-flex items-center justify-center gap-1.5 active:scale-95 transition-transform ${
               isLight ? 'bg-white border-black/[0.08] text-[#1C1C1E] shadow-sm' : 'bg-[#1C1C1E] border-white/5 text-white'
             }`}
           >
-            {lang === 'ru' ? '← Предыдущий' : '← Oldingi'}
+            <ArrowLeft className="w-4 h-4 shrink-0" />
+            <span>{lang === 'ru' ? 'Предыдущий' : 'Oldingi'}</span>
           </button>
           <button
             onClick={() => {
@@ -911,11 +945,19 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
                 handleFinishExam();
               }
             }}
-            className="flex-1 bg-[#007AFF] hover:bg-blue-600 text-white py-3.5 rounded-2xl font-bold text-xs active:scale-95 transition-transform"
+            className="flex-1 bg-[#007AFF] hover:bg-[#0066D6] text-white py-3.5 rounded-2xl font-bold text-xs inline-flex items-center justify-center gap-1.5 active:scale-95 transition-transform"
           >
-            {currentQIndex === activeQuestions.length - 1
-              ? (lang === 'ru' ? 'Завершить ✓' : 'Yakunlash ✓')
-              : (lang === 'ru' ? 'Следующий →' : 'Keyingi →')}
+            {currentQIndex === activeQuestions.length - 1 ? (
+              <>
+                <span>{lang === 'ru' ? 'Завершить' : 'Yakunlash'}</span>
+                <Check className="w-4 h-4 shrink-0" />
+              </>
+            ) : (
+              <>
+                <span>{lang === 'ru' ? 'Следующий' : 'Keyingi'}</span>
+                <ArrowRight className="w-4 h-4 shrink-0" />
+              </>
+            )}
           </button>
         </div>
 
@@ -950,19 +992,23 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
   }
 
   // ──────────────────────────────────────────────────────────
-  // SCREEN 4: RESULTS SCREEN
+  // SCREEN 4: RESULTS SCREEN (WITH CONFETTI & MISTAKE REVIEW)
   // ──────────────────────────────────────────────────────────
   if (examFinished) {
     return (
       <div className={`w-full min-h-screen p-4 sm:px-6 pb-28 max-w-lg sm:max-w-3xl desktop:max-w-5xl mx-auto space-y-5 select-none ${
         isLight ? 'bg-[#F2F2F7] text-[#1C1C1E]' : 'bg-[#000000] text-white'
       }`}>
-        
+        <ConfettiBurst key={confettiKey} active={examFinished} />
+
         {/* Results Card */}
-        <div className={`border rounded-3xl p-6 sm:p-8 text-center space-y-5 shadow-2xl ${
-          isLight ? 'bg-white border-black/[0.06]' : 'bg-[#1C1C1E] border-white/5'
+        <div className={`border rounded-3xl p-6 sm:p-8 text-center space-y-5 shadow-lg ${
+          isLight ? 'bg-white border-black/[0.06]' : 'bg-[#1C1C1E] border-white/[0.08]'
         }`}>
-          <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 text-black flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/30">
+          <div
+            data-testid="results-trophy-badge"
+            className="w-16 h-16 rounded-full bg-yellow-400 text-yellow-950 flex items-center justify-center mx-auto shadow-md shadow-yellow-500/20"
+          >
             <Trophy className="w-8 h-8" />
           </div>
 
@@ -1005,8 +1051,8 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
           </div>
 
           {selectedMode !== 'dtm' && (
-            <div className={`bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-2xl text-xs font-semibold flex items-center justify-center gap-2 max-w-xl mx-auto ${
-              isLight ? 'text-emerald-700' : 'text-emerald-300'
+            <div className={`bg-blue-500/10 border border-blue-500/20 p-3 rounded-2xl text-xs font-semibold flex items-center justify-center gap-2 max-w-xl mx-auto ${
+              isLight ? 'text-blue-700' : 'text-blue-400'
             }`}>
               <Sparkles className="w-4 h-4" />
               <span>
@@ -1020,7 +1066,7 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
           <div className="pt-2 max-w-xl mx-auto">
             <button
               onClick={() => handleStartExam(selectedTest)}
-              className="w-full bg-[#007AFF] hover:bg-blue-600 text-white font-bold py-3.5 px-3 rounded-2xl text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95"
+              className="w-full bg-[#007AFF] hover:bg-[#0066D6] text-white font-bold py-3.5 px-3 rounded-2xl text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
             >
               <RotateCcw className="w-4 h-4" />
               <span>{lang === 'ru' ? 'Пройти заново' : 'Qayta topshirish'}</span>
@@ -1032,15 +1078,127 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
               setExamFinished(false);
               setCurrentView('test_list');
             }}
-            className={`w-full max-w-xl mx-auto border font-bold py-3 px-3 rounded-2xl text-xs flex items-center justify-center gap-1.5 transition-all ${
+            className={`w-full max-w-xl mx-auto border font-bold py-3 px-3 rounded-2xl text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
               isLight
                 ? 'bg-[#F2F2F7] hover:bg-gray-200 border-black/10 text-[#1C1C1E]'
-                : 'bg-[#1C1C1E] border-white/10 hover:bg-[#2C2C2E] text-white/80'
+                : 'bg-[#2C2C2E] border-white/10 hover:bg-[#3A3A3C] text-white/90'
             }`}
           >
             <span>{lang === 'ru' ? 'Смотреть другие варианты' : "Boshqa variantlarni ko'rish"}</span>
           </button>
         </div>
+
+        {/* Full Mistake Breakdown right after completing test */}
+        <ExamMistakeReview
+          questions={activeQuestions}
+          userAnswers={userAnswers}
+          isLight={isLight}
+          lang={lang}
+        />
+      </div>
+    );
+  }
+
+  // ──────────────────────────────────────────────────────────
+  // COMPLETED TEST MISTAKE REVIEW & RETAKE VIEW (FROM VARIANT LIST)
+  // ──────────────────────────────────────────────────────────
+  if (reviewEntry) {
+    const { test: revTest, result: revRes } = reviewEntry;
+    const revQuestions = revTest?.questions || [];
+    const revMax = revRes?.maxScore || revTest?.maxScore || (selectedMode === 'dtm' ? 93 : 75);
+
+    return (
+      <div
+        className={`w-full select-none flex flex-col min-h-full px-4 sm:px-6 pt-2 space-y-4 sm:space-y-5 max-w-lg sm:max-w-3xl desktop:max-w-5xl mx-auto ${
+          isLight ? 'text-[#1C1C1E]' : 'text-white'
+        }`}
+        style={{
+          paddingBottom: 'calc(var(--safe-area-bottom, 0px) + 88px)'
+        }}
+      >
+        <div className="flex items-center justify-between pt-1">
+          <button
+            type="button"
+            onClick={() => {
+              impactLight();
+              setReviewEntry(null);
+            }}
+            className={`flex items-center gap-1.5 text-xs sm:text-sm transition-colors cursor-pointer ${
+              isLight ? 'text-gray-600 hover:text-[#1C1C1E]' : 'text-[#8E8E93] hover:text-white'
+            }`}
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>{lang === 'ru' ? 'К вариантам' : 'Variantlarga qaytish'}</span>
+          </button>
+        </div>
+
+        {/* Saved Result Summary Card */}
+        <div
+          className={`border rounded-3xl p-6 text-center space-y-4 shadow-lg ${
+            isLight ? 'bg-white border-black/[0.06]' : 'bg-[#1C1C1E] border-white/[0.08]'
+          }`}
+        >
+          <div className="w-14 h-14 rounded-full bg-yellow-400 text-yellow-950 flex items-center justify-center mx-auto shadow-md shadow-yellow-500/20">
+            <Trophy className="w-7 h-7" />
+          </div>
+
+          <div>
+            <h3 className={`font-extrabold text-lg sm:text-xl mb-1 ${isLight ? 'text-[#1C1C1E]' : 'text-white'}`}>
+              {revTest?.title}
+            </h3>
+            <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-[#8E8E93]'}`}>
+              {lang === 'ru' ? 'Сохранённый результат' : 'Saqlangan natija'}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 sm:gap-4 max-w-2xl mx-auto">
+            <div className={`p-3 rounded-2xl ${isLight ? 'bg-[#F2F2F7]' : 'bg-[#2C2C2E]'}`}>
+              <span className={`text-[10px] block ${isLight ? 'text-gray-500' : 'text-[#8E8E93]'}`}>
+                {lang === 'ru' ? 'Верно:' : "To'g'ri:"}
+              </span>
+              <span className={`font-bold text-base sm:text-lg ${isLight ? 'text-emerald-600' : 'text-emerald-400'}`}>
+                {revRes?.correctCount ?? 0} / {revRes?.totalQuestions ?? revQuestions.length}
+              </span>
+            </div>
+            <div className={`p-3 rounded-2xl ${isLight ? 'bg-[#F2F2F7]' : 'bg-[#2C2C2E]'}`}>
+              <span className={`text-[10px] block ${isLight ? 'text-gray-500' : 'text-[#8E8E93]'}`}>
+                {lang === 'ru' ? 'Баллы:' : 'Ball:'}
+              </span>
+              <span className={`font-bold text-base sm:text-lg ${isLight ? 'text-blue-600' : 'text-blue-400'}`}>
+                {revRes?.score ?? 0} / {revMax}
+              </span>
+            </div>
+            <div className={`p-3 rounded-2xl ${isLight ? 'bg-[#F2F2F7]' : 'bg-[#2C2C2E]'}`}>
+              <span className={`text-[10px] block ${isLight ? 'text-gray-500' : 'text-[#8E8E93]'}`}>
+                {selectedMode === 'dtm'
+                  ? (lang === 'ru' ? 'Точность:' : 'Foiz:')
+                  : (lang === 'ru' ? 'Сертификат:' : 'Sertifikat:')}
+              </span>
+              <span className={`font-bold text-base sm:text-lg ${isLight ? 'text-amber-600' : 'text-amber-400'}`}>
+                {selectedMode === 'dtm' ? `${revRes?.percentage ?? 0}%` : (revRes?.certGrade || 'C')}
+              </span>
+            </div>
+          </div>
+
+          <div className="pt-1 max-w-xl mx-auto">
+            <button
+              type="button"
+              onClick={() => handleStartExam(revTest)}
+              className="w-full bg-[#007AFF] hover:bg-[#0066D6] text-white font-bold py-3.5 px-4 rounded-2xl text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span>{lang === 'ru' ? 'Пересдать' : 'Qayta topshirish'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Mistake Breakdown */}
+        <ExamMistakeReview
+          questions={revQuestions}
+          userAnswers={revRes?.userAnswers || {}}
+          isLight={isLight}
+          lang={lang}
+        />
       </div>
     );
   }
@@ -1277,26 +1435,8 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
           paddingBottom: 'calc(var(--safe-area-bottom, 0px) + 88px)'
         }}
       >
-        {/* Subject Header Badge & Desktop Back Button */}
-        <div className="flex items-center justify-between pt-1">
-          {isDesktop ? (
-            <button
-              type="button"
-              onClick={() => {
-                impactLight();
-                setCurrentView('carousel');
-              }}
-              className={`flex items-center gap-1.5 text-xs sm:text-sm transition-colors cursor-pointer ${
-                isLight ? 'text-gray-600 hover:text-[#1C1C1E]' : 'text-[#8E8E93] hover:text-white'
-              }`}
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span>{lang === 'ru' ? 'К предметам' : 'Fanlarga qaytish'}</span>
-            </button>
-          ) : (
-            <div />
-          )}
-
+        {/* Subject Header Badge */}
+        <div className="flex items-center justify-end pt-1">
           <div className={`inline-flex items-center gap-2 border px-4 py-2 rounded-full text-xs sm:text-sm font-bold shadow-sm ${
             isLight
               ? 'bg-white border-black/[0.08] text-[#1C1C1E]'
@@ -1341,12 +1481,8 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
                   onClick={() => handleSelectMode(modeKey)}
                   className={`relative border rounded-3xl p-5 sm:p-7 cursor-pointer group active:scale-[0.99] transition-all ${
                     isLight
-                      ? isSertifikat
-                        ? 'bg-white border-amber-500/35 shadow-[0_8px_28px_rgba(245,158,11,0.12)] hover:border-amber-500/60'
-                        : 'bg-white border-blue-500/30 shadow-[0_8px_28px_rgba(0,122,255,0.10)] hover:border-blue-500/55'
-                      : isSertifikat
-                      ? 'bg-gradient-to-br from-[#1C1C1E] via-[#161618] to-[#0A0A0C] border-amber-500/30 shadow-[0_8px_30px_rgba(245,158,11,0.14)] hover:border-amber-400/50'
-                      : 'bg-gradient-to-br from-[#1C1C1E] via-[#161618] to-[#0A0A0C] border-blue-500/30 shadow-[0_8px_30px_rgba(0,122,255,0.14)] hover:border-blue-400/50'
+                      ? 'bg-white border-blue-500/30 shadow-[0_8px_28px_rgba(0,122,255,0.10)] hover:border-blue-500/55'
+                      : 'bg-[#1C1C1E] border-blue-500/25 shadow-lg hover:border-blue-500/45'
                   } ${
                     isWideSingle
                       ? 'flex flex-col md:grid md:grid-cols-12 md:items-center md:gap-8 space-y-4 md:space-y-0'
@@ -1358,11 +1494,7 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
                     <div className="flex items-center justify-between gap-2">
                       <span
                         className={`text-[10px] sm:text-[11px] font-extrabold uppercase px-3 py-1 rounded-full tracking-wider border ${
-                          isSertifikat
-                            ? isLight
-                              ? 'bg-amber-500/15 border-amber-500/35 text-amber-700'
-                              : 'bg-amber-500/15 border-amber-500/30 text-amber-400'
-                            : isLight
+                          isLight
                             ? 'bg-blue-500/12 border-blue-500/30 text-blue-700'
                             : 'bg-blue-500/15 border-blue-500/30 text-blue-400'
                         }`}
@@ -1377,8 +1509,8 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
                       <h3
                         className={`font-extrabold text-lg sm:text-2xl transition-colors ${
                           isLight
-                            ? isSertifikat ? 'text-[#1C1C1E] group-hover:text-amber-700' : 'text-[#1C1C1E] group-hover:text-blue-600'
-                            : isSertifikat ? 'text-white group-hover:text-amber-300' : 'text-white group-hover:text-blue-300'
+                            ? 'text-[#1C1C1E] group-hover:text-blue-600'
+                            : 'text-white group-hover:text-blue-400'
                         }`}
                       >
                         {modeCfg.title}
@@ -1407,36 +1539,34 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
                   {/* Right / Specs + CTA */}
                   <div className={isWideSingle ? 'md:col-span-5 flex flex-col justify-center gap-4' : 'space-y-4'}>
                     <div className="grid grid-cols-3 gap-2 sm:gap-2.5 text-center text-xs">
-                      <div className={`border p-2.5 sm:p-3 rounded-2xl ${
+                      <div className={`border p-2.5 sm:p-3 rounded-2xl min-h-[62px] sm:min-h-[68px] flex flex-col items-center justify-center ${
                         isLight ? 'bg-[#F2F2F7] border-black/5' : 'bg-[#242426] border-white/5'
                       }`}>
                         <span className={`text-[10px] block mb-0.5 ${isLight ? 'text-gray-500' : 'text-[#8E8E93]'}`}>
                           {lang === 'ru' ? 'Вопросов:' : 'Savollar:'}
                         </span>
-                        <span className={`font-bold sm:text-sm ${isLight ? 'text-[#1C1C1E]' : 'text-white'}`}>
+                        <span className={`font-bold text-xs sm:text-sm whitespace-nowrap ${isLight ? 'text-[#1C1C1E]' : 'text-white'}`}>
                           {modeCfg.questionCount || (isSertifikat ? 40 : 30)} {lang === 'ru' ? 'шт.' : 'ta'}
                         </span>
                       </div>
-                      <div className={`border p-2.5 sm:p-3 rounded-2xl ${
+                      <div className={`border p-2.5 sm:p-3 rounded-2xl min-h-[62px] sm:min-h-[68px] flex flex-col items-center justify-center ${
                         isLight ? 'bg-[#F2F2F7] border-black/5' : 'bg-[#242426] border-white/5'
                       }`}>
                         <span className={`text-[10px] block mb-0.5 ${isLight ? 'text-gray-500' : 'text-[#8E8E93]'}`}>
                           {lang === 'ru' ? 'Время:' : 'Vaqt:'}
                         </span>
-                        <span className={`font-bold sm:text-sm ${isLight ? 'text-amber-600' : 'text-amber-400'}`}>
+                        <span className={`font-bold text-[11px] sm:text-sm tracking-tight whitespace-nowrap ${isLight ? 'text-amber-600' : 'text-amber-400'}`}>
                           {formatDurationLabel(modeCfg.durationMinutes || (isSertifikat ? 100 : 60), lang)}
                         </span>
                       </div>
-                      <div className={`border p-2.5 sm:p-3 rounded-2xl ${
+                      <div className={`border p-2.5 sm:p-3 rounded-2xl min-h-[62px] sm:min-h-[68px] flex flex-col items-center justify-center ${
                         isLight ? 'bg-[#F2F2F7] border-black/5' : 'bg-[#242426] border-white/5'
                       }`}>
                         <span className={`text-[10px] block mb-0.5 ${isLight ? 'text-gray-500' : 'text-[#8E8E93]'}`}>
                           {lang === 'ru' ? 'Максимум:' : 'Maksimal:'}
                         </span>
-                        <span className={`font-bold sm:text-sm ${
-                          isSertifikat
-                            ? isLight ? 'text-amber-600' : 'text-amber-400'
-                            : isLight ? 'text-emerald-600' : 'text-emerald-400'
+                        <span className={`font-bold text-xs sm:text-sm whitespace-nowrap ${
+                          isLight ? 'text-emerald-600' : 'text-emerald-400'
                         }`}>
                           {modeCfg.maxScore || (isSertifikat ? 75 : 93)} {lang === 'ru' ? 'б.' : 'ball'}
                         </span>
@@ -1450,11 +1580,7 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
                         e.stopPropagation();
                         handleSelectMode(modeKey);
                       }}
-                      className={`w-full font-bold py-3.5 px-5 rounded-2xl text-xs sm:text-sm flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer z-10 ${
-                        isSertifikat
-                          ? 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black shadow-lg shadow-amber-500/25'
-                          : 'bg-gradient-to-r from-[#007AFF] to-[#0A84FF] hover:brightness-110 text-white shadow-lg shadow-blue-500/25'
-                      }`}
+                      className="w-full font-bold py-3.5 px-5 rounded-2xl text-xs sm:text-sm flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer z-10 bg-[#007AFF] hover:bg-[#0066D6] text-white shadow-sm"
                     >
                       <span>{lang === 'ru' ? 'Смотреть варианты' : "Variantlarni ko'rish"}</span>
                       <ChevronRight className="w-4 h-4" />
@@ -1531,7 +1657,7 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
           {selectedMode === 'dtm' ? (
             <Zap className="w-5 h-5 text-blue-500" />
           ) : (
-            <Award className="w-5 h-5 text-amber-500" />
+            <Award className="w-5 h-5 text-blue-500" />
           )}
           <span>{modeTitle}</span>
         </h3>
@@ -1553,13 +1679,16 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {activeModeTests.map((rawTest, index) => {
             const test = localizeVariant(rawTest, lang);
+            const resultKey = buildExamResultKey(selectedSubjectKey, selectedMode, rawTest.id || index);
+            const savedResult = savedResultsMap[resultKey];
+
             return (
               <div 
                 key={test.id || index}
                 className={`border rounded-3xl p-4 sm:p-5 flex flex-col justify-between gap-4 transition-all group ${
                   isLight
                     ? 'bg-white border-black/[0.08] hover:border-blue-500/40 shadow-md'
-                    : 'bg-[#1C1C1E] border-white/5 hover:border-white/15 shadow-md'
+                    : 'bg-[#1C1C1E] border-white/[0.08] hover:border-white/20 shadow-md'
                 }`}
               >
                 <div className="space-y-3">
@@ -1580,7 +1709,7 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
                     </div>
 
                     <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 text-xs font-mono font-bold ${
-                      isLight ? 'bg-[#F2F2F7] text-gray-600' : 'bg-[#242426] text-white/70'
+                      isLight ? 'bg-[#F2F2F7] text-gray-600' : 'bg-[#2C2C2E] text-white/70'
                     }`}>
                       #{index + 1}
                     </div>
@@ -1593,13 +1722,13 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
                   {/* Specs Chips */}
                   <div className="flex items-center flex-wrap gap-1.5 text-[11px]">
                     <div className={`px-2 py-1 rounded-xl flex items-center gap-1 whitespace-nowrap ${
-                      isLight ? 'bg-[#F2F2F7] text-gray-700' : 'bg-[#242426] text-white/80'
+                      isLight ? 'bg-[#F2F2F7] text-gray-700' : 'bg-[#2C2C2E] text-white/80'
                     }`}>
                       <FileText className="w-3 h-3 text-blue-500 shrink-0" />
                       <span>{test.questionCount} {lang === 'ru' ? 'вопр.' : 'ta savol'}</span>
                     </div>
                     <div className={`px-2 py-1 rounded-xl flex items-center gap-1 whitespace-nowrap ${
-                      isLight ? 'bg-[#F2F2F7] text-gray-700' : 'bg-[#242426] text-white/80'
+                      isLight ? 'bg-[#F2F2F7] text-gray-700' : 'bg-[#2C2C2E] text-white/80'
                     }`}>
                       <Clock className="w-3 h-3 text-amber-500 shrink-0" />
                       <span>{formatDurationLabel(test.durationMinutes, lang)}</span>
@@ -1612,15 +1741,49 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
                   </div>
                 </div>
 
-                {/* Start Button */}
-                <button
-                  type="button"
-                  onClick={() => handleStartExam(test)}
-                  className={`w-full bg-gradient-to-r ${buttonGradient} hover:brightness-110 text-white font-bold py-3 px-4 rounded-2xl text-xs flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all cursor-pointer`}
-                >
-                  <span>{lang === 'ru' ? 'Начать тест' : 'Testni boshlash'}</span>
-                  <ChevronRight className="w-4 h-4" />
-                </button>
+                {/* Result Button (if already completed) OR Start Button */}
+                {savedResult ? (
+                  <button
+                    type="button"
+                    data-testid={`variant-result-${test.id || index}`}
+                    onClick={() => {
+                      impactLight();
+                      setReviewEntry({ test, result: savedResult });
+                    }}
+                    className={`w-full border font-bold py-2.5 px-3.5 rounded-2xl text-xs flex items-center justify-between gap-2 active:scale-95 transition-all cursor-pointer ${
+                      isLight
+                        ? 'bg-emerald-50 hover:bg-emerald-100/80 border-emerald-500/30 text-emerald-800'
+                        : 'bg-[#2C2C2E] hover:bg-[#3A3A3C] border-emerald-500/35 text-emerald-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0 text-left">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                      <div className="min-w-0">
+                        <div className="font-extrabold truncate">
+                          {lang === 'ru'
+                            ? `Результат: ${savedResult.correctCount}/${savedResult.totalQuestions} · ${savedResult.score} б.`
+                            : `Natija: ${savedResult.correctCount}/${savedResult.totalQuestions} · ${savedResult.score} ball`}
+                        </div>
+                        <div className={`text-[10px] font-medium truncate ${
+                          isLight ? 'text-emerald-700/80' : 'text-white/60'
+                        }`}>
+                          {lang === 'ru' ? 'Ошибки и пересдача' : 'Xatolar va qayta topshirish'}
+                        </div>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 shrink-0" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    data-testid={`variant-start-${test.id || index}`}
+                    onClick={() => handleStartExam(test)}
+                    className="w-full bg-[#007AFF] hover:bg-[#0066D6] text-white font-bold py-3 px-4 rounded-2xl text-xs flex items-center justify-center gap-2 shadow-sm active:scale-95 transition-all cursor-pointer"
+                  >
+                    <span>{lang === 'ru' ? 'Начать тест' : 'Testni boshlash'}</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             );
           })}

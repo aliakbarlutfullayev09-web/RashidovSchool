@@ -698,12 +698,14 @@ export const saveExamProgress = async (userId, subjectKey, mode, testId, score, 
         balance: (user.balance || 0) + rewardNeyrons
       }).eq('telegram_id', userId);
 
-      await supabase.from('transactions').insert([{
-        user_id: userId,
-        amount: rewardNeyrons,
-        type: 'gift',
-        description: `${mode.toUpperCase()} Imtihon yakunlandi (${testId}): +${rewardNeyrons} 🧠`
-      }]).catch(() => {});
+      try {
+        await supabase.from('transactions').insert([{
+          user_id: userId,
+          amount: rewardNeyrons,
+          type: 'gift',
+          description: `${mode.toUpperCase()} Imtihon yakunlandi (${testId}): +${rewardNeyrons} 🧠`
+        }]);
+      } catch {}
     }
 
     return { success: true, rewardNeyrons, rewardXp };
