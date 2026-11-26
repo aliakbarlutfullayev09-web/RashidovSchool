@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   Play, Pause, RotateCcw, Maximize, 
-  BookOpen, Clock, AlertCircle, RefreshCw, Sparkles, CheckCircle2, 
+  BookOpen, Clock, AlertCircle, RefreshCw, FileCheck2, CheckCircle2, 
   X, ZoomIn, ZoomOut, ChevronDown 
 } from 'lucide-react';
 import CheckpointModal from './CheckpointModal';
@@ -466,26 +466,45 @@ export default function VideoPlayer({
 
   const handleAnswerCheckpoint = (isCorrect) => {
     if (!activeCheckpoint) return;
-    setAnsweredCheckpoints(prev => ({ ...prev, [activeCheckpoint.id]: isCorrect }));
 
     if (isCorrect) {
+      setAnsweredCheckpoints(prev => ({ ...prev, [activeCheckpoint.id]: true }));
       setActiveCheckpoint(null);
       if (videoRef.current) {
-        videoRef.current.play();
-        setIsPlaying(true);
+        videoRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
       }
     } else {
-      const rewindTime = activeCheckpoint.rewind_time_sec !== undefined 
-        ? activeCheckpoint.rewind_time_sec 
-        : Math.max(0, activeCheckpoint.trigger_time_sec - 10);
+      const rawRewind = activeCheckpoint.rewind_time_sec ?? activeCheckpoint.rewind_to_sec;
+      const rewindTime = rawRewind !== undefined && rawRewind !== null && !Number.isNaN(Number(rawRewind))
+        ? Math.max(0, Number(rawRewind))
+        : Math.max(0, (activeCheckpoint.trigger_time_sec || 0) - 10);
+
+      // Reset watched frontier back to rewindTime BEFORE seeking so user cannot skip right back to the checkpoint
+      maxWatchedRef.current = rewindTime;
+      setMaxWatchedSeconds(rewindTime);
+      setCurrentTime(rewindTime);
+      lastPlaybackTimeRef.current = rewindTime;
+      lastPlaybackWallClockRef.current = Date.now();
+      saveWatchProgress(userId, lessonId, rewindTime, rewindTime);
+
+      // Mark this checkpoint (and any checkpoints after rewindTime) unanswered so they must pass again
+      setAnsweredCheckpoints(prev => {
+        const next = { ...prev };
+        delete next[activeCheckpoint.id];
+        checkpoints.forEach(cp => {
+          if (cp.trigger_time_sec >= rewindTime) {
+            delete next[cp.id];
+          }
+        });
+        return next;
+      });
 
       if (videoRef.current) {
         videoRef.current.currentTime = rewindTime;
-        lastPlaybackTimeRef.current = rewindTime;
-        lastPlaybackWallClockRef.current = Date.now();
         setActiveCheckpoint(null);
-        videoRef.current.play();
-        setIsPlaying(true);
+        videoRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
+      } else {
+        setActiveCheckpoint(null);
       }
     }
   };
@@ -530,48 +549,42 @@ export default function VideoPlayer({
       className="fixed inset-0 z-50 bg-[#000000] text-white flex flex-col justify-between overflow-hidden select-none video-player-container"
     >
 
-      {/* ── TOP TELEGRAM-STYLE "TERMINLAR" BUTTON (Positioned below Telegram's ∨ ⋮ capsule) ── */}
+      {/* ── TOP TELEGRAM-STYLE "TERMINLAR" BUTTON (Always visible on desktop & portrait) ── */}
       <div 
         onTouchStart={(e) => e.stopPropagation()}
         onTouchEnd={(e) => e.stopPropagation()}
         className={`absolute z-40 pointer-events-auto transition-all duration-300 ${
           isOverlayLayout ? 'right-4' : 'right-3'
         } ${
-          isOverlayLayout && !showControls && !isGlossaryOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'
+          isOverlayLayout && !isDesktop && !showControls && !isGlossaryOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'
         }`}
         style={{
           top: isOverlayLayout 
-            ? 'max(calc(var(--safe-area-top, 0px) + 36px), 56px)' 
+            ? 'max(calc(var(--safe-area-top, 0px) + 20px), 24px)' 
             : 'max(calc(var(--safe-area-top, 0px) + 54px), 80px)'
         }}
       >
         <button
+          type="button"
+          data-testid="video-terms-btn"
           onClick={(e) => {
             e.stopPropagation();
             impactLight();
             setIsGlossaryOpen(prev => !prev);
           }}
-          className={`flex items-center backdrop-blur-xl border shadow-xl transition-all active:scale-95 ${
-            isOverlayLayout
-              ? 'w-9 h-9 rounded-full justify-center p-0'
-              : 'h-8 px-3 rounded-full gap-1.5 text-xs font-semibold'
-          } ${
+          className={`flex items-center backdrop-blur-xl border shadow-xl transition-all active:scale-95 h-9 px-3.5 rounded-full gap-1.5 text-xs font-semibold cursor-pointer ${
             isGlossaryOpen
               ? 'bg-purple-600/40 border-purple-400/60 text-white shadow-purple-500/25'
-              : 'bg-black/60 hover:bg-black/75 border-white/20 text-white/95'
+              : 'bg-black/65 hover:bg-black/85 border-white/20 text-white/95'
           }`}
           title={lang === 'ru' ? 'Термины урока' : 'Dars terminlari'}
         >
           <BookOpen className="w-4 h-4 text-purple-300 shrink-0" />
-          {!isOverlayLayout && <span>{lang === 'ru' ? 'Термины' : 'Terminlar'}</span>}
+          <span>{lang === 'ru' ? 'Термины' : 'Terminlar'}</span>
           {terms.length > 0 && (
-            !isOverlayLayout ? (
-              <span className="bg-purple-500/40 text-purple-200 text-[10px] px-1.5 py-0.2 rounded-full font-bold ml-0.5">
-                {terms.length}
-              </span>
-            ) : (
-              <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-purple-500 rounded-full border border-black shadow" />
-            )
+            <span className="bg-purple-500/40 text-purple-200 text-[10px] px-1.5 py-0.2 rounded-full font-bold ml-0.5">
+              {terms.length}
+            </span>
           )}
         </button>
       </div>
@@ -837,54 +850,64 @@ export default function VideoPlayer({
             </button>
           </div>
         </div>
+      </div>
 
-        {/* Completion Card at End of Video */}
-        {isEnded && (
-          <div className="mt-3 bg-[#1C1C1E] border border-emerald-500/30 p-3.5 rounded-2xl space-y-2.5 animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-                <CheckCircle2 className="w-4 h-4" />
-              </div>
-              <div>
-                <h4 className="text-white font-bold text-xs">
-                  {lang === 'ru' ? 'Урок успешно просмотрен!' : 'Dars muvaffaqiyatli ko‘rildi!'}
-                </h4>
-                <p className="text-[10px] text-emerald-400 font-medium">
-                  {lang === 'ru' ? 'Все фрагменты подтверждены' : 'Barcha qismlar tasdiqlandi'}
-                </p>
-              </div>
+      {/* ── LARGE CENTERED LESSON COMPLETION BANNER ── */}
+      {isEnded && !activeCheckpoint && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
+          data-testid="video-end-banner"
+          className="fixed inset-0 z-[55] bg-black/80 backdrop-blur-md flex items-center justify-center p-5 animate-in fade-in duration-200"
+        >
+          <div className="w-full max-w-md bg-[#1C1C1E] border border-white/10 rounded-[32px] p-6 sm:p-8 text-center space-y-5 shadow-2xl">
+            <div className="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center mx-auto text-emerald-400">
+              <CheckCircle2 className="w-9 h-9" />
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1.5">
+              <h3 className="text-white font-extrabold text-xl sm:text-2xl leading-tight">
+                {lang === 'ru' ? 'Урок успешно просмотрен!' : 'Dars muvaffaqiyatli ko‘rildi!'}
+              </h3>
+              <p className="text-xs sm:text-sm text-emerald-400 font-medium">
+                {lang === 'ru' ? 'Все фрагменты подтверждены' : 'Barcha qismlar tasdiqlandi'}
+              </p>
+            </div>
+
+            <div className="space-y-2.5 pt-1">
               <button
+                type="button"
                 onClick={() => {
                   impactMedium();
                   if (onStartQuiz) onStartQuiz();
                 }}
-                className="bg-[#007AFF] hover:bg-blue-600 text-white font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-lg active:scale-95 transition-all"
+                className="w-full bg-[#007AFF] hover:bg-[#0066D6] text-white font-bold py-3.5 px-5 rounded-2xl text-sm flex items-center justify-center gap-2 shadow-sm active:scale-95 transition-all cursor-pointer"
               >
-                <Sparkles className="w-3.5 h-3.5" />
+                <FileCheck2 className="w-4 h-4 shrink-0" />
                 <span>{lang === 'ru' ? 'Начать тест' : 'Testni boshlash'}</span>
               </button>
 
               <button
+                type="button"
                 onClick={() => {
                   if (videoRef.current) {
                     videoRef.current.currentTime = 0;
-                    videoRef.current.play();
-                    setIsPlaying(true);
-                    setIsEnded(false);
+                    videoRef.current.play().then(() => {
+                      setIsPlaying(true);
+                      setIsEnded(false);
+                    }).catch(() => setIsEnded(false));
                   }
                 }}
-                className="bg-[#2C2C2E] hover:bg-[#3A3A3C] text-white font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all"
+                className="w-full bg-[#2C2C2E] hover:bg-[#3A3A3C] text-white font-bold py-3 px-5 rounded-2xl text-xs sm:text-sm flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer"
               >
-                <RotateCcw className="w-3.5 h-3.5" />
+                <RotateCcw className="w-4 h-4 shrink-0" />
                 <span>{lang === 'ru' ? 'Смотреть снова' : 'Qayta ko‘rish'}</span>
               </button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* ── PORTRAIT MODE: TERMS BELOW VIDEO ── */}
       {!isOverlayLayout && (
@@ -981,23 +1004,22 @@ export default function VideoPlayer({
               )}
             </div>
           ) : (
-            /* Tap to open terms button if terms exist (Dars jarayoni card removed) */
-            terms.length > 0 && (
-              <div className="p-4 sm:px-8">
-                <button
-                  onClick={() => setIsGlossaryOpen(true)}
-                  className="w-full py-3 px-4 rounded-2xl bg-[#1C1C1E] hover:bg-[#242426] border border-purple-500/25 flex items-center justify-between text-xs font-bold text-purple-300 active:scale-[0.98] transition-all"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <BookOpen className="w-4 h-4 text-purple-400" />
-                    <span>{lang === 'ru' ? 'Список терминов урока' : 'Dars terminlari ro‘yxati'}</span>
-                  </div>
-                  <span className="bg-purple-500/20 text-purple-200 text-[10px] px-2 py-0.5 rounded-full">
-                    {lang === 'ru' ? `${terms.length} терм.` : `${terms.length} ta termin`}
-                  </span>
-                </button>
-              </div>
-            )
+            /* Tap to open terms button (always accessible below video in portrait mode) */
+            <div className="p-4 sm:px-8">
+              <button
+                type="button"
+                onClick={() => setIsGlossaryOpen(true)}
+                className="w-full py-3 px-4 rounded-2xl bg-[#1C1C1E] hover:bg-[#242426] border border-purple-500/25 flex items-center justify-between text-xs font-bold text-purple-300 active:scale-[0.98] transition-all cursor-pointer"
+              >
+                <div className="flex items-center gap-2.5">
+                  <BookOpen className="w-4 h-4 text-purple-400" />
+                  <span>{lang === 'ru' ? 'Список терминов урока' : 'Dars terminlari ro‘yxati'}</span>
+                </div>
+                <span className="bg-purple-500/20 text-purple-200 text-[10px] px-2 py-0.5 rounded-full">
+                  {lang === 'ru' ? `${terms.length} терм.` : `${terms.length} ta termin`}
+                </span>
+              </button>
+            </div>
           )}
         </div>
       )}

@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, BookOpen, Clock, Lock, Sparkles } from 'lucide-react';
+import { X, BookOpen, Clock, Lock } from 'lucide-react';
 import { formatTime } from '../utils/formatters';
 import { useHaptic } from '../hooks/useHaptic';
 import { useLanguage } from '../context/LanguageContext';

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ChevronRight, CreditCard, Settings, 
-  Sparkles, Edit3, Headphones, Globe, Dna, FlaskConical, Atom
+  Edit3, Headphones, Globe, Dna, FlaskConical, Atom
 } from 'lucide-react';
 import Profile from '../components/Profile';
 import TopUpModal from '../components/TopUpModal';
@@ -265,10 +265,10 @@ export default function ProfilePage({ user, onUpdateUser, onRegisterBackAction }
             style={{ color: isLight ? profilePreset.hex : profilePreset.accent }}
           >
             <Dna className="w-5 h-5 absolute top-5 left-12 -rotate-12" />
-            <Sparkles className="w-4 h-4 absolute top-14 left-5 rotate-12" />
+            <Atom className="w-4 h-4 absolute top-14 left-5 rotate-12" />
             <Atom className="w-5 h-5 absolute top-24 left-14 rotate-45" />
             <FlaskConical className="w-5 h-5 absolute top-6 right-12 rotate-12" />
-            <Sparkles className="w-4 h-4 absolute top-16 right-5 -rotate-12" />
+            <FlaskConical className="w-4 h-4 absolute top-16 right-5 -rotate-12" />
             <Dna className="w-4 h-4 absolute top-24 right-14 -rotate-45" />
           </div>
         </div>

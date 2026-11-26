@@ -7,8 +7,10 @@ import { getSubjects, getCoursesAndLessons, getProgress, getVideoCheckpoints, ge
 import { mockSubjects } from '../mock/data';
 import { 
   Play, Search, X, Bookmark, BookmarkCheck, Clock, 
-  ChevronRight, MoreHorizontal, ArrowLeft 
+  ChevronRight, MoreHorizontal, Trophy, RotateCcw 
 } from 'lucide-react';
+import ConfettiBurst from '../components/ConfettiBurst';
+import ExamMistakeReview from '../components/ExamMistakeReview';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
@@ -234,7 +236,13 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
   useEffect(() => {
     if (typeof onRegisterBackAction !== 'function') return;
 
-    if (playingLesson) {
+    if (lessonQuiz) {
+      window.__rb_exit_video = null;
+      onRegisterBackAction(() => {
+        impactLight();
+        setLessonQuiz(null);
+      });
+    } else if (playingLesson) {
       window.__rb_exit_video = handleBackFromPlayer;
       onRegisterBackAction(() => handleBackFromPlayer());
     } else {
@@ -259,7 +267,7 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
     return () => {
       window.__rb_exit_video = null;
     };
-  }, [playingLesson, currentView, onRegisterBackAction]);
+  }, [lessonQuiz, playingLesson, currentView, onRegisterBackAction]);
 
   // Filter lessons
   const normalizedQuery = searchQuery.trim().toLowerCase().replace(/[`'‘’ʼ]/g, "'");
@@ -289,7 +297,7 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
     return true;
   });
 
-  // If in quiz mode for lesson
+  // If in quiz mode for lesson (scrollable container + DTM-style final banner with confetti & mistake review)
   if (lessonQuiz) {
     const q = lessonQuiz.questions[lessonQuiz.currentQ];
     const isLast = lessonQuiz.currentQ === lessonQuiz.questions.length - 1;
@@ -307,85 +315,196 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
             correctCount++;
           }
         });
-        const ratio = correctCount / lessonQuiz.questions.length;
+        const ratio = correctCount / (lessonQuiz.questions.length || 1);
         const stars = ratio >= 0.8 ? 3 : ratio >= 0.5 ? 2 : 1;
+        const rewardNeyrons = stars === 3 ? 100 : stars === 2 ? 60 : 30;
         const uid = user?.telegram_id || user?.id;
+
+        setLessonQuiz({
+          ...lessonQuiz,
+          answers: newAnswers,
+          finished: true,
+          correctCount,
+          stars,
+          rewardNeyrons,
+          pct: Math.round(ratio * 100),
+        });
 
         if (uid) {
           await saveLessonQuizProgress(uid, lessonQuiz.lesson.id, stars, Math.round(ratio * 100));
-        }
-
-        const finishMsg = lang === 'ru'
-          ? `Поздравляем! Тест завершён.\nПравильных ответов: ${correctCount}/${lessonQuiz.questions.length}\nЗвёзды: ${'⭐️'.repeat(stars)}\nНейроны зачислены на ваш счёт!`
-          : `Tabriklaymiz! Test yakunlandi.\nTo'g'ri javoblar: ${correctCount}/${lessonQuiz.questions.length}\nYulduzlar: ${'⭐️'.repeat(stars)}\nHisobingizga neyronlar qo'shildi!`;
-        alert(finishMsg);
-        
-        if (uid) {
           const prog = await getProgress(uid);
           const pMap = {};
           (prog || []).forEach(p => { pMap[p.lesson_id] = p; });
           setProgressMap(pMap);
         }
-        setLessonQuiz(null);
-        setPlayingLesson(null);
       }
     };
 
-    return (
-      <div className={`fixed inset-0 z-50 flex flex-col p-4 max-w-md sm:max-w-2xl desktop:max-w-4xl mx-auto ${
-        isLight ? 'bg-[#F2F2F7] text-[#1C1C1E]' : 'bg-black/95 text-white'
-      }`}>
-        <div className={`flex items-center justify-between py-3 border-b ${
-          isLight ? 'border-black/10' : 'border-white/10'
-        }`}>
-          <button 
-            onClick={() => setLessonQuiz(null)}
-            className={`w-9 h-9 rounded-full flex items-center justify-center active:scale-95 ${
-              isLight ? 'bg-white border border-black/10 text-[#1C1C1E] shadow-sm' : 'bg-[#1C1C1E] text-white'
-            }`}
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <span className="text-xs font-bold text-blue-500">
-            {lang === 'ru'
-              ? `Вопрос ${lessonQuiz.currentQ + 1} / ${lessonQuiz.questions.length}`
-              : `Savol ${lessonQuiz.currentQ + 1} / ${lessonQuiz.questions.length}`}
-          </span>
-          <div className="w-9" />
-        </div>
+    if (lessonQuiz.finished) {
+      const totalQ = lessonQuiz.questions.length || 1;
+      const cCount = lessonQuiz.correctCount ?? 0;
+      const pct = lessonQuiz.pct ?? Math.round((cCount / totalQ) * 100);
+      const stars = lessonQuiz.stars ?? 1;
+      const reward = lessonQuiz.rewardNeyrons ?? 30;
 
-        <div className="flex-1 flex flex-col justify-center py-6">
-          {q.image_url && !q.image_url.startsWith('cp_meta:') && (
-            <div className={`relative w-full aspect-video rounded-2xl overflow-hidden mb-4 border bg-black ${
-              isLight ? 'border-black/10' : 'border-white/10'
-            }`}>
-              <img src={q.image_url} alt="" className="w-full h-full object-contain" />
-            </div>
-          )}
+      return (
+        <div
+          data-testid="lesson-quiz-results"
+          className={`fixed inset-0 z-50 overflow-y-auto app-scroll-container select-none ${
+            isLight ? 'bg-[#F2F2F7] text-[#1C1C1E]' : 'bg-[#000000] text-white'
+          }`}
+        >
+          <ConfettiBurst active={true} duration={6500} />
 
-          <h3 className={`text-lg font-bold mb-6 leading-snug ${isLight ? 'text-[#1C1C1E]' : 'text-white'}`}>
-            {q.text}
-          </h3>
-
-          <div className="space-y-3">
-            {(q.options || []).map((opt, optIdx) => (
-              <button
-                key={optIdx}
-                onClick={() => handleAnswerQuiz(optIdx)}
-                className={`w-full p-4 rounded-2xl border hover:border-blue-500/50 text-left text-sm font-semibold flex items-center gap-3 active:scale-98 transition-all ${
-                  isLight
-                    ? 'bg-white border-black/[0.08] text-[#1C1C1E] shadow-sm'
-                    : 'bg-[#1C1C1E] border-white/10 text-white'
-                }`}
+          <div className="w-full max-w-lg sm:max-w-3xl desktop:max-w-5xl mx-auto p-4 sm:px-6 pt-6 pb-28 space-y-5">
+            {/* Final Results Banner Card matching DTM Mock */}
+            <div
+              className={`border rounded-3xl p-6 sm:p-8 text-center space-y-5 shadow-lg ${
+                isLight ? 'bg-white border-black/[0.06]' : 'bg-[#1C1C1E] border-white/[0.08]'
+              }`}
+            >
+              <div
+                data-testid="lesson-quiz-trophy"
+                className="w-16 h-16 rounded-full bg-yellow-400 text-yellow-950 flex items-center justify-center mx-auto shadow-md shadow-yellow-500/20"
               >
-                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                  isLight ? 'bg-gray-100 text-gray-700' : 'bg-[#2C2C2E] text-white/70'
-                }`}>
-                  {['A', 'B', 'C', 'D'][optIdx]}
-                </span>
-                <span className="flex-1">{opt}</span>
-              </button>
-            ))}
+                <Trophy className="w-8 h-8" />
+              </div>
+
+              <div>
+                <h3 className={`font-extrabold text-2xl mb-1 ${isLight ? 'text-[#1C1C1E]' : 'text-white'}`}>
+                  {lang === 'ru' ? 'Тест завершён!' : 'Test yakunlandi!'}
+                </h3>
+                <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-[#8E8E93]'}`}>
+                  {lessonQuiz.lesson?.title}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 sm:gap-4 pt-2 max-w-2xl mx-auto">
+                <div className={`p-3 sm:p-4 rounded-2xl ${isLight ? 'bg-[#F2F2F7]' : 'bg-[#2C2C2E]'}`}>
+                  <span className={`text-[10px] block ${isLight ? 'text-gray-500' : 'text-[#8E8E93]'}`}>
+                    {lang === 'ru' ? 'Верно:' : "To'g'ri:"}
+                  </span>
+                  <span className={`font-bold text-lg ${isLight ? 'text-emerald-600' : 'text-emerald-400'}`}>
+                    {cCount} / {totalQ}
+                  </span>
+                </div>
+                <div className={`p-3 sm:p-4 rounded-2xl ${isLight ? 'bg-[#F2F2F7]' : 'bg-[#2C2C2E]'}`}>
+                  <span className={`text-[10px] block ${isLight ? 'text-gray-500' : 'text-[#8E8E93]'}`}>
+                    {lang === 'ru' ? 'Результат:' : 'Natija:'}
+                  </span>
+                  <span className={`font-bold text-lg ${isLight ? 'text-blue-600' : 'text-blue-400'}`}>
+                    {pct}%
+                  </span>
+                </div>
+                <div className={`p-3 sm:p-4 rounded-2xl ${isLight ? 'bg-[#F2F2F7]' : 'bg-[#2C2C2E]'}`}>
+                  <span className={`text-[10px] block ${isLight ? 'text-gray-500' : 'text-[#8E8E93]'}`}>
+                    {lang === 'ru' ? 'Награда:' : 'Mukofot:'}
+                  </span>
+                  <span className={`font-bold text-lg ${isLight ? 'text-amber-600' : 'text-amber-400'}`}>
+                    +{reward} ({stars}★)
+                  </span>
+                </div>
+              </div>
+
+              <div className="pt-2 max-w-xl mx-auto space-y-2.5">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setLessonQuiz({
+                      lesson: lessonQuiz.lesson,
+                      questions: lessonQuiz.questions,
+                      currentQ: 0,
+                      answers: {},
+                      finished: false,
+                    })
+                  }
+                  className="w-full bg-[#007AFF] hover:bg-[#0066D6] text-white font-bold py-3.5 px-3 rounded-2xl text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  <span>{lang === 'ru' ? 'Пройти заново' : 'Qayta topshirish'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLessonQuiz(null);
+                    setPlayingLesson(null);
+                  }}
+                  className={`w-full border font-bold py-3 px-3 rounded-2xl text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    isLight
+                      ? 'bg-[#F2F2F7] hover:bg-gray-200 border-black/10 text-[#1C1C1E]'
+                      : 'bg-[#2C2C2E] border-white/10 hover:bg-[#3A3A3C] text-white/90'
+                  }`}
+                >
+                  <span>{lang === 'ru' ? 'Вернуться к урокам' : 'Darslarga qaytish'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Detailed Mistake Breakdown */}
+            <ExamMistakeReview
+              questions={lessonQuiz.questions}
+              userAnswers={lessonQuiz.answers}
+              isLight={isLight}
+              lang={lang}
+            />
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div
+        data-testid="lesson-quiz-runner"
+        className={`fixed inset-0 z-50 overflow-y-auto app-scroll-container select-none ${
+          isLight ? 'bg-[#F2F2F7] text-[#1C1C1E]' : 'bg-[#000000] text-white'
+        }`}
+      >
+        <div className="min-h-full w-full max-w-md sm:max-w-2xl desktop:max-w-4xl mx-auto p-4 sm:px-6 pb-20 flex flex-col">
+          <div className={`flex items-center justify-center py-3 border-b shrink-0 ${
+            isLight ? 'border-black/10' : 'border-white/10'
+          }`}>
+            <span className="text-xs font-bold text-[#007AFF]">
+              {lang === 'ru'
+                ? `Вопрос ${lessonQuiz.currentQ + 1} / ${lessonQuiz.questions.length}`
+                : `Savol ${lessonQuiz.currentQ + 1} / ${lessonQuiz.questions.length}`}
+            </span>
+          </div>
+
+          <div className="my-auto py-6">
+            {q.image_url && !q.image_url.startsWith('cp_meta:') && (
+              <div className={`relative w-full aspect-video rounded-2xl overflow-hidden mb-4 border bg-black ${
+                isLight ? 'border-black/10' : 'border-white/10'
+              }`}>
+                <img src={q.image_url} alt="" className="w-full h-full object-contain" />
+              </div>
+            )}
+
+            <h3 className={`text-lg font-bold mb-6 leading-snug ${isLight ? 'text-[#1C1C1E]' : 'text-white'}`}>
+              {q.text}
+            </h3>
+
+            <div className="space-y-3">
+              {(q.options || []).map((opt, optIdx) => (
+                <button
+                  key={optIdx}
+                  type="button"
+                  onClick={() => handleAnswerQuiz(optIdx)}
+                  className={`w-full p-4 rounded-2xl border hover:border-[#007AFF]/50 text-left text-sm font-semibold flex items-center gap-3 active:scale-[0.98] transition-all cursor-pointer ${
+                    isLight
+                      ? 'bg-white border-black/[0.08] text-[#1C1C1E] shadow-sm'
+                      : 'bg-[#1C1C1E] border-white/10 text-white'
+                  }`}
+                >
+                  <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                    isLight ? 'bg-gray-100 text-gray-700' : 'bg-[#2C2C2E] text-white/70'
+                  }`}>
+                    {['A', 'B', 'C', 'D'][optIdx]}
+                  </span>
+                  <span className="flex-1">{opt}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>

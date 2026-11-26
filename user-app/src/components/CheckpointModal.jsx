@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle2, XCircle, Sparkles } from 'lucide-react';
+import { CheckCircle2, XCircle, HelpCircle } from 'lucide-react';
 import { useHaptic } from '../hooks/useHaptic';
 import { useLanguage } from '../context/LanguageContext';
 
@@ -50,8 +50,8 @@ export default function CheckpointModal({ checkpoint, onAnswer }) {
         >
           {/* Badge */}
           <div className="inline-flex items-center gap-1.5 bg-amber-500/20 border border-amber-500/30 text-amber-300 px-3 py-1 rounded-full text-xs font-bold mb-4">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>{lang === 'ru' ? 'Вопрос по видео' : 'Stop-Test Savoli'}</span>
+            <HelpCircle className="w-3.5 h-3.5" />
+            <span>{lang === 'ru' ? 'Решите вопрос' : 'Savolni yeching'}</span>
           </div>
 
           <h3 className="text-white font-bold text-lg leading-snug mb-6">

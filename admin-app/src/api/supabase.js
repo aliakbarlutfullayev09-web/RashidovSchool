@@ -350,6 +350,23 @@ export const api = {
     return { success: true, thumbnail_url: cleanThumb, duration: cleanDuration };
   },
 
+  updateLessonTerms: async (lessonId, terms) => {
+    const cleanTerms = Array.isArray(terms) ? terms : [];
+    try {
+      await supabase.from('lessons').update({ terms: cleanTerms }).eq('id', lessonId);
+    } catch {}
+    await api._mergeSiteMeta((meta) => {
+      const lessonMeta = { ...(meta.lesson_meta || {}) };
+      const existing = lessonMeta[String(lessonId)] || {};
+      lessonMeta[String(lessonId)] = {
+        ...existing,
+        terms: cleanTerms
+      };
+      return { ...meta, lesson_meta: lessonMeta };
+    });
+    return { success: true, terms: cleanTerms };
+  },
+
   deleteCourse: async (courseId) => {
     const { error } = await supabase.from('courses').delete().eq('id', courseId);
     if (error) alert("Kurs o'chirishda xatolik: " + error.message);
@@ -412,6 +429,7 @@ export const api = {
         ...l,
         thumbnail_url: l.thumbnail_url || m.thumbnail_url || null,
         duration: l.duration || m.duration || null,
+        terms: Array.isArray(l.terms) ? l.terms : (Array.isArray(m.terms) ? m.terms : []),
         questions_count: l.questions?.[0]?.count || 0
       };
     });

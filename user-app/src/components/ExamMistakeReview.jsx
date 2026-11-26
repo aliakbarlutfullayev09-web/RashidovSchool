@@ -39,7 +39,8 @@ export function evaluateQuestionAnswer(q, userAns) {
   if (q.type === 'input') {
     return Boolean(userAns && isUzbekMatch(userAns, q.correctAnswer));
   }
-  return userAns === q.correctIndex;
+  const expectedIndex = q.correctIndex !== undefined ? q.correctIndex : q.correct_option_index;
+  return userAns === expectedIndex;
 }
 
 export function formatOptionText(q, answerValue, lang = 'uz') {
@@ -141,10 +142,11 @@ export default function ExamMistakeReview({ questions = [], userAnswers = {}, is
       ) : (
         <div className="space-y-3">
           {visibleItems.map(({ q, idx, userAns, isCorrect, isUnanswered }) => {
+            const expectedIndex = q.correctIndex !== undefined ? q.correctIndex : q.correct_option_index;
             const correctDisplay =
               q.type === 'input'
                 ? String(q.correctAnswer || '')
-                : formatOptionText(q, q.correctIndex, lang);
+                : formatOptionText(q, expectedIndex, lang);
             const userDisplay = formatOptionText(q, userAns, lang);
 
             return (

@@ -4,7 +4,7 @@ import { compressImageFileToDataUrl, formatDurationFromSeconds } from '../utils/
 import VideoCheckpointStudio from './VideoCheckpointStudio';
 import { 
   Plus, Trash2, Video, Check, Upload,
-  Image as ImageIcon, ArrowLeft, X 
+  Image as ImageIcon, ArrowLeft, X, BookOpen 
 } from 'lucide-react';
 
 export default function LessonBuilder({ courseId, courseName, onSelectLesson, onBack }) {
@@ -25,6 +25,64 @@ export default function LessonBuilder({ courseId, courseName, onSelectLesson, on
   const [editThumb, setEditThumb] = useState('');
   const [editDuration, setEditDuration] = useState('');
   const [savingMedia, setSavingMedia] = useState(false);
+
+  // Edit lesson glossary terms modal state
+  const [editingTermsLesson, setEditingTermsLesson] = useState(null);
+  const [termsDraft, setTermsDraft] = useState([]);
+  const [savingTerms, setSavingTerms] = useState(false);
+
+  const formatTermSec = (sec) => {
+    const sNum = Math.max(0, parseInt(sec, 10) || 0);
+    const m = Math.floor(sNum / 60);
+    const s = sNum % 60;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  };
+
+  const parseTermInput = (val) => {
+    if (!val && val !== 0) return 0;
+    const str = String(val).trim();
+    if (str.includes(':')) {
+      const [m, s] = str.split(':');
+      return Math.max(0, (parseInt(m, 10) || 0) * 60 + (parseInt(s, 10) || 0));
+    }
+    return Math.max(0, parseInt(str, 10) || 0);
+  };
+
+  const handleOpenTermsModal = (lesson) => {
+    setEditingTermsLesson(lesson);
+    const existing = Array.isArray(lesson.terms) ? lesson.terms : [];
+    setTermsDraft(
+      existing.map((item, idx) => ({
+        id: item.id || `${Date.now()}_${idx}`,
+        term: item.term || item.title || '',
+        definition: item.definition || item.description || '',
+        timeInput: item.timestamp !== undefined && item.timestamp !== null ? formatTermSec(item.timestamp) : '00:00'
+      }))
+    );
+  };
+
+  const handleSaveTerms = async () => {
+    if (!editingTermsLesson) return;
+    setSavingTerms(true);
+    const cleaned = termsDraft
+      .filter((t) => t.term.trim())
+      .map((t, idx) => ({
+        id: t.id || idx + 1,
+        term: t.term.trim(),
+        definition: t.definition.trim(),
+        timestamp: parseTermInput(t.timeInput)
+      }))
+      .sort((a, b) => a.timestamp - b.timestamp);
+
+    const res = await api.updateLessonTerms(editingTermsLesson.id, cleaned);
+    setSavingTerms(false);
+    if (res?.success) {
+      setLessons((prev) =>
+        prev.map((l) => (l.id === editingTermsLesson.id ? { ...l, terms: cleaned } : l))
+      );
+      setEditingTermsLesson(null);
+    }
+  };
 
   useEffect(() => {
     loadLessons();
@@ -367,6 +425,15 @@ export default function LessonBuilder({ courseId, courseName, onSelectLesson, on
                   </button>
 
                   <button 
+                    type="button"
+                    onClick={() => handleOpenTermsModal(lesson)}
+                    className="bg-[#2C2C2E] hover:bg-purple-500/20 hover:text-purple-300 border border-white/5 text-xs font-semibold py-1.5 px-3 rounded-xl transition-all flex items-center gap-1.5"
+                  >
+                    <BookOpen className="w-3.5 h-3.5 text-purple-400" />
+                    <span>Terminlar ({lesson.terms?.length || 0})</span>
+                  </button>
+
+                  <button 
                     onClick={() => setEditingCheckpointLesson(lesson)}
                     className="bg-[#2C2C2E] hover:bg-amber-500/20 hover:text-amber-300 border border-white/5 text-xs font-semibold py-1.5 px-3 rounded-xl transition-all flex items-center gap-1.5"
                   >
@@ -485,6 +552,134 @@ export default function LessonBuilder({ courseId, courseName, onSelectLesson, on
                 className="flex-1 bg-[#007AFF] hover:bg-blue-600 disabled:opacity-50 text-white py-3 rounded-2xl font-bold text-xs"
               >
                 {savingMedia ? 'Saqlanmoqda...' : 'Saqlash'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Lesson Terms / Glossary Modal */}
+      {editingTermsLesson && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#1C1C1E] border border-white/10 rounded-3xl p-6 w-full max-w-lg max-h-[85vh] flex flex-col shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-white/5 pb-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400 shrink-0">
+                  <BookOpen className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-bold text-white truncate">
+                    Terminlar: {editingTermsLesson.title}
+                  </h3>
+                  <p className="text-[11px] text-[#8E8E93]">
+                    Video darsdagi atamalar va ularning vaqti (mm:ss)
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingTermsLesson(null)}
+                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/70 shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+              {termsDraft.length === 0 ? (
+                <div className="p-6 rounded-2xl bg-[#2C2C2E]/50 border border-white/5 text-center text-xs text-[#8E8E93]">
+                  Hozircha terminlar yo'q. Pastdagi tugma orqali qo'shing.
+                </div>
+              ) : (
+                termsDraft.map((item, tIdx) => (
+                  <div
+                    key={item.id || tIdx}
+                    className="p-3.5 rounded-2xl bg-[#2C2C2E] border border-white/10 space-y-2.5"
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 min-w-0">
+                        <input
+                          type="text"
+                          value={item.term}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setTermsDraft((prev) =>
+                              prev.map((x, i) => (i === tIdx ? { ...x, term: val } : x))
+                            );
+                          }}
+                          placeholder="Termin nomi (masalan: Mitoxondriya)"
+                          className="input-field py-2 text-xs w-full"
+                        />
+                      </div>
+                      <div className="w-24 shrink-0">
+                        <input
+                          type="text"
+                          value={item.timeInput}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setTermsDraft((prev) =>
+                              prev.map((x, i) => (i === tIdx ? { ...x, timeInput: val } : x))
+                            );
+                          }}
+                          placeholder="00:15"
+                          className="input-field py-2 text-xs w-full text-center font-mono"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setTermsDraft((prev) => prev.filter((_, i) => i !== tIdx))
+                        }
+                        className="w-8 h-8 rounded-xl bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white flex items-center justify-center shrink-0 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <textarea
+                      value={item.definition}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setTermsDraft((prev) =>
+                          prev.map((x, i) => (i === tIdx ? { ...x, definition: val } : x))
+                        );
+                      }}
+                      placeholder="Termin ta'rifi / izohi..."
+                      className="input-field py-2 text-xs min-h-[54px] resize-y"
+                    />
+                  </div>
+                ))
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                setTermsDraft((prev) => [
+                  ...prev,
+                  { id: Date.now(), term: '', definition: '', timeInput: '00:05' }
+                ])
+              }
+              className="w-full py-2.5 rounded-2xl bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-300 font-bold text-xs flex items-center justify-center gap-1.5"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Yangi termin qo'shish</span>
+            </button>
+
+            <div className="flex gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => setEditingTermsLesson(null)}
+                className="flex-1 bg-[#2C2C2E] text-white py-3 rounded-2xl font-bold text-xs"
+              >
+                Bekor qilish
+              </button>
+              <button
+                type="button"
+                disabled={savingTerms}
+                onClick={handleSaveTerms}
+                className="flex-1 bg-[#007AFF] hover:bg-blue-600 disabled:opacity-50 text-white py-3 rounded-2xl font-bold text-xs"
+              >
+                {savingTerms ? 'Saqlanmoqda...' : 'Saqlash'}
               </button>
             </div>
           </div>

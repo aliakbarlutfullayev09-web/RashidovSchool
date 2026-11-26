@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Trophy, Clock, AlertTriangle, CheckCircle2, XCircle, ArrowLeft, ArrowRight,
-  RotateCcw, BookOpen, Search, Sparkles, ChevronRight, Check,
+  RotateCcw, BookOpen, Search, ChevronRight, Check,
   Award, Zap, UserCheck, FileText, CheckCircle,
   Dna, FlaskConical, Calculator
 } from 'lucide-react';
@@ -1054,7 +1054,7 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
             <div className={`bg-blue-500/10 border border-blue-500/20 p-3 rounded-2xl text-xs font-semibold flex items-center justify-center gap-2 max-w-xl mx-auto ${
               isLight ? 'text-blue-700' : 'text-blue-400'
             }`}>
-              <Sparkles className="w-4 h-4" />
+              <Award className="w-4 h-4" />
               <span>
                 {lang === 'ru'
                   ? `Уровень сертификата: ${certGrade} (${grantProb}%)`
@@ -1412,7 +1412,7 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
       ? Calculator
       : isSubjectBio
       ? Dna
-      : Sparkles;
+      : BookOpen;
 
     const subjectIconColor = isSubjectKimyo
       ? 'text-purple-500'
@@ -1524,9 +1524,9 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
                       <div className={`space-y-2 text-xs pt-1 ${isLight ? 'text-gray-700' : 'text-white/85'}`}>
                         {modeCfg.features.map((feat, fIdx) => (
                           <div key={fIdx} className="flex items-center gap-2 text-[11px] sm:text-xs">
-                            <Sparkles
+                            <CheckCircle2
                               className={`w-3.5 h-3.5 flex-shrink-0 ${
-                                fIdx % 2 === 0 ? 'text-purple-500' : 'text-emerald-500'
+                                fIdx % 2 === 0 ? 'text-blue-500' : 'text-emerald-500'
                               }`}
                             />
                             <span>{feat}</span>

@@ -348,7 +348,8 @@ export const getLessons = async (courseId) => {
         return {
           ...l,
           thumbnail_url: l.thumbnail_url || m.thumbnail_url || null,
-          duration: l.duration || m.duration || null
+          duration: l.duration || m.duration || null,
+          terms: Array.isArray(l.terms) ? l.terms : (Array.isArray(m.terms) ? m.terms : [])
         };
       });
     }
@@ -395,7 +396,8 @@ export const getCoursesAndLessons = async (subjectId) => {
           ...l,
           thumbnail_url: l.thumbnail_url || m.thumbnail_url || parentCourse?.image_url || null,
           duration: l.duration || m.duration || null,
-          category_name: l.category_name || parentCourse?.title || null
+          category_name: l.category_name || parentCourse?.title || null,
+          terms: Array.isArray(l.terms) ? l.terms : (Array.isArray(m.terms) ? m.terms : [])
         };
       });
       return { courses: dbCourses, lessons: hydrated };
@@ -447,11 +449,13 @@ export const saveWatchProgress = async (userId, lessonId, currentPosition, maxWa
   try {
     localStorage.setItem(key, JSON.stringify(payload));
     if (userId) {
-      supabase.from('progress').upsert({
-        user_id: userId,
-        lesson_id: lessonId,
-        is_unlocked: true
-      }, { onConflict: 'user_id,lesson_id' }).catch(() => {});
+      try {
+        await supabase.from('progress').upsert({
+          user_id: userId,
+          lesson_id: lessonId,
+          is_unlocked: true
+        }, { onConflict: 'user_id,lesson_id' });
+      } catch {}
     }
     return { success: true, localOnly: true };
   } catch (e) {
@@ -473,12 +477,14 @@ export const freezeStreak = async (userId) => {
       frozen_until: tomorrow.toISOString().split('T')[0]
     }).eq('telegram_id', userId);
     
-    await supabase.from('transactions').insert([{
-      user_id: userId,
-      amount: -10000,
-      type: 'spend',
-      description: 'Muzlatish (Streak Freeze) xaridi'
-    }]).catch(() => {});
+    try {
+      await supabase.from('transactions').insert([{
+        user_id: userId,
+        amount: -10000,
+        type: 'spend',
+        description: 'Muzlatish (Streak Freeze) xaridi'
+      }]);
+    } catch {}
 
     return { success: true, newBalance: user.balance - 10000 };
   } catch {
@@ -667,12 +673,14 @@ export const saveLessonQuizProgress = async (userId, lessonId, stars = 3, score 
         balance: (user.balance || 0) + rewardNeyrons
       }).eq('telegram_id', userId);
 
-      await supabase.from('transactions').insert([{
-        user_id: userId,
-        amount: rewardNeyrons,
-        type: 'gift',
-        description: `Dars testi yakunlandi (#${lessonId}): +${rewardNeyrons} 🧠`
-      }]).catch(() => {});
+      try {
+        await supabase.from('transactions').insert([{
+          user_id: userId,
+          amount: rewardNeyrons,
+          type: 'gift',
+          description: `Dars testi yakunlandi (#${lessonId}): +${rewardNeyrons} 🧠`
+        }]);
+      } catch {}
     }
 
     return { success: true, rewardNeyrons, rewardXp };
@@ -737,7 +745,9 @@ export const incrementViewCount = async (lessonId) => {
     const { data: lesson } = await supabase.from('lessons').select('id').eq('id', lessonId).single();
     if (lesson) {
       // Safe check if view_count column exists
-      await supabase.rpc('increment_lesson_view', { lesson_id: lessonId }).catch(() => {});
+      try {
+        await supabase.rpc('increment_lesson_view', { lesson_id: lessonId });
+      } catch {}
     }
   } catch {}
 };
