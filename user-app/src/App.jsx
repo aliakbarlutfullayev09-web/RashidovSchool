@@ -8,7 +8,7 @@ import LeaderboardPage from './pages/LeaderboardPage';
 import ProfilePage from './pages/ProfilePage';
 import { useTelegram } from './hooks/useTelegram';
 import { useIsDesktop } from './hooks/useIsDesktop';
-import { getUserData, syncUserSession } from './api/supabase';
+import { getUserData, syncUserSession, getSupportContacts } from './api/supabase';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { getSavedProfileColor } from './utils/profileColors';
@@ -164,6 +164,7 @@ function MainApp() {
     }
     
     fetchUser();
+    getSupportContacts().catch(() => {});
 
     return () => { mounted = false; };
   }, [tgUser]);

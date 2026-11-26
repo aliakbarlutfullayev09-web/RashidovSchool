@@ -1624,20 +1624,7 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
       }}
     >
       {/* Header Info */}
-      <div className="flex items-center justify-between pt-1">
-        <button
-          onClick={() => {
-            impactLight();
-            setCurrentView('mode_select');
-          }}
-          className={`flex items-center gap-1.5 text-xs sm:text-sm transition-colors ${
-            isLight ? 'text-gray-600 hover:text-[#1C1C1E]' : 'text-[#8E8E93] hover:text-white'
-          }`}
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>{lang === 'ru' ? 'К направлениям' : "Yo'nalishlarga qaytish"}</span>
-        </button>
-
+      <div className="flex items-center justify-end pt-1">
         <span className={`text-[11px] font-bold px-3 py-1 rounded-full border ${
           isLight
             ? 'text-blue-700 bg-blue-500/10 border-blue-500/25'
@@ -1708,10 +1695,10 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
                       </h4>
                     </div>
 
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 text-xs font-mono font-bold ${
+                    <div className={`min-w-9 h-8 px-2 rounded-xl flex items-center justify-center flex-shrink-0 text-xs font-mono font-bold whitespace-nowrap ${
                       isLight ? 'bg-[#F2F2F7] text-gray-600' : 'bg-[#2C2C2E] text-white/70'
                     }`}>
-                      #{index + 1}
+                      {lang === 'ru' ? `${index + 1}-В` : `${index + 1}-V`}
                     </div>
                   </div>
 

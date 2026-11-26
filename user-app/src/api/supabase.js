@@ -770,6 +770,26 @@ export const DEFAULT_SUPPORT_CONTACTS = {
   website: 'https://rashidovschool.uz'
 };
 
+let cachedSupportContacts = null;
+
+export const getCachedSupportContacts = () => {
+  if (cachedSupportContacts) return cachedSupportContacts;
+  try {
+    const cached = localStorage.getItem('rb_support_contacts');
+    if (cached) {
+      const parsedCached = JSON.parse(cached);
+      const merged = {
+        ...DEFAULT_SUPPORT_CONTACTS,
+        ...parsedCached,
+        website: parsedCached.website || DEFAULT_SUPPORT_CONTACTS.website
+      };
+      cachedSupportContacts = merged;
+      return merged;
+    }
+  } catch {}
+  return null;
+};
+
 export const getSupportContacts = async () => {
   try {
     const { data, error } = await supabase
@@ -782,12 +802,17 @@ export const getSupportContacts = async () => {
       try {
         const parsed = JSON.parse(data.description);
         if (parsed && typeof parsed === 'object') {
-          return {
+          const merged = {
             bio: { ...DEFAULT_SUPPORT_CONTACTS.bio, ...(parsed.bio || {}) },
             chem: { ...DEFAULT_SUPPORT_CONTACTS.chem, ...(parsed.chem || {}) },
             tech: { ...DEFAULT_SUPPORT_CONTACTS.tech, ...(parsed.tech || {}) },
             website: parsed.website || DEFAULT_SUPPORT_CONTACTS.website
           };
+          cachedSupportContacts = merged;
+          try {
+            localStorage.setItem('rb_support_contacts', JSON.stringify(merged));
+          } catch {}
+          return merged;
         }
       } catch {}
     }
@@ -795,17 +820,8 @@ export const getSupportContacts = async () => {
     console.warn('getSupportContacts error:', e);
   }
 
-  try {
-    const cached = localStorage.getItem('rb_support_contacts');
-    if (cached) {
-      const parsedCached = JSON.parse(cached);
-      return {
-        ...DEFAULT_SUPPORT_CONTACTS,
-        ...parsedCached,
-        website: parsedCached.website || DEFAULT_SUPPORT_CONTACTS.website
-      };
-    }
-  } catch {}
+  const cached = getCachedSupportContacts();
+  if (cached) return cached;
 
   return DEFAULT_SUPPORT_CONTACTS;
 };

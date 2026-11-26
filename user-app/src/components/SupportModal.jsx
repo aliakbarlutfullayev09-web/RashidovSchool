@@ -7,7 +7,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useIsDesktop } from '../hooks/useIsDesktop';
-import { getSupportContacts, DEFAULT_SUPPORT_CONTACTS } from '../api/supabase';
+import { getSupportContacts, getCachedSupportContacts, DEFAULT_SUPPORT_CONTACTS } from '../api/supabase';
 
 // Telegram official paper plane SVG logo
 const TelegramIcon = ({ className = "w-4 h-4" }) => (
@@ -24,13 +24,19 @@ export default function SupportModal({ isOpen, onClose, inlineDesktop = false })
 
   const isLight = resolvedTheme === 'light';
 
-  const [contacts, setContacts] = useState(DEFAULT_SUPPORT_CONTACTS);
-  const [loading, setLoading] = useState(true);
+  const [contacts, setContacts] = useState(() => getCachedSupportContacts());
+  const [loading, setLoading] = useState(() => !getCachedSupportContacts());
 
-  // Fetch support contacts from Supabase
+  // Fetch fresh support contacts from Supabase without flashing stub defaults
   useEffect(() => {
     if (!isOpen) return;
     let mounted = true;
+
+    const cached = getCachedSupportContacts();
+    if (cached) {
+      setContacts(cached);
+      setLoading(false);
+    }
 
     async function loadContacts() {
       try {
@@ -40,6 +46,9 @@ export default function SupportModal({ isOpen, onClose, inlineDesktop = false })
         }
       } catch (e) {
         console.warn('Error loading support contacts:', e);
+        if (mounted && !getCachedSupportContacts()) {
+          setContacts(DEFAULT_SUPPORT_CONTACTS);
+        }
       } finally {
         if (mounted) setLoading(false);
       }
@@ -124,27 +133,29 @@ export default function SupportModal({ isOpen, onClose, inlineDesktop = false })
     window.location.href = `tel:${cleanNumber}`;
   };
 
+  const safeContacts = contacts || DEFAULT_SUPPORT_CONTACTS;
+
   const categories = [
     {
       id: 'bio',
       title: lang === 'ru' ? 'Вопросы по биологии' : 'Biologiya bo‘yicha savollar',
       icon: <Dna className="w-4 h-4 text-emerald-400" />,
       iconBg: 'bg-emerald-500/15 border-emerald-500/25',
-      data: contacts.bio || DEFAULT_SUPPORT_CONTACTS.bio
+      data: safeContacts.bio || DEFAULT_SUPPORT_CONTACTS.bio
     },
     {
       id: 'chem',
       title: lang === 'ru' ? 'Вопросы по химии' : 'Kimyo bo‘yicha savollar',
       icon: <FlaskConical className="w-4 h-4 text-purple-400" />,
       iconBg: 'bg-purple-500/15 border-purple-500/25',
-      data: contacts.chem || DEFAULT_SUPPORT_CONTACTS.chem
+      data: safeContacts.chem || DEFAULT_SUPPORT_CONTACTS.chem
     },
     {
       id: 'tech',
       title: lang === 'ru' ? 'Техническая поддержка' : 'Texnik va boshqa masalalar',
       icon: <Settings className="w-4 h-4 text-blue-400" />,
       iconBg: 'bg-blue-500/15 border-blue-500/25',
-      data: contacts.tech || DEFAULT_SUPPORT_CONTACTS.tech
+      data: safeContacts.tech || DEFAULT_SUPPORT_CONTACTS.tech
     }
   ];
 
@@ -209,7 +220,26 @@ export default function SupportModal({ isOpen, onClose, inlineDesktop = false })
             paddingBottom: isDesktop && inlineDesktop ? '20px' : 'max(calc(var(--safe-area-bottom, 0px) + 24px), 32px)'
           }}
         >
-          {categories.map((cat) => {
+          {loading && !contacts ? (
+            [0, 1, 2].map((skeletonIdx) => (
+              <div
+                key={skeletonIdx}
+                className={`p-3.5 rounded-2xl border animate-pulse ${
+                  isLight ? 'bg-white border-black/5 shadow-sm' : 'bg-[#1C1C1E] border-white/5 shadow-md'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 mb-2.5">
+                  <div className={`w-8 h-8 rounded-xl ${isLight ? 'bg-gray-200' : 'bg-white/10'}`} />
+                  <div className={`h-4 w-40 rounded-lg ${isLight ? 'bg-gray-200' : 'bg-white/10'}`} />
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className={`flex-1 h-9 rounded-xl ${isLight ? 'bg-gray-100' : 'bg-white/5'}`} />
+                  <div className={`w-28 h-9 rounded-xl ${isLight ? 'bg-gray-100' : 'bg-white/5'}`} />
+                </div>
+              </div>
+            ))
+          ) : (
+            categories.map((cat) => {
             const tgHandle = cat.data?.telegram || '@rashidov_support';
             const phoneNum = cat.data?.phone || '+998 71 200 00 00';
 
@@ -259,7 +289,8 @@ export default function SupportModal({ isOpen, onClose, inlineDesktop = false })
                 </div>
               </div>
             );
-          })}
+            })
+          )}
         </div>
       </motion.div>
   );

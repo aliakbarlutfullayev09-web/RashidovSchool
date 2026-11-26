@@ -670,23 +670,6 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
       ────────────────────────────────────────────────────────── */}
       {currentView === 'subject_hub' && (
         <div className="w-full max-w-md sm:max-w-4xl desktop:max-w-7xl mx-auto px-4 desktop:px-2 pt-3 pb-8 animate-in fade-in duration-300">
-          {isDesktop && (
-            <div className="mb-3">
-              <button
-                type="button"
-                onClick={() => {
-                  impactLight();
-                  setCurrentView('carousel');
-                }}
-                className={`inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium transition-colors cursor-pointer ${
-                  isLight ? 'text-gray-600 hover:text-[#1C1C1E]' : 'text-[#8E8E93] hover:text-white'
-                }`}
-              >
-                <ArrowLeft className="w-4 h-4" />
-                <span>{lang === 'ru' ? 'К предметам' : 'Fanlarga qaytish'}</span>
-              </button>
-            </div>
-          )}
           {/* Search Input Bar with glass styling & visible Search icon */}
           <div className="relative mb-3">
             <Search className={`w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none z-10 ${
@@ -835,32 +818,6 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
       ────────────────────────────────────────────────────────── */}
       {currentView === 'lesson_list' && (
         <div className="w-full max-w-md sm:max-w-4xl desktop:max-w-7xl mx-auto px-4 desktop:px-2 pt-3 pb-8 animate-in fade-in duration-300">
-          {isDesktop && (
-            <div className="mb-3 flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => {
-                  impactLight();
-                  setCurrentView('subject_hub');
-                  setSelectedCourse(null);
-                  setSearchQuery('');
-                }}
-                className={`inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium transition-colors cursor-pointer ${
-                  isLight ? 'text-gray-600 hover:text-[#1C1C1E]' : 'text-[#8E8E93] hover:text-white'
-                }`}
-              >
-                <ArrowLeft className="w-4 h-4" />
-                <span>{lang === 'ru' ? 'Назад' : 'Orqaga'}</span>
-              </button>
-              {selectedCourse?.title && (
-                <span className={`text-xs font-bold px-3 py-1 rounded-full border ${
-                  isLight ? 'bg-white border-black/[0.08] text-gray-700' : 'bg-[#1C1C1E] border-white/10 text-white/80'
-                }`}>
-                  {selectedCourse.title}
-                </span>
-              )}
-            </div>
-          )}
           {/* Search Input Bar with Clear button, visible Search icon & glass styling */}
           <div className="relative mb-3">
             <Search className={`w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none z-10 ${

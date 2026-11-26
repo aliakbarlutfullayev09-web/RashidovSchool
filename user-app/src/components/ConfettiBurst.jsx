@@ -10,7 +10,7 @@ const CONFETTI_COLORS = [
   '#FF9500',
 ];
 
-export default function ConfettiBurst({ active = true, duration = 3200 }) {
+export default function ConfettiBurst({ active = true, duration = 6500 }) {
   const canvasRef = useRef(null);
 
   useEffect(() => {
@@ -31,41 +31,47 @@ export default function ConfettiBurst({ active = true, duration = 3200 }) {
 
     const w = window.innerWidth;
     const h = window.innerHeight;
-    const count = Math.min(130, Math.max(70, Math.floor(w / 10)));
+    const count = Math.min(180, Math.max(100, Math.floor(w / 8)));
 
-    // Spawn burst from top center and twin side cannons
-    const particles = Array.from({ length: count }, (_, i) => {
+    const spawnParticle = (i, delayMs = 0) => {
       const originType = i % 3;
       const startX =
         originType === 0
-          ? w * (0.2 + Math.random() * 0.6)
+          ? w * (0.15 + Math.random() * 0.7)
           : originType === 1
-          ? w * 0.12
-          : w * 0.88;
-      const startY = originType === 0 ? -10 - Math.random() * 60 : h * 0.25;
+          ? w * 0.1
+          : w * 0.9;
+      const startY = originType === 0 ? -10 - Math.random() * 140 : h * 0.25;
       const vx =
         originType === 0
-          ? (Math.random() - 0.5) * 8
+          ? (Math.random() - 0.5) * 7
           : originType === 1
-          ? 3 + Math.random() * 7
-          : -(3 + Math.random() * 7);
+          ? 2.5 + Math.random() * 6
+          : -(2.5 + Math.random() * 6);
       const vy =
-        originType === 0 ? 2 + Math.random() * 5 : -(4 + Math.random() * 6);
+        originType === 0 ? 1.5 + Math.random() * 3.5 : -(3.5 + Math.random() * 5.5);
 
       return {
         x: startX,
         y: startY,
         vx,
         vy,
+        delayMs,
         size: 6 + Math.random() * 6,
         aspect: 0.45 + Math.random() * 0.45,
         color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
         rotation: Math.random() * Math.PI * 2,
-        rotSpeed: (Math.random() - 0.5) * 0.22,
+        rotSpeed: (Math.random() - 0.5) * 0.18,
         tiltAngle: Math.random() * Math.PI * 2,
-        tiltSpeed: 0.08 + Math.random() * 0.08,
+        tiltSpeed: 0.06 + Math.random() * 0.07,
       };
-    });
+    };
+
+    // Wave 1 at 0ms + Wave 2 at 1600ms so confetti stays lively much longer
+    const particles = [
+      ...Array.from({ length: count }, (_, i) => spawnParticle(i, 0)),
+      ...Array.from({ length: Math.floor(count * 0.75) }, (_, i) => spawnParticle(i + 2, 1600)),
+    ];
 
     const startTime = performance.now();
     let rafId = 0;
@@ -76,11 +82,12 @@ export default function ConfettiBurst({ active = true, duration = 3200 }) {
 
       ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
 
-      const globalAlpha = progress > 0.72 ? Math.max(0, 1 - (progress - 0.72) / 0.28) : 1;
+      const globalAlpha = progress > 0.76 ? Math.max(0, 1 - (progress - 0.76) / 0.24) : 1;
 
       for (const p of particles) {
-        p.vx *= 0.99;
-        p.vy += 0.22; // gravity
+        if (elapsed < p.delayMs) continue;
+        p.vx *= 0.992;
+        p.vy = Math.min(p.vy + 0.12, 5.2); // gentler gravity for longer floaty fall
         p.x += p.vx;
         p.y += p.vy;
         p.rotation += p.rotSpeed;
