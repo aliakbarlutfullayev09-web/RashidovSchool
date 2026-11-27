@@ -61,15 +61,23 @@ export default function TestsPage({ user }) {
   // Question Builder inside a Variant
   const [activeVariantId, setActiveVariantId] = useState(null);
   const [editingQuestionIdx, setEditingQuestionIdx] = useState(null);
+  const [editingMatchIndices, setEditingMatchIndices] = useState([]);
 
   // New / Editing Question form state
-  const [qType, setQType] = useState('choice');
+  const [qType, setQType] = useState('choice'); // 'choice' | 'matching_group' | 'input'
   const [qText, setQText] = useState('');
   const [qImageUrl, setQImageUrl] = useState('');
   const [qOptions, setQOptions] = useState(['', '', '', '']);
   const [qCorrectIndex, setQCorrectIndex] = useState(0);
   const [qCorrectAnswer, setQCorrectAnswer] = useState('');
   const [qTextbookRef, setQTextbookRef] = useState('');
+  const [qMatchGroupId, setQMatchGroupId] = useState(null);
+  const [qMatchOptions, setQMatchOptions] = useState(['', '', '', '', '', '']);
+  const [qMatchItems, setQMatchItems] = useState([
+    { text: '', correctIndex: 0 },
+    { text: '', correctIndex: 1 },
+    { text: '', correctIndex: 2 }
+  ]);
 
   useEffect(() => {
     loadAll();
@@ -212,20 +220,60 @@ export default function TestsPage({ user }) {
   // Question builder screen inside a variant
   const activeVariant = activeVariantId ? variants.find(v => v.id === activeVariantId) : null;
 
-  const resetQuestionForm = () => {
+  const getSuggestedSertifikatType = (qs = []) => {
+    const count = qs.length;
+    if (count >= 35) return 'input';
+    if (count >= 32) return 'matching_group';
+    return 'choice';
+  };
+
+  const resetQuestionForm = (overrideQuestions = null) => {
     setEditingQuestionIdx(null);
-    setQType('choice');
+    setEditingMatchIndices([]);
+    const list = overrideQuestions || activeVariant?.questions || [];
+    setQType(selectedMode === 'dtm' ? 'choice' : getSuggestedSertifikatType(list));
     setQText('');
     setQImageUrl('');
     setQOptions(['', '', '', '']);
     setQCorrectIndex(0);
     setQCorrectAnswer('');
     setQTextbookRef('');
+    setQMatchGroupId(null);
+    setQMatchOptions(['', '', '', '', '', '']);
+    setQMatchItems([
+      { text: '', correctIndex: 0 },
+      { text: '', correctIndex: 1 },
+      { text: '', correctIndex: 2 }
+    ]);
   };
 
   const startEditQuestion = (q, idx) => {
+    if (selectedMode !== 'dtm' && q.type === 'matching') {
+      const qs = activeVariant?.questions || [];
+      const siblingIndices = q.groupId
+        ? qs.map((item, i) => (item?.type === 'matching' && item?.groupId === q.groupId ? i : -1)).filter(i => i >= 0)
+        : [idx];
+      const siblings = siblingIndices.map(i => qs[i]);
+      const opts = Array.isArray(q.options) ? q.options : [];
+
+      setEditingQuestionIdx(siblingIndices[0]);
+      setEditingMatchIndices(siblingIndices);
+      setQType('matching_group');
+      setQMatchGroupId(q.groupId || `match-${Date.now()}`);
+      setQText(q.groupPrompt || '');
+      setQImageUrl(q.groupImageUrl || q.imageUrl || '');
+      setQMatchOptions([0, 1, 2, 3, 4, 5].map(i => opts[i] || ''));
+      setQMatchItems([0, 1, 2].map(i => ({
+        text: siblings[i]?.text || '',
+        correctIndex: siblings[i]?.correctIndex ?? i
+      })));
+      setQTextbookRef(q.textbookRef || '');
+      return;
+    }
+
     setEditingQuestionIdx(idx);
-    setQType(q.type === 'input' ? 'input' : q.imageUrl ? 'image' : 'choice');
+    setEditingMatchIndices([]);
+    setQType(selectedMode !== 'dtm' && q.type === 'input' ? 'input' : q.imageUrl ? 'image' : 'choice');
     setQText(q.text || '');
     setQImageUrl(q.imageUrl || '');
     setQOptions(
@@ -253,7 +301,63 @@ export default function TestsPage({ user }) {
     if (!activeVariant || !qText.trim()) return;
 
     const cleanImg = qImageUrl.trim() || undefined;
-    const newQuestion = qType === 'input'
+    const effectiveType = selectedMode === 'dtm' ? 'choice' : qType;
+
+    if (effectiveType === 'matching_group') {
+      const cleanSharedOpts = qMatchOptions.map(o => o.trim());
+      if (cleanSharedOpts.some(o => !o)) {
+        alert('Moslashtirish (33–35) uchun barcha 6 ta variantni (A–F) kiriting.');
+        return;
+      }
+      const cleanItems = qMatchItems.map(it => ({
+        text: (it.text || '').trim(),
+        correctIndex: Math.min(5, Math.max(0, Number(it.correctIndex) || 0))
+      }));
+      if (cleanItems.some(it => !it.text)) {
+        alert('6 ta variantdan tanlanadigan barcha 3 ta savol bandini kiriting.');
+        return;
+      }
+
+      const groupId = qMatchGroupId || `match-${Date.now()}`;
+      const baseTs = Date.now();
+      const createdGroup = cleanItems.map((it, i) => ({
+        id: editingMatchIndices[i] !== undefined
+          ? activeVariant.questions[editingMatchIndices[i]]?.id || (baseTs + i)
+          : baseTs + i,
+        type: 'matching',
+        groupId,
+        groupPrompt: qText.trim(),
+        ...(cleanImg ? { groupImageUrl: cleanImg } : {}),
+        options: cleanSharedOpts,
+        text: it.text,
+        correctIndex: it.correctIndex,
+        textbookRef: qTextbookRef.trim() || 'Rashidov School darsligi'
+      }));
+
+      let updatedQuestions = [];
+      updateSubjectBundle((sub) => {
+        const list = [...(sub[selectedMode] || [])];
+        const idx = list.findIndex(v => v.id === activeVariant.id);
+        if (idx >= 0) {
+          const prevQs = [...(list[idx].questions || [])];
+          if (editingMatchIndices.length > 0) {
+            const firstPos = editingMatchIndices[0];
+            const filtered = prevQs.filter((_, qIdx) => !editingMatchIndices.includes(qIdx));
+            filtered.splice(firstPos, 0, ...createdGroup);
+            updatedQuestions = filtered;
+          } else {
+            updatedQuestions = [...prevQs, ...createdGroup];
+          }
+          list[idx] = { ...list[idx], questions: updatedQuestions };
+        }
+        return { ...sub, [selectedMode]: list };
+      }, editingMatchIndices.length > 0 ? 'Moslashtirish bloki yangilandi' : '3 ta moslashtirish savoli (33–35) qo‘shildi');
+
+      resetQuestionForm(updatedQuestions);
+      return;
+    }
+
+    const newQuestion = effectiveType === 'input'
       ? {
           id: editingQuestionIdx !== null ? activeVariant.questions[editingQuestionIdx]?.id || Date.now() : Date.now(),
           type: 'input',
@@ -281,6 +385,7 @@ export default function TestsPage({ user }) {
       return;
     }
 
+    let nextQsSnapshot = [];
     updateSubjectBundle((sub) => {
       const list = [...(sub[selectedMode] || [])];
       const idx = list.findIndex(v => v.id === activeVariant.id);
@@ -291,12 +396,13 @@ export default function TestsPage({ user }) {
         } else {
           nextQs.push(newQuestion);
         }
+        nextQsSnapshot = nextQs;
         list[idx] = { ...list[idx], questions: nextQs };
       }
       return { ...sub, [selectedMode]: list };
     }, editingQuestionIdx !== null ? 'Savol yangilandi' : 'Yangi savol qo‘shildi');
 
-    resetQuestionForm();
+    resetQuestionForm(nextQsSnapshot);
   };
 
   const handleDeleteQuestion = (qIdx) => {
@@ -316,6 +422,10 @@ export default function TestsPage({ user }) {
   // ── VIEW B: QUESTIONS EDITOR FOR A VARIANT ──
   if (activeVariant) {
     const questions = activeVariant.questions || [];
+    const choiceCount = questions.filter(q => q.type !== 'matching' && q.type !== 'input').length;
+    const matchingCount = questions.filter(q => q.type === 'matching').length;
+    const inputCount = questions.filter(q => q.type === 'input').length;
+
     return (
       <div className="space-y-6 pb-24 text-white">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -337,16 +447,39 @@ export default function TestsPage({ user }) {
           )}
         </div>
 
-        <div className="bg-[#1C1C1E] border border-white/10 rounded-3xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-400 bg-amber-500/15 border border-amber-500/30 px-2.5 py-0.5 rounded-full">
-              {modeConfig.title} • {currentRow?.name || selectedSubjectKey}
-            </span>
-            <h2 className="text-lg font-extrabold text-white mt-2">{activeVariant.title}</h2>
-            <p className="text-xs text-[#8E8E93] mt-0.5">
-              Jami kiritilgan savollar: <strong className="text-white">{questions.length} ta</strong> • Vaqt: {formatDurationLabel(activeVariant.durationMinutes)} • Maksimal: {activeVariant.maxScore} ball
-            </p>
+        <div className="bg-[#1C1C1E] border border-white/10 rounded-3xl p-5 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-400 bg-amber-500/15 border border-amber-500/30 px-2.5 py-0.5 rounded-full">
+                {modeConfig.title} • {currentRow?.name || selectedSubjectKey}
+              </span>
+              <h2 className="text-lg font-extrabold text-white mt-2">{activeVariant.title}</h2>
+              <p className="text-xs text-[#8E8E93] mt-0.5">
+                Jami kiritilgan savollar: <strong className="text-white">{questions.length} ta</strong> • Vaqt: {formatDurationLabel(activeVariant.durationMinutes)} • Maksimal: {activeVariant.maxScore} ball
+              </p>
+            </div>
           </div>
+
+          {selectedMode === 'dtm' ? (
+            <div className="bg-blue-500/10 border border-blue-500/25 rounded-2xl px-3.5 py-2.5 text-xs text-blue-300 font-semibold">
+              DTM Standarti: Faqat test savollari (A / B / C / D). Yozma va moslashtirish savollari ishlatilmaydi.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-xs">
+              <div className="bg-[#242426] border border-white/5 rounded-2xl px-3.5 py-2.5 flex items-center justify-between">
+                <span className="text-[#8E8E93]">1–32: Test (A–D)</span>
+                <span className="font-bold text-blue-400">{choiceCount} / 32</span>
+              </div>
+              <div className="bg-[#242426] border border-white/5 rounded-2xl px-3.5 py-2.5 flex items-center justify-between">
+                <span className="text-[#8E8E93]">33–35: Moslashtirish (6→3)</span>
+                <span className="font-bold text-amber-400">{matchingCount} / 3</span>
+              </div>
+              <div className="bg-[#242426] border border-white/5 rounded-2xl px-3.5 py-2.5 flex items-center justify-between">
+                <span className="text-[#8E8E93]">36–40: Yozma javob</span>
+                <span className="font-bold text-purple-400">{inputCount} / 5</span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Add / Edit Question Form */}
@@ -354,12 +487,18 @@ export default function TestsPage({ user }) {
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-white flex items-center gap-2">
               <Plus className="w-4 h-4 text-[#007AFF]" />
-              <span>{editingQuestionIdx !== null ? `${editingQuestionIdx + 1}-savolni tahrirlash` : 'Yangi savol qo‘shish'}</span>
+              <span>
+                {editingMatchIndices.length > 0
+                  ? `${editingMatchIndices[0] + 1}–${editingMatchIndices[editingMatchIndices.length - 1] + 1}-moslashtirish blokini tahrirlash`
+                  : editingQuestionIdx !== null
+                  ? `${editingQuestionIdx + 1}-savolni tahrirlash`
+                  : 'Yangi savol qo‘shish'}
+              </span>
             </h3>
-            {editingQuestionIdx !== null && (
+            {(editingQuestionIdx !== null || editingMatchIndices.length > 0) && (
               <button
                 type="button"
-                onClick={resetQuestionForm}
+                onClick={() => resetQuestionForm()}
                 className="text-xs font-semibold text-[#8E8E93] hover:text-white"
               >
                 Bekor qilish
@@ -367,34 +506,51 @@ export default function TestsPage({ user }) {
             )}
           </div>
 
-          {/* Question Type Toggle */}
-          <div className="flex gap-2">
-            {[
-              { id: 'choice', label: 'Test variantlari (A/B/C/D)' },
-              { id: 'input', label: 'Yozma / Sonli javob' }
-            ].map(tab => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setQType(tab.id)}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
-                  (tab.id === 'input' ? qType === 'input' : qType !== 'input')
-                    ? 'bg-[#007AFF] text-white'
-                    : 'bg-[#2C2C2E] text-[#8E8E93] hover:text-white'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
+          {/* Question Type Selector (Milliy Sertifikat has 3 sections; DTM is Choice only) */}
+          {selectedMode !== 'dtm' && (
+            <div className="flex flex-wrap gap-2">
+              {[
+                { id: 'choice', label: '1–32: Test (A/B/C/D)' },
+                { id: 'matching_group', label: '33–35: Moslashtirish (6 dan 3)' },
+                { id: 'input', label: '36–40: Yozma javob' }
+              ].map(tab => {
+                const isSelectedTab = tab.id === 'choice'
+                  ? (qType === 'choice' || qType === 'image')
+                  : qType === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    data-testid={`admin-qtype-${tab.id}`}
+                    onClick={() => setQType(tab.id)}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      isSelectedTab
+                        ? 'bg-[#007AFF] text-white'
+                        : 'bg-[#2C2C2E] text-[#8E8E93] hover:text-white'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           <div>
-            <label className="block text-[11px] font-bold text-[#8E8E93] uppercase mb-1.5">Savol matni *</label>
+            <label className="block text-[11px] font-bold text-[#8E8E93] uppercase mb-1.5">
+              {selectedMode !== 'dtm' && qType === 'matching_group'
+                ? 'Umumiy savol matni (33–35 uchun bitta shart) *'
+                : 'Savol matni *'}
+            </label>
             <textarea
               rows={2}
               value={qText}
               onChange={(e) => setQText(e.target.value)}
-              placeholder="Savol matnini kiriting..."
+              placeholder={
+                selectedMode !== 'dtm' && qType === 'matching_group'
+                  ? "Masalan: Quyidagi tushunchalar va ularning ta'riflarini moslashtiring:"
+                  : 'Savol matnini kiriting...'
+              }
               className="input-field resize-none"
               required
             />
@@ -436,14 +592,87 @@ export default function TestsPage({ user }) {
             )}
           </div>
 
-          {qType === 'input' ? (
+          {selectedMode !== 'dtm' && qType === 'matching_group' ? (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="block text-[11px] font-bold text-[#8E8E93] uppercase">
+                  6 ta mavjud javob varianti (A–F) *
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {['A', 'B', 'C', 'D', 'E', 'F'].map((letter, idx) => (
+                    <div key={letter} className="flex items-center gap-2">
+                      <span className="w-8 h-9 rounded-xl bg-[#2C2C2E] border border-white/10 text-xs font-extrabold text-amber-300 flex items-center justify-center shrink-0">
+                        {letter}
+                      </span>
+                      <input
+                        type="text"
+                        value={qMatchOptions[idx] || ''}
+                        onChange={(e) => {
+                          const next = [...qMatchOptions];
+                          next[idx] = e.target.value;
+                          setQMatchOptions(next);
+                        }}
+                        placeholder={`${letter} varianti...`}
+                        className="input-field flex-1 py-2 text-xs"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2.5">
+                <label className="block text-[11px] font-bold text-[#8E8E93] uppercase">
+                  So‘raladigan 3 ta band (har biri uchun A–F dan to‘g‘ri javobni belgilang) *
+                </label>
+                {qMatchItems.map((item, itemIdx) => (
+                  <div key={itemIdx} className="bg-[#242426] border border-white/10 rounded-2xl p-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-extrabold text-blue-400 shrink-0">
+                        #{itemIdx + 1}
+                      </span>
+                      <input
+                        type="text"
+                        value={item.text}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setQMatchItems(prev => prev.map((it, i) => (i === itemIdx ? { ...it, text: val } : it)));
+                        }}
+                        placeholder={`${itemIdx + 1}-band matni...`}
+                        className="input-field flex-1 py-2 text-xs"
+                      />
+                    </div>
+                    <div className="grid grid-cols-6 gap-1.5">
+                      {['A', 'B', 'C', 'D', 'E', 'F'].map((letter, optIdx) => (
+                        <button
+                          key={letter}
+                          type="button"
+                          onClick={() =>
+                            setQMatchItems(prev => prev.map((it, i) => (i === itemIdx ? { ...it, correctIndex: optIdx } : it)))
+                          }
+                          className={`py-1.5 rounded-xl text-xs font-extrabold border transition-all cursor-pointer ${
+                            item.correctIndex === optIdx
+                              ? 'bg-emerald-500 border-emerald-400 text-black'
+                              : 'bg-[#1C1C1E] border-white/10 text-[#8E8E93] hover:text-white'
+                          }`}
+                        >
+                          {letter}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : selectedMode !== 'dtm' && qType === 'input' ? (
             <div>
-              <label className="block text-[11px] font-bold text-[#8E8E93] uppercase mb-1.5">To‘g‘ri javob *</label>
+              <label className="block text-[11px] font-bold text-[#8E8E93] uppercase mb-1.5">
+                To‘g‘ri javob (sonli javoblar faqat aniq mos kelsagina qabul qilinadi) *
+              </label>
               <input
                 type="text"
                 value={qCorrectAnswer}
                 onChange={(e) => setQCorrectAnswer(e.target.value)}
-                placeholder="Masalan: 46 yoki Krossingover"
+                placeholder="Masalan: 2500 yoki Krossingover"
                 className="input-field"
                 required
               />
@@ -498,7 +727,15 @@ export default function TestsPage({ user }) {
             className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-[#007AFF] hover:bg-blue-600 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25 active:scale-95 transition-all"
           >
             <Save className="w-4 h-4" />
-            <span>{editingQuestionIdx !== null ? 'Savolni yangilash' : 'Savolni saqlash'}</span>
+            <span>
+              {editingMatchIndices.length > 0
+                ? 'Moslashtirish blokini yangilash'
+                : editingQuestionIdx !== null
+                ? 'Savolni yangilash'
+                : selectedMode !== 'dtm' && qType === 'matching_group'
+                ? '3 ta moslashtirish savolini saqlash'
+                : 'Savolni saqlash'}
+            </span>
           </button>
         </form>
 
@@ -517,9 +754,16 @@ export default function TestsPage({ user }) {
                       {idx + 1}-Savol
                     </span>
                     <span className="text-[10px] text-[#8E8E93] uppercase font-bold">
-                      {q.type === 'input' ? 'Yozma' : 'Test A/B/C/D'}
+                      {q.type === 'matching'
+                        ? 'Moslashtirish (A–F)'
+                        : q.type === 'input'
+                        ? 'Yozma javob'
+                        : 'Test A/B/C/D'}
                     </span>
                   </div>
+                  {q.groupPrompt && (
+                    <p className="text-xs text-[#8E8E93] italic leading-snug">{q.groupPrompt}</p>
+                  )}
                   <p className="text-sm font-bold text-white leading-snug">{q.text}</p>
                   {q.type === 'input' ? (
                     <div className="text-xs text-emerald-400 font-semibold">
@@ -536,7 +780,7 @@ export default function TestsPage({ user }) {
                               : 'bg-[#242426] border-white/5 text-[#8E8E93]'
                           }`}
                         >
-                          {['A', 'B', 'C', 'D'][oIdx]}. {opt}
+                          {['A', 'B', 'C', 'D', 'E', 'F'][oIdx] || oIdx + 1}. {opt}
                         </div>
                       ))}
                     </div>

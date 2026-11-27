@@ -120,9 +120,10 @@ export const DEFAULT_EXAM_PORTAL_DATA = {
             },
             {
               id: 3,
-              type: 'input',
-              text: "Odam tana hujayrasidagi (somatik) xromosomalar sonini yozing:",
-              correctAnswer: "46",
+              type: 'choice',
+              text: "Odam tana hujayrasidagi (somatik) xromosomalar soni nechta?",
+              options: ["23 ta", "44 ta", "46 ta", "48 ta"],
+              correctIndex: 2,
               textbookRef: "9-sinf Biologiya, 4-bob, §15, 62-bet"
             },
             {
@@ -165,9 +166,10 @@ export const DEFAULT_EXAM_PORTAL_DATA = {
             },
             {
               id: 2,
-              type: 'input',
+              type: 'choice',
               text: "DNK fragmentidagi adenin (A) soni 300 ta bo'lsa, timin (T) soni nechta bo'ladi?",
-              correctAnswer: "300",
+              options: ["150 ta", "300 ta", "600 ta", "900 ta"],
+              correctIndex: 1,
               textbookRef: "9-sinf Biologiya, Nuklein kislotalar, §10, 42-bet"
             },
             {
@@ -202,9 +204,10 @@ export const DEFAULT_EXAM_PORTAL_DATA = {
             },
             {
               id: 2,
-              type: 'input',
+              type: 'choice',
               text: "Gomologik xromosomalarning o'zaro qismlari bilan almashinish jarayoni nima deb ataladi?",
-              correctAnswer: "Krossingover",
+              options: ["Kon'yugatsiya", "Krossingover", "Mutatsiya", "Transduksiya"],
+              correctIndex: 1,
               textbookRef: "10-sinf Biologiya, Meyoz va irsiyat, §16, 68-bet"
             }
           ]
@@ -221,7 +224,7 @@ export const DEFAULT_EXAM_PORTAL_DATA = {
           maxScore: 75,
           difficulty: "Yuqori",
           difficultyColor: "text-amber-400 bg-amber-400/10 border-amber-400/20",
-          description: "Rasmiy Milliy sertifikat standarti bo'yicha nazariy savollar, moslashtirish va genetik masalalar.",
+          description: "Rasmiy Milliy sertifikat standarti bo'yicha 1-32 test, 33-35 moslashtirish (6 dan 3) va 36-40 yozma masalalar.",
           questions: [
             {
               id: 1,
@@ -233,18 +236,69 @@ export const DEFAULT_EXAM_PORTAL_DATA = {
             },
             {
               id: 2,
-              type: 'input',
-              text: "Tinch holatda odamda 1 minutda yurak o'rtacha necha marta uradi (puls normasi)?",
-              correctAnswer: "70",
-              textbookRef: "8-sinf Fiziologiya, Qon aylanish, §23, 90-bet"
-            },
-            {
-              id: 3,
               type: 'choice',
               text: "Fotosintezning qorong'ulik bosqichida qaysi biokimyoviy sikl amalga oshadi?",
               options: ["Krebs sikli", "Kalvin sikli", "Glikoliz", "Kori sikli"],
               correctIndex: 1,
               textbookRef: "10-sinf Biologiya, Plastik almashinuv, §8, 33-bet"
+            },
+            {
+              id: 3,
+              type: 'matching',
+              groupId: 'bio-cert-1-m1',
+              groupPrompt: "Quyidagi hujayra organoidlari (1-3) va ularning asosiy vazifalarini (A-F) moslashtiring:",
+              options: [
+                "ATF sintezi (energiya ishlab chiqarish)",
+                "Oqsil biosintezi",
+                "Fotosintez jarayoni",
+                "Hujayra bo'linishida urchuq iplarini hosil qilish",
+                "Organik moddalarni parchalash (ovqat hazm qilish)",
+                "Genetik axborotni saqlash"
+              ],
+              text: "Mitoxondriya",
+              correctIndex: 0,
+              textbookRef: "9-sinf Biologiya, Hujayra organoidlari, §9, 36-bet"
+            },
+            {
+              id: 4,
+              type: 'matching',
+              groupId: 'bio-cert-1-m1',
+              groupPrompt: "Quyidagi hujayra organoidlari (1-3) va ularning asosiy vazifalarini (A-F) moslashtiring:",
+              options: [
+                "ATF sintezi (energiya ishlab chiqarish)",
+                "Oqsil biosintezi",
+                "Fotosintez jarayoni",
+                "Hujayra bo'linishida urchuq iplarini hosil qilish",
+                "Organik moddalarni parchalash (ovqat hazm qilish)",
+                "Genetik axborotni saqlash"
+              ],
+              text: "Ribosoma",
+              correctIndex: 1,
+              textbookRef: "9-sinf Biologiya, Hujayra organoidlari, §9, 37-bet"
+            },
+            {
+              id: 5,
+              type: 'matching',
+              groupId: 'bio-cert-1-m1',
+              groupPrompt: "Quyidagi hujayra organoidlari (1-3) va ularning asosiy vazifalarini (A-F) moslashtiring:",
+              options: [
+                "ATF sintezi (energiya ishlab chiqarish)",
+                "Oqsil biosintezi",
+                "Fotosintez jarayoni",
+                "Hujayra bo'linishida urchuq iplarini hosil qilish",
+                "Organik moddalarni parchalash (ovqat hazm qilish)",
+                "Genetik axborotni saqlash"
+              ],
+              text: "Lizosoma",
+              correctIndex: 4,
+              textbookRef: "9-sinf Biologiya, Hujayra organoidlari, §9, 38-bet"
+            },
+            {
+              id: 6,
+              type: 'input',
+              text: "Tinch holatda odamda 1 minutda yurak o'rtacha necha marta uradi (puls normasi)?",
+              correctAnswer: "70",
+              textbookRef: "8-sinf Fiziologiya, Qon aylanish, §23, 90-bet"
             }
           ]
         },
@@ -309,9 +363,10 @@ export const DEFAULT_EXAM_PORTAL_DATA = {
             },
             {
               id: 2,
-              type: 'input',
+              type: 'choice',
               text: "Suv (H2O) molekulasining nisbiy molekulyar massasini (Mr) toping:",
-              correctAnswer: "18",
+              options: ["16", "18", "20", "32"],
+              correctIndex: 1,
               textbookRef: "7-sinf Kimyo, Molekulyar massa hisoblash, §12, 45-bet"
             },
             {
@@ -354,9 +409,10 @@ export const DEFAULT_EXAM_PORTAL_DATA = {
             },
             {
               id: 2,
-              type: 'input',
-              text: "Osh tuzi (NaCl) ning nisbiy molekulyar massasini butun son sifatida yozing (Na=23, Cl=35.5):",
-              correctAnswer: "58.5",
+              type: 'choice',
+              text: "Osh tuzi (NaCl) ning nisbiy molekulyar massasini aniqlang (Na=23, Cl=35.5):",
+              options: ["48.5", "55.5", "58.5", "60.5"],
+              correctIndex: 2,
               textbookRef: "7-sinf Kimyo, Kimyoviy formulalar, §14, 52-bet"
             }
           ]
@@ -424,9 +480,10 @@ export const DEFAULT_EXAM_PORTAL_DATA = {
             },
             {
               id: 2,
-              type: 'input',
+              type: 'choice',
               text: "To'g'ri burchakli uchburchakning katetlari 3 va 4 bo'lsa, gipotenuzasini toping:",
-              correctAnswer: "5",
+              options: ["4", "5", "6", "7"],
+              correctIndex: 1,
               textbookRef: "8-sinf Geometriya, Pifagor teoremasi, §18, 72-bet"
             },
             {
@@ -461,9 +518,10 @@ export const DEFAULT_EXAM_PORTAL_DATA = {
           questions: [
             {
               id: 1,
-              type: 'input',
+              type: 'choice',
               text: "log2(16) ifodaning qiymatini toping:",
-              correctAnswer: "4",
+              options: ["2", "3", "4", "8"],
+              correctIndex: 2,
               textbookRef: "10-sinf Algebra, Logarifm tushunchasi va xossalari, §22, 92-bet"
             }
           ]

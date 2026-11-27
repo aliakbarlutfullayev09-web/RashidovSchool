@@ -54,10 +54,10 @@ export function formatOptionText(q, answerValue, lang = 'uz') {
   if (answerValue === undefined || answerValue === null) {
     return lang === 'ru' ? 'Не отвечено' : 'Javob berilmagan';
   }
-  const letters = ['A', 'B', 'C', 'D'];
+  const letters = ['A', 'B', 'C', 'D', 'E', 'F'];
   const letter = letters[answerValue] || String(Number(answerValue) + 1);
   const optText = q?.options?.[answerValue] ?? '';
-  return `${letter}) ${optText}`;
+  return optText ? `${letter}) ${optText}` : letter;
 }
 
 export default function ExamMistakeReview({ questions = [], userAnswers = {}, isLight = false, lang = 'uz' }) {
@@ -210,6 +210,13 @@ export default function ExamMistakeReview({ questions = [], userAnswers = {}, is
                     )}
                   </span>
                 </div>
+
+                {/* Shared Matching Prompt (if present) */}
+                {q.groupPrompt && (
+                  <p className={`text-[11px] leading-snug italic ${isLight ? 'text-gray-500' : 'text-[#8E8E93]'}`}>
+                    {q.groupPrompt}
+                  </p>
+                )}
 
                 {/* Question Text */}
                 <p className={`text-xs sm:text-sm font-semibold leading-snug ${isLight ? 'text-[#1C1C1E]' : 'text-white/95'}`}>

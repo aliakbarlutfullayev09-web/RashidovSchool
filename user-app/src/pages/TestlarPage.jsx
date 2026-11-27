@@ -404,6 +404,235 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
       userAnswersRef.current = next;
       return next;
     });
+    setVisitedQuestions(prev => {
+      if (prev.has(qIndex)) return prev;
+      const next = new Set(prev);
+      next.add(qIndex);
+      return next;
+    });
+  };
+
+  const renderExamQuestionBody = (q, qIndex, compact = false) => {
+    if (!q) return null;
+
+    if (q.type === 'matching') {
+      const groupItems = q.groupId
+        ? activeQuestions
+            .map((item, idx) => ({ q: item, idx }))
+            .filter(({ q: item }) => item?.type === 'matching' && item?.groupId === q.groupId)
+        : [{ q, idx: qIndex }];
+
+      const sharedPrompt = q.groupPrompt || groupItems[0]?.q?.groupPrompt || '';
+      const sharedImage = q.groupImageUrl || q.imageUrl;
+      const sharedOptions = Array.isArray(q.options) && q.options.length > 0
+        ? q.options
+        : (groupItems[0]?.q?.options || []);
+      const letters = ['A', 'B', 'C', 'D', 'E', 'F'];
+
+      return (
+        <div className="space-y-4">
+          {sharedImage && (
+            <div className={`w-full max-h-60 rounded-2xl overflow-hidden border flex items-center justify-center p-2 ${
+              isLight ? 'bg-gray-100 border-black/10' : 'bg-[#2C2C2E] border-white/10'
+            }`}>
+              <img
+                src={sharedImage}
+                alt={lang === 'ru' ? 'Иллюстрация' : 'Savol rasmi'}
+                className="max-h-56 max-w-full object-contain rounded-xl"
+              />
+            </div>
+          )}
+
+          {sharedPrompt && (
+            <h3 className={`font-bold leading-relaxed ${compact ? 'text-sm sm:text-base' : 'text-base sm:text-lg'} ${
+              isLight ? 'text-[#1C1C1E]' : 'text-white'
+            }`}>
+              {sharedPrompt}
+            </h3>
+          )}
+
+          {/* 6 Shared Available Variants (A..F) */}
+          <div className={`rounded-2xl border p-3.5 space-y-2 ${
+            isLight ? 'bg-[#F2F2F7] border-black/[0.08]' : 'bg-[#242426] border-white/[0.08]'
+          }`}>
+            <span className={`text-[10px] font-bold uppercase tracking-wider block ${
+              isLight ? 'text-gray-500' : 'text-[#8E8E93]'
+            }`}>
+              {lang === 'ru' ? 'Доступные варианты (A–F):' : 'Mavjud variantlar (A–F):'}
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {sharedOptions.map((opt, oIdx) => (
+                <div
+                  key={oIdx}
+                  className={`flex items-start gap-2.5 p-2 rounded-xl border text-xs ${
+                    isLight
+                      ? 'bg-white border-black/[0.06] text-[#1C1C1E]'
+                      : 'bg-[#1C1C1E] border-white/[0.06] text-white/90'
+                  }`}
+                >
+                  <span className="w-6 h-6 rounded-lg bg-[#007AFF]/15 text-[#007AFF] font-extrabold text-[11px] flex items-center justify-center shrink-0">
+                    {letters[oIdx] || oIdx + 1}
+                  </span>
+                  <span className="leading-snug pt-0.5">{opt}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 3 Items Requested From the 6 Variants */}
+          <div className="space-y-3" data-testid="matching-group-items">
+            {groupItems.map((item) => {
+              const isFocused = item.idx === qIndex;
+              const selectedVal = userAnswers[item.idx];
+
+              return (
+                <div
+                  key={item.idx}
+                  data-testid={`matching-item-${item.idx + 1}`}
+                  onClick={() => setCurrentQIndex(item.idx)}
+                  className={`p-3.5 rounded-2xl border transition-all space-y-2.5 ${
+                    isFocused
+                      ? isLight
+                        ? 'bg-blue-50/70 border-[#007AFF]/60'
+                        : 'bg-[#007AFF]/10 border-[#007AFF]/50'
+                      : isLight
+                      ? 'bg-[#F8F8FA] border-black/[0.08]'
+                      : 'bg-[#2C2C2E]/70 border-white/[0.08]'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <span className={`text-xs sm:text-sm font-bold leading-snug ${
+                      isLight ? 'text-[#1C1C1E]' : 'text-white'
+                    }`}>
+                      {item.idx + 1}. {item.q.text}
+                    </span>
+                    {selectedVal !== undefined && selectedVal !== null && (
+                      <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-500 text-[11px] font-extrabold shrink-0">
+                        {letters[selectedVal] || selectedVal + 1}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-6 gap-1.5">
+                    {sharedOptions.map((_, oIdx) => {
+                      const active = selectedVal === oIdx;
+                      return (
+                        <button
+                          key={oIdx}
+                          type="button"
+                          data-testid={`matching-choice-${item.idx + 1}-${letters[oIdx]}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCurrentQIndex(item.idx);
+                            handleSelectAnswer(item.idx, oIdx);
+                          }}
+                          className={`py-2 rounded-xl font-extrabold text-xs transition-all active:scale-95 border cursor-pointer ${
+                            active
+                              ? 'bg-[#007AFF] border-[#007AFF] text-white shadow-sm'
+                              : isLight
+                              ? 'bg-white border-black/10 text-[#1C1C1E] hover:border-[#007AFF]/50'
+                              : 'bg-[#1C1C1E] border-white/10 text-white/80 hover:border-white/30'
+                          }`}
+                        >
+                          {letters[oIdx] || oIdx + 1}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <>
+        {q.imageUrl && (
+          <div className={`w-full max-h-60 rounded-2xl overflow-hidden border mb-4 flex items-center justify-center p-2 ${
+            isLight ? 'bg-gray-100 border-black/10' : 'bg-[#2C2C2E] border-white/10'
+          }`}>
+            <img
+              src={q.imageUrl}
+              alt={lang === 'ru' ? 'Иллюстрация к вопросу' : 'Savol rasmi'}
+              className="max-h-56 max-w-full object-contain rounded-xl"
+            />
+          </div>
+        )}
+
+        <h3 className={`font-bold ${compact ? 'text-base' : 'text-lg'} leading-relaxed mb-4 ${
+          isLight ? 'text-[#1C1C1E]' : 'text-white'
+        }`}>
+          {q.text}
+        </h3>
+
+        {q.type === 'input' ? (
+          <div className="pt-2">
+            <label className={`text-xs font-medium block mb-2 ${isLight ? 'text-gray-600' : 'text-[#8E8E93]'}`}>
+              {lang === 'ru' ? 'Введите точный ответ:' : 'Aniq javobni kiriting:'}
+            </label>
+            <input
+              type="text"
+              data-testid="exam-input-answer"
+              value={userAnswers[qIndex] || ''}
+              onChange={(e) => handleSelectAnswer(qIndex, e.target.value)}
+              placeholder={lang === 'ru' ? 'Введите ответ...' : 'Javobni kiriting...'}
+              className={`w-full border rounded-2xl p-4 text-base font-bold outline-none transition-colors ${
+                isLight
+                  ? 'bg-[#F2F2F7] border-black/10 text-[#1C1C1E] focus:border-[#007AFF]'
+                  : 'bg-[#2C2C2E] border-white/10 text-white focus:border-[#007AFF]'
+              }`}
+            />
+          </div>
+        ) : (
+          <div className="space-y-2.5 pt-1">
+            {(q.options || []).map((opt, oIdx) => {
+              const isSelected = userAnswers[qIndex] === oIdx;
+              const letter = ['A', 'B', 'C', 'D'][oIdx] || String(oIdx + 1);
+
+              return (
+                <button
+                  key={oIdx}
+                  type="button"
+                  onClick={() => handleSelectAnswer(qIndex, oIdx)}
+                  className={`w-full p-3.5 rounded-2xl border text-left text-sm font-semibold flex items-center justify-between transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF] ${
+                    isSelected
+                      ? isLight
+                        ? 'bg-blue-50 border-[#007AFF] text-blue-950 shadow-sm'
+                        : 'bg-[#007AFF]/15 border-[#007AFF] text-white'
+                      : isLight
+                      ? 'bg-[#F2F2F7] hover:bg-gray-200/80 border-black/[0.06] text-[#1C1C1E]'
+                      : 'bg-[#2C2C2E] hover:bg-[#3A3A3C] border-white/[0.06] text-white/90'
+                  }`}
+                >
+                  <div className="flex items-center gap-3.5 min-w-0 pr-3">
+                    <span className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 transition-colors ${
+                      isSelected
+                        ? 'bg-[#007AFF] text-white font-black'
+                        : isLight
+                        ? 'bg-white text-gray-700 border border-black/10'
+                        : 'bg-[#1C1C1E] text-white/80 border border-white/10'
+                    }`}>
+                      {letter}
+                    </span>
+                    <span className="leading-snug">{opt}</span>
+                  </div>
+
+                  <div className={`w-6 h-6 rounded-full border flex items-center justify-center shrink-0 transition-all ${
+                    isSelected
+                      ? 'border-[#007AFF] bg-[#007AFF] text-white'
+                      : isLight ? 'border-black/20' : 'border-white/20'
+                  }`}>
+                    {isSelected && <Check className="w-4 h-4 stroke-[3]" />}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </>
+    );
   };
 
   // Results Calculation
@@ -537,92 +766,24 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
                   <span className={`font-extrabold text-base ${isLight ? 'text-[#1C1C1E]' : 'text-white'}`}>
                     {lang === 'ru' ? `Вопрос ${currentQIndex + 1}` : `${currentQIndex + 1}-Savol`}
                   </span>
+                  {selectedMode === 'sertifikat' && (
+                    <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                      currentQ?.type === 'matching'
+                        ? 'bg-amber-500/15 text-amber-500'
+                        : currentQ?.type === 'input'
+                        ? 'bg-purple-500/15 text-purple-400'
+                        : 'bg-blue-500/15 text-blue-500'
+                    }`}>
+                      {currentQ?.type === 'matching'
+                        ? (lang === 'ru' ? 'Соответствие (3 из 6)' : 'Moslashtirish (6 dan 3)')
+                        : currentQ?.type === 'input'
+                        ? (lang === 'ru' ? 'Письменный ответ' : 'Yozma javob')
+                        : (lang === 'ru' ? 'Тест (A–D)' : 'Test (A–D)')}
+                    </span>
+                  )}
                 </div>
 
-                {/* Optional Illustration centered */}
-                {currentQ?.imageUrl && (
-                  <div className={`w-full max-h-60 rounded-2xl overflow-hidden border mb-4 flex items-center justify-center p-2 ${
-                    isLight ? 'bg-gray-100 border-black/10' : 'bg-[#2C2C2E] border-white/10'
-                  }`}>
-                    <img 
-                      src={currentQ.imageUrl} 
-                      alt={lang === 'ru' ? 'Иллюстрация к вопросу' : 'Savol rasmi'} 
-                      className="max-h-56 max-w-full object-contain rounded-xl" 
-                    />
-                  </div>
-                )}
-
-                {/* Question Text */}
-                <h3 className={`font-bold text-lg leading-relaxed mb-4 ${
-                  isLight ? 'text-[#1C1C1E]' : 'text-white'
-                }`}>
-                  {currentQ?.text}
-                </h3>
-
-                {/* Options List in Single Column */}
-                {currentQ?.type === 'input' ? (
-                  <div className="pt-2">
-                    <label className={`text-xs font-medium block mb-2 ${isLight ? 'text-gray-600' : 'text-[#8E8E93]'}`}>
-                      {lang === 'ru' ? 'Введите ваш ответ:' : 'Javobingizni yozing:'}
-                    </label>
-                    <input
-                      type="text"
-                      value={userAnswers[currentQIndex] || ''}
-                      onChange={(e) => handleSelectAnswer(currentQIndex, e.target.value)}
-                      placeholder={lang === 'ru' ? 'Введите ответ...' : 'Javobni kiriting...'}
-                      className={`w-full border rounded-2xl p-4 text-base font-bold outline-none transition-colors ${
-                        isLight
-                          ? 'bg-[#F2F2F7] border-black/10 text-[#1C1C1E] focus:border-[#007AFF]'
-                          : 'bg-[#2C2C2E] border-white/10 text-white focus:border-[#007AFF]'
-                      }`}
-                    />
-                  </div>
-                ) : (
-                  <div className="space-y-2.5 pt-1">
-                    {(currentQ?.options || []).map((opt, oIdx) => {
-                      const isSelected = userAnswers[currentQIndex] === oIdx;
-                      const letter = ['A', 'B', 'C', 'D'][oIdx] || String(oIdx + 1);
-
-                      return (
-                        <button
-                          key={oIdx}
-                          type="button"
-                          onClick={() => handleSelectAnswer(currentQIndex, oIdx)}
-                          className={`w-full p-3.5 rounded-2xl border text-left text-sm font-semibold flex items-center justify-between transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF] ${
-                            isSelected
-                              ? isLight
-                                ? 'bg-blue-50 border-[#007AFF] text-blue-950 shadow-sm'
-                                : 'bg-[#007AFF]/15 border-[#007AFF] text-white'
-                              : isLight
-                              ? 'bg-[#F2F2F7] hover:bg-gray-200/80 border-black/[0.06] text-[#1C1C1E]'
-                              : 'bg-[#2C2C2E] hover:bg-[#3A3A3C] border-white/[0.06] text-white/90'
-                          }`}
-                        >
-                          <div className="flex items-center gap-3.5 min-w-0 pr-3">
-                            <span className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 transition-colors ${
-                              isSelected
-                                ? 'bg-[#007AFF] text-white font-black'
-                                : isLight
-                                ? 'bg-white text-gray-700 border border-black/10'
-                                : 'bg-[#1C1C1E] text-white/80 border border-white/10'
-                            }`}>
-                              {letter}
-                            </span>
-                            <span className="leading-snug">{opt}</span>
-                          </div>
-
-                          <div className={`w-6 h-6 rounded-full border flex items-center justify-center shrink-0 transition-all ${
-                            isSelected
-                              ? 'border-[#007AFF] bg-[#007AFF] text-white'
-                              : isLight ? 'border-black/20' : 'border-white/20'
-                          }`}>
-                            {isSelected && <Check className="w-4 h-4 stroke-[3]" />}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+                {renderExamQuestionBody(currentQ, currentQIndex, false)}
               </div>
 
               {/* Pinned Bottom Actions Bar */}
@@ -688,14 +849,15 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
                   isLight ? 'border-black/10' : 'border-white/[0.06]'
                 }`}>
                   <span className={`text-[11px] font-mono ${isLight ? 'text-gray-500' : 'text-[#8E8E93]'}`}>
-                    {Object.keys(userAnswers).length} / {activeQuestions.length}
+                    {Object.values(userAnswers).filter(v => v !== undefined && v !== null && v !== '').length} / {activeQuestions.length}
                   </span>
                 </div>
 
                 {/* 5-Column Question Grid (padded inner box prevents corner highlight clipping) */}
                 <div className="grid grid-cols-5 gap-2 max-h-[360px] overflow-y-auto no-scrollbar p-1">
                   {activeQuestions.map((_, idx) => {
-                    const isAnswered = userAnswers[idx] !== undefined;
+                    const ansVal = userAnswers[idx];
+                    const isAnswered = ansVal !== undefined && ansVal !== null && ansVal !== '';
                     const isCurrent = idx === currentQIndex;
                     const isVisited = visitedQuestions.has(idx);
                     const isSkipped = isVisited && !isAnswered && !isCurrent;
@@ -830,7 +992,8 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
         {/* Question Grid Navigator */}
         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-2 px-1 mb-4">
           {activeQuestions.map((_, idx) => {
-            const isAnswered = userAnswers[idx] !== undefined;
+            const ansVal = userAnswers[idx];
+            const isAnswered = ansVal !== undefined && ansVal !== null && ansVal !== '';
             const isCurrent = idx === currentQIndex;
             return (
               <button
@@ -864,65 +1027,24 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
                 ? `Вопрос ${currentQIndex + 1}`
                 : `${currentQIndex + 1}-Savol`}
             </span>
+            {selectedMode === 'sertifikat' && (
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                currentQ?.type === 'matching'
+                  ? 'bg-amber-500/15 text-amber-500'
+                  : currentQ?.type === 'input'
+                  ? 'bg-purple-500/15 text-purple-400'
+                  : 'bg-blue-500/15 text-blue-500'
+              }`}>
+                {currentQ?.type === 'matching'
+                  ? (lang === 'ru' ? '3 из 6' : '6 dan 3')
+                  : currentQ?.type === 'input'
+                  ? (lang === 'ru' ? 'Ответ' : 'Yozma')
+                  : 'A–D'}
+              </span>
+            )}
           </div>
 
-          {currentQ?.imageUrl && (
-            <div className={`w-full aspect-video rounded-2xl overflow-hidden border ${
-              isLight ? 'bg-gray-100 border-black/10' : 'bg-black/40 border-white/5'
-            }`}>
-              <img src={currentQ.imageUrl} alt={lang === 'ru' ? 'Иллюстрация' : 'Savol rasmi'} className="w-full h-full object-cover" />
-            </div>
-          )}
-
-          <h3 className={`font-bold text-base leading-snug ${isLight ? 'text-[#1C1C1E]' : 'text-white'}`}>
-            {currentQ?.text}
-          </h3>
-
-          {/* Option UI: Choice vs Input */}
-          {currentQ?.type === 'input' ? (
-            <div className="pt-2">
-              <label className={`text-xs block mb-1 ${isLight ? 'text-gray-600' : 'text-[#8E8E93]'}`}>
-                {lang === 'ru' ? 'Введите ваш ответ:' : 'Javobingizni yozing:'}
-              </label>
-              <input
-                type="text"
-                value={userAnswers[currentQIndex] || ''}
-                onChange={(e) => handleSelectAnswer(currentQIndex, e.target.value)}
-                placeholder={lang === 'ru' ? 'Введите ответ...' : 'Javobni kiriting...'}
-                className={`w-full border rounded-2xl p-4 text-base font-bold outline-none focus:border-[#007AFF] ${
-                  isLight ? 'bg-[#F2F2F7] border-black/10 text-[#1C1C1E]' : 'bg-[#2C2C2E] border-white/10 text-white'
-                }`}
-              />
-            </div>
-          ) : (
-            <div className="space-y-2.5 pt-2">
-              {(currentQ?.options || []).map((opt, oIdx) => {
-                const isSelected = userAnswers[currentQIndex] === oIdx;
-                return (
-                  <button
-                    key={oIdx}
-                    onClick={() => handleSelectAnswer(currentQIndex, oIdx)}
-                    className={`w-full p-4 rounded-2xl border text-left text-xs font-semibold flex items-center justify-between transition-all active:scale-[0.99] ${
-                      isSelected
-                        ? 'bg-[#007AFF] border-blue-400 text-white shadow-lg shadow-blue-500/25'
-                        : isLight
-                        ? 'bg-[#F2F2F7] border-black/[0.06] text-[#1C1C1E] hover:bg-gray-200/80'
-                        : 'bg-[#2C2C2E] border-white/5 text-white/90 hover:bg-[#343438]'
-                    }`}
-                  >
-                    <span>{opt}</span>
-                    <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${
-                      isSelected
-                        ? 'border-white bg-white text-[#007AFF]'
-                        : isLight ? 'border-black/20' : 'border-white/20'
-                    }`}>
-                      {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          {renderExamQuestionBody(currentQ, currentQIndex, true)}
         </div>
 
         {/* Navigation Arrows */}

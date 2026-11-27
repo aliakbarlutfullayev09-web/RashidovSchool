@@ -3,7 +3,7 @@
  * Handles variations: o‘, o', o’, g‘, g', g’, sh, ch
  */
 export function normalizeUzbekText(text) {
-  if (!text) return '';
+  if (text === undefined || text === null) return '';
   return text
     .toString()
     .trim()
@@ -43,16 +43,41 @@ export function levenshteinDistance(a, b) {
   return matrix[bn][an];
 }
 
+const PURE_NUMBER_RE = /^-?\d+(?:[.,]\d+)?$/;
+const PURE_LETTERS_RE = /^[a-zа-яёўқғҳ'\s]+$/i;
+
 /**
- * Checks if input matches target with 1-character typo tolerance
+ * Checks if student input matches the target answer.
+ * - Numbers, answers containing any digit, or formulas/symbols require STRICT exact match
+ *   (e.g. target "2500" rejects "250ф", "250", "2501"; decimal "." and "," are equivalent for pure numbers).
+ * - Only long pure-word text answers (>= 6 letters, no digits) allow 1-character typo tolerance.
  */
 export function isUzbekMatch(input, target) {
   const normInput = normalizeUzbekText(input);
   const normTarget = normalizeUzbekText(target);
 
+  if (!normInput || !normTarget) return false;
   if (normInput === normTarget) return true;
-  // If target is very short (<= 3 chars), allow exact match only
-  if (normTarget.length <= 3) return normInput === normTarget;
-  // Levenshtein distance <= 1 allowed for longer words
+
+  // Allow decimal comma/dot equivalence ONLY if both sides are strictly valid numbers
+  if (PURE_NUMBER_RE.test(normTarget)) {
+    if (!PURE_NUMBER_RE.test(normInput)) return false;
+    return normInput.replace(',', '.') === normTarget.replace(',', '.');
+  }
+
+  // Reject any fuzzy matching if either side contains digits or non-letter symbols (e.g. 2500 vs 250ф)
+  if (/\d/.test(normTarget) || /\d/.test(normInput)) {
+    return false;
+  }
+  if (!PURE_LETTERS_RE.test(normTarget) || !PURE_LETTERS_RE.test(normInput)) {
+    return false;
+  }
+
+  // Short words require exact match
+  if (normTarget.length < 6) {
+    return false;
+  }
+
+  // Gentle 1-character typo tolerance only for long alphabetic words
   return levenshteinDistance(normInput, normTarget) <= 1;
 }
