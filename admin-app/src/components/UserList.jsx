@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api/supabase';
-import { Search, Gift, Send, Users, User, Flame, X } from 'lucide-react';
+import { Search, Gift, Send, Users, User, Flame, X, ExternalLink, Copy, Check, Loader2 } from 'lucide-react';
 
 export default function UserList() {
   const [users, setUsers] = useState([]);
@@ -8,6 +8,10 @@ export default function UserList() {
   const [selectedUserForGift, setSelectedUserForGift] = useState(null);
   const [giftAmount, setGiftAmount] = useState('');
   const [loading, setLoading] = useState(false);
+  const [profileLoadingId, setProfileLoadingId] = useState(null);
+  const [tgProfiles, setTgProfiles] = useState({});
+  const [selectedUserForProfile, setSelectedUserForProfile] = useState(null);
+  const [copiedId, setCopiedId] = useState(false);
 
   useEffect(() => {
     loadUsers();
@@ -42,17 +46,48 @@ export default function UserList() {
     alert(`Muvaffaqiyatli! ${selectedUserForGift.full_name} balansiga ${amount > 0 ? '+' : ''}${amount} Neyron kiritildi.`);
   };
 
-  const getProfileHref = (student) => {
-    const uname = (student?.username || '').trim().replace(/^@/, '');
-    return uname ? `https://t.me/${uname}` : `tg://user?id=${student?.telegram_id}`;
+  const openTelegramUrl = (url) => {
+    if (url.startsWith('https://t.me/') && window.Telegram?.WebApp?.openTelegramLink) {
+      window.Telegram.WebApp.openTelegramLink(url);
+      return;
+    }
+    if (url.startsWith('tg://')) {
+      window.location.href = url;
+      return;
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
-  const handleOpenProfile = (e, student) => {
-    const uname = (student?.username || '').trim().replace(/^@/, '');
-    if (uname && window.Telegram?.WebApp?.openTelegramLink) {
-      e.preventDefault();
-      window.Telegram.WebApp.openTelegramLink(`https://t.me/${uname}`);
+  const handleOpenProfile = async (student) => {
+    if (!student) return;
+    const id = student.telegram_id;
+    const existingUsername = (student.username || tgProfiles[id]?.username || '').trim().replace(/^@/, '');
+    if (existingUsername) {
+      openTelegramUrl(`https://t.me/${existingUsername}`);
+      return;
     }
+
+    setProfileLoadingId(id);
+    const tgProfile = await api.getStudentTelegramProfile(id);
+    setProfileLoadingId(null);
+
+    if (tgProfile) {
+      setTgProfiles(prev => ({ ...prev, [id]: tgProfile }));
+      const resolvedUsername = (tgProfile.username || '').trim().replace(/^@/, '');
+      if (resolvedUsername) {
+        openTelegramUrl(`https://t.me/${resolvedUsername}`);
+        return;
+      }
+    }
+
+    setCopiedId(false);
+    setSelectedUserForProfile({ ...student, tgProfile: tgProfile || tgProfiles[id] || null });
+  };
+
+  const handleCopyTelegramId = (id) => {
+    navigator.clipboard?.writeText(String(id));
+    setCopiedId(true);
+    setTimeout(() => setCopiedId(false), 1800);
   };
 
   const handleMessageUser = (telegramId) => {
@@ -138,17 +173,20 @@ export default function UserList() {
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <a
-                        href={getProfileHref(u)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => handleOpenProfile(e, u)}
-                        className="bg-white/5 hover:bg-[#007AFF] hover:text-white border border-white/10 text-white/90 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 active:scale-95"
+                      <button
+                        type="button"
+                        onClick={() => handleOpenProfile(u)}
+                        disabled={profileLoadingId === u.telegram_id}
+                        className="bg-white/5 hover:bg-[#007AFF] hover:text-white border border-white/10 text-white/90 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-60"
                         title="O'quvchi profiliga o'tish"
                       >
-                        <User className="w-3.5 h-3.5" />
+                        {profileLoadingId === u.telegram_id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <User className="w-3.5 h-3.5" />
+                        )}
                         <span>Profil</span>
-                      </a>
+                      </button>
 
                       <button 
                         onClick={() => setSelectedUserForGift(u)}
@@ -183,6 +221,104 @@ export default function UserList() {
           </table>
         </div>
       </div>
+
+      {/* Profile Fallback Modal (when user has no public @username) */}
+      {selectedUserForProfile && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="card p-6 bg-[#1C1C1E] border border-white/10 rounded-3xl max-w-sm w-full space-y-4 shadow-2xl relative">
+            <button
+              type="button"
+              onClick={() => setSelectedUserForProfile(null)}
+              className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white/70 absolute top-4 right-4"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-[#007AFF]/15 border border-[#007AFF]/30 text-[#007AFF] flex items-center justify-center">
+                <User className="w-5 h-5" />
+              </div>
+              <div className="min-w-0 pr-6">
+                <h3 className="text-white font-bold text-base truncate">
+                  {selectedUserForProfile.full_name || 'Noma‘lum o‘quvchi'}
+                </h3>
+                <p className="text-xs text-[#8E8E93]">
+                  @username mavjud emas (yopiq profil)
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5 text-xs">
+              <div className="bg-[#242426] border border-white/5 rounded-2xl p-3">
+                <span className="text-[10px] text-[#8E8E93] block">Telegram ID</span>
+                <div className="flex items-center justify-between gap-1 mt-0.5">
+                  <span className="font-mono font-bold text-white truncate">
+                    {selectedUserForProfile.telegram_id}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyTelegramId(selectedUserForProfile.telegram_id)}
+                    className="text-blue-400 hover:text-blue-300 shrink-0"
+                    title="Nusxalash"
+                  >
+                    {copiedId ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+              <div className="bg-[#242426] border border-white/5 rounded-2xl p-3">
+                <span className="text-[10px] text-[#8E8E93] block">Sinf / Guruh</span>
+                <span className="font-bold text-white block mt-0.5">
+                  {selectedUserForProfile.class_group || 'Abituriyent'}
+                </span>
+              </div>
+              <div className="bg-[#242426] border border-white/5 rounded-2xl p-3">
+                <span className="text-[10px] text-[#8E8E93] block">Balans</span>
+                <span className="font-mono font-bold text-blue-400 block mt-0.5">
+                  {(selectedUserForProfile.balance || 0).toLocaleString('ru-RU')} 🧠
+                </span>
+              </div>
+              <div className="bg-[#242426] border border-white/5 rounded-2xl p-3">
+                <span className="text-[10px] text-[#8E8E93] block">Streak</span>
+                <span className="font-bold text-amber-400 block mt-0.5">
+                  {selectedUserForProfile.streak_days || 0} kun 🔥
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 pt-1">
+              <a
+                href={`tg://user?id=${selectedUserForProfile.telegram_id}`}
+                className="btn-primary w-full py-2.5 text-xs justify-center"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Telegram ilovasida ochish</span>
+              </a>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = selectedUserForProfile;
+                    setSelectedUserForProfile(null);
+                    setSelectedUserForGift(target);
+                  }}
+                  className="btn-secondary py-2.5 text-xs"
+                >
+                  <Gift className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Neyron</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleMessageUser(selectedUserForProfile.telegram_id)}
+                  className="btn-secondary py-2.5 text-xs"
+                >
+                  <Send className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Yozish</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Gift Modal */}
       {selectedUserForGift && (

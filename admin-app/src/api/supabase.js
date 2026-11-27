@@ -541,6 +541,25 @@ export const api = {
     const { data } = await supabase.from('users').select('*').order('created_at', { ascending: false });
     return data || [];
   },
+
+  getStudentTelegramProfile: async (telegramId) => {
+    const id = Number(telegramId);
+    if (!id || Number.isNaN(id)) return null;
+    const botToken = import.meta.env.VITE_STUDENT_BOT_TOKEN || '8656707475:AAFW4jrRdgKdFYVoXuLXnb5GKNC2tp_EyLw';
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${botToken}/getChat?chat_id=${encodeURIComponent(id)}`);
+      const json = await res.json();
+      if (!json?.ok || !json?.result) return null;
+      return {
+        username: json.result.username || (Array.isArray(json.result.active_usernames) ? json.result.active_usernames[0] : '') || '',
+        first_name: json.result.first_name || '',
+        last_name: json.result.last_name || '',
+        bio: json.result.bio || '',
+      };
+    } catch {
+      return null;
+    }
+  },
   
   updateUserBalance: async (telegramId, newBalance, giftAmount = null) => {
     const { data } = await supabase.from('users').update({ balance: newBalance }).eq('telegram_id', telegramId).select().single();

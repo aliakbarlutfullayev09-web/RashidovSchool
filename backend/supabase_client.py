@@ -31,6 +31,27 @@ class SupabaseRest:
         rows = resp.json()
         return rows[0] if rows else None
 
+    async def find_users_by_query(self, query_text: str) -> list[dict[str, Any]]:
+        q = (query_text or "").strip().lstrip("@")
+        if not q:
+            return []
+        if q.isdigit():
+            exact = await self.get_user(int(q))
+            return [exact] if exact else []
+        clean = q.replace("*", "").replace("(", "").replace(")", "").replace(",", "")
+        resp = await self.client.get(
+            f"{self.base_url}/users",
+            headers=self.headers,
+            params={
+                "full_name": f"ilike.*{clean}*",
+                "select": "*",
+                "order": "created_at.desc",
+                "limit": "10",
+            },
+        )
+        resp.raise_for_status()
+        return resp.json()
+
     async def create_user(
         self,
         telegram_id: int,

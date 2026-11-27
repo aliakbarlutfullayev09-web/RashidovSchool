@@ -1,0 +1,14 @@
+{
+  "name": "rashidov-studio-bot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "login": "npx tgcloud login",
+    "push": "npx tgcloud push",
+    "fetch": "npx tgcloud fetch"
+  },
+  "devDependencies": {
+    "@tgcloud/cli": "latest"
+  }
+}
