@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api/supabase';
-import { compressImageFileToDataUrl } from '../utils/mediaUtils';
-import { Plus, Trash2, FolderGit2, ChevronRight, ArrowLeft, Image as ImageIcon, Upload, X } from 'lucide-react';
+import { Plus, Trash2, FolderGit2, ChevronRight, ArrowLeft, Image as ImageIcon, X } from 'lucide-react';
 
 export default function CourseBuilder({ user, subjectId, subjectName, onSelectCourse, onBack }) {
   const [courses, setCourses] = useState([]);
@@ -22,16 +21,6 @@ export default function CourseBuilder({ user, subjectId, subjectName, onSelectCo
   const loadCourses = async () => {
     const data = await api.getCourses(subjectId);
     setCourses(data);
-  };
-
-  const handleFilePick = async (file, setter) => {
-    if (!file) return;
-    try {
-      const dataUrl = await compressImageFileToDataUrl(file, 720, 0.8);
-      setter(dataUrl);
-    } catch (err) {
-      alert(err.message || "Rasmni yuklashda xatolik");
-    }
   };
 
   const handleAdd = async (e) => {
@@ -126,18 +115,8 @@ export default function CourseBuilder({ user, subjectId, subjectName, onSelectCo
               value={imageUrl}
               onChange={e => setImageUrl(e.target.value)}
               className="input-field flex-1 text-xs"
-              placeholder="Kurs muqova rasmi URL (ixtiyoriy) yoki o'ngdan yuklang"
+              placeholder="Kurs muqova rasmi URL (ixtiyoriy)"
             />
-            <label className="cursor-pointer bg-[#2C2C2E] hover:bg-[#3A3A3C] border border-white/10 rounded-2xl px-4 py-3 text-xs font-bold text-white flex items-center justify-center gap-2 whitespace-nowrap transition-colors">
-              <Upload className="w-4 h-4 text-blue-400" />
-              <span>Rasm yuklash</span>
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={e => handleFilePick(e.target.files?.[0], setImageUrl)}
-              />
-            </label>
             <button 
               type="submit" 
               disabled={loading || !title.trim()} 
@@ -272,22 +251,11 @@ export default function CourseBuilder({ user, subjectId, subjectName, onSelectCo
             </div>
 
             <div className="space-y-3">
-              <label className="w-full cursor-pointer bg-[#2C2C2E] hover:bg-[#3A3A3C] border border-white/10 rounded-2xl py-3 px-4 text-xs font-bold text-white flex items-center justify-center gap-2 transition-colors">
-                <Upload className="w-4 h-4 text-blue-400" />
-                <span>Qurilmadan rasm tanlash</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={e => handleFilePick(e.target.files?.[0], setEditPhotoValue)}
-                />
-              </label>
-
               <input
                 type="url"
                 value={editPhotoValue.startsWith('data:') ? '' : editPhotoValue}
                 onChange={e => setEditPhotoValue(e.target.value)}
-                placeholder="Yoki rasm havolasini kiriting (https://...)"
+                placeholder="Rasm havolasini kiriting (https://...)"
                 className="input-field text-xs"
               />
             </div>

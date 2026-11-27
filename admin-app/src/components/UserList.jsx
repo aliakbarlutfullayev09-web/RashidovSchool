@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api/supabase';
-import { Search, Gift, Send, Users, ShieldCheck, Flame, X } from 'lucide-react';
+import { Search, Gift, Send, Users, User, Flame, X } from 'lucide-react';
 
 export default function UserList() {
   const [users, setUsers] = useState([]);
@@ -42,6 +42,19 @@ export default function UserList() {
     alert(`Muvaffaqiyatli! ${selectedUserForGift.full_name} balansiga ${amount > 0 ? '+' : ''}${amount} Neyron kiritildi.`);
   };
 
+  const getProfileHref = (student) => {
+    const uname = (student?.username || '').trim().replace(/^@/, '');
+    return uname ? `https://t.me/${uname}` : `tg://user?id=${student?.telegram_id}`;
+  };
+
+  const handleOpenProfile = (e, student) => {
+    const uname = (student?.username || '').trim().replace(/^@/, '');
+    if (uname && window.Telegram?.WebApp?.openTelegramLink) {
+      e.preventDefault();
+      window.Telegram.WebApp.openTelegramLink(`https://t.me/${uname}`);
+    }
+  };
+
   const handleMessageUser = (telegramId) => {
     const url = `https://t.me/RashidovSchool_bot?start=msg_${telegramId}`;
     if (window.Telegram?.WebApp?.openTelegramLink) {
@@ -66,13 +79,13 @@ export default function UserList() {
         </div>
 
         <div className="relative w-full sm:w-72">
-          <Search className="w-4 h-4 text-[#8E8E93] absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-[#8E8E93] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input 
             type="text" 
             placeholder="Ism yoki Telegram ID..." 
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="input-field pl-10 py-2.5 text-xs"
+            className="input-field !pl-10 py-2.5 text-xs"
           />
         </div>
       </div>
@@ -125,6 +138,18 @@ export default function UserList() {
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
+                      <a
+                        href={getProfileHref(u)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => handleOpenProfile(e, u)}
+                        className="bg-white/5 hover:bg-[#007AFF] hover:text-white border border-white/10 text-white/90 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 active:scale-95"
+                        title="O'quvchi profiliga o'tish"
+                      >
+                        <User className="w-3.5 h-3.5" />
+                        <span>Profil</span>
+                      </a>
+
                       <button 
                         onClick={() => setSelectedUserForGift(u)}
                         className="bg-emerald-500/10 hover:bg-emerald-500 hover:text-white border border-emerald-500/20 text-emerald-400 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 active:scale-95"

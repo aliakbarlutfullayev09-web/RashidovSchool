@@ -20,7 +20,6 @@ import {
   DEFAULT_EXAM_PORTAL_DATA,
   createSubjectSkeleton,
   formatDurationLabel,
-  localizeDifficulty,
   localizeModeConfig,
   localizeVariant,
   normalizeSubjectKey
@@ -1803,12 +1802,14 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
                 <div className="space-y-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="space-y-1">
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                        adaptChipClass(test.badgeColor || 'bg-white/10 text-white border-white/10', isLight)
-                      }`}>
-                        {test.badge}
-                      </span>
-                      <h4 className={`font-bold text-sm sm:text-base transition-colors pt-1 ${
+                      {test.badge?.trim() && (
+                        <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                          adaptChipClass(test.badgeColor || 'bg-white/10 text-white border-white/10', isLight)
+                        }`}>
+                          {test.badge}
+                        </span>
+                      )}
+                      <h4 className={`font-bold text-sm sm:text-base transition-colors ${test.badge?.trim() ? 'pt-1' : ''} ${
                         isLight
                           ? 'text-[#1C1C1E] group-hover:text-blue-600'
                           : 'text-white group-hover:text-blue-300'
@@ -1841,11 +1842,6 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
                     }`}>
                       <Clock className="w-3 h-3 text-amber-500 shrink-0" />
                       <span>{formatDurationLabel(test.durationMinutes, lang)}</span>
-                    </div>
-                    <div className={`px-2 py-1 rounded-xl border whitespace-nowrap ${
-                      adaptChipClass(test.difficultyColor || 'text-amber-400 bg-amber-400/10 border-amber-400/20', isLight)
-                    }`}>
-                      <span>{localizeDifficulty(test.difficulty, lang)}</span>
                     </div>
                   </div>
                 </div>

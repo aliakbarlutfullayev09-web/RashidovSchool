@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api/supabase';
-import { compressImageFileToDataUrl, formatDurationFromSeconds } from '../utils/mediaUtils';
+import { formatDurationFromSeconds } from '../utils/mediaUtils';
 import VideoCheckpointStudio from './VideoCheckpointStudio';
 import { 
-  Plus, Trash2, Video, Check, Upload,
+  Plus, Trash2, Video, Check,
   Image as ImageIcon, ArrowLeft, X, BookOpen 
 } from 'lucide-react';
 
@@ -91,16 +91,6 @@ export default function LessonBuilder({ courseId, courseName, onSelectLesson, on
   const loadLessons = async () => {
     const data = await api.getLessons(courseId);
     setLessons(data);
-  };
-
-  const handleFilePick = async (file, setter) => {
-    if (!file) return;
-    try {
-      const dataUrl = await compressImageFileToDataUrl(file, 720, 0.8);
-      setter(dataUrl);
-    } catch (err) {
-      alert(err.message || "Rasmni yuklashda xatolik");
-    }
   };
 
   const handleAdd = async (e) => {
@@ -231,27 +221,15 @@ export default function LessonBuilder({ courseId, courseName, onSelectLesson, on
 
               <div>
                 <label className="block text-xs font-semibold text-[#8E8E93] mb-1.5 uppercase tracking-wider">
-                  Muqova rasmi (URL yoki fayl yuklash)
+                  Muqova rasmi havolasi (URL, ixtiyoriy)
                 </label>
-                <div className="flex gap-2">
-                  <input 
-                    type="text" 
-                    value={thumbnailUrl.startsWith('data:') ? '' : thumbnailUrl} 
-                    onChange={e => setThumbnailUrl(e.target.value)} 
-                    className="input-field flex-1" 
-                    placeholder={thumbnailUrl.startsWith('data:') ? 'Rasm fayldan yuklandi' : 'https://images.unsplash.com/...'} 
-                  />
-                  <label className="cursor-pointer bg-[#2C2C2E] hover:bg-[#3A3A3C] border border-white/10 rounded-2xl px-3.5 text-xs font-bold text-white flex items-center justify-center gap-1.5 shrink-0 transition-colors">
-                    <Upload className="w-4 h-4 text-blue-400" />
-                    <span>Yuklash</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={e => handleFilePick(e.target.files?.[0], setThumbnailUrl)}
-                    />
-                  </label>
-                </div>
+                <input 
+                  type="text" 
+                  value={thumbnailUrl.startsWith('data:') ? '' : thumbnailUrl} 
+                  onChange={e => setThumbnailUrl(e.target.value)} 
+                  className="input-field" 
+                  placeholder="https://images.unsplash.com/..." 
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -504,22 +482,11 @@ export default function LessonBuilder({ courseId, courseName, onSelectLesson, on
             </div>
 
             <div className="space-y-3">
-              <label className="w-full cursor-pointer bg-[#2C2C2E] hover:bg-[#3A3A3C] border border-white/10 rounded-2xl py-3 px-4 text-xs font-bold text-white flex items-center justify-center gap-2 transition-colors">
-                <Upload className="w-4 h-4 text-blue-400" />
-                <span>Qurilmadan muqova tanlash</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={e => handleFilePick(e.target.files?.[0], setEditThumb)}
-                />
-              </label>
-
               <input
                 type="url"
                 value={editThumb.startsWith('data:') ? '' : editThumb}
                 onChange={e => setEditThumb(e.target.value)}
-                placeholder="Yoki rasm havolasi (https://...)"
+                placeholder="Rasm havolasi (https://...)"
                 className="input-field text-xs"
               />
 

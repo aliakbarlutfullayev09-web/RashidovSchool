@@ -93,7 +93,10 @@ const BADGE_RU_MAP = {
 export function localizeVariant(variant, lang = 'uz') {
   if (!variant || lang !== 'ru') return variant;
   const preset = VARIANT_RU_TRANSLATIONS[variant.id];
-  const mappedBadge = BADGE_RU_MAP[variant.badge] || preset?.badge || variant.badge;
+  const explicitEmptyBadge = variant.badge !== undefined && String(variant.badge).trim() === '';
+  const mappedBadge = explicitEmptyBadge
+    ? ''
+    : (BADGE_RU_MAP[variant.badge] || variant.badge || preset?.badge || '');
   let localizedTitle = preset?.title || variant.title;
   if (!preset?.title && typeof variant.title === 'string') {
     localizedTitle = variant.title.replace(/^(\d+)\s*-\s*Variant\b/i, 'Вариант $1');

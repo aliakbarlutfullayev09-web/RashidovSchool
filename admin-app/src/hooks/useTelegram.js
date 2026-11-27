@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { mockTeacherUser, mockSuperadminUser } from '../mock/data';
 
 export function useTelegram() {
@@ -8,6 +8,7 @@ export function useTelegram() {
   const initialUser = tg?.initDataUnsafe?.user || mockSuperadminUser;
   const [user, setUser] = useState(initialUser);
   const [ready, setReady] = useState(false);
+  const backButtonHandlerRef = useRef(null);
 
   useEffect(() => {
     if (tg) {
@@ -28,6 +29,28 @@ export function useTelegram() {
     setReady(true);
   }, [tg]);
 
+  const setBackButton = useCallback((shouldShow, onClickHandler) => {
+    const backBtn = tg?.BackButton;
+    if (!backBtn) return;
+
+    try {
+      if (backButtonHandlerRef.current && typeof backBtn.offClick === 'function') {
+        backBtn.offClick(backButtonHandlerRef.current);
+        backButtonHandlerRef.current = null;
+      }
+
+      if (shouldShow && typeof onClickHandler === 'function') {
+        backButtonHandlerRef.current = onClickHandler;
+        backBtn.onClick(onClickHandler);
+        backBtn.show();
+      } else {
+        backBtn.hide();
+      }
+    } catch (e) {
+      console.warn('BackButton error:', e);
+    }
+  }, [tg]);
+
   const toggleMockRole = () => {
     setUser(prev => prev.role === 'superadmin' ? mockTeacherUser : mockSuperadminUser);
   };
@@ -36,6 +59,7 @@ export function useTelegram() {
     tg,
     user,
     ready,
+    setBackButton,
     toggleMockRole,
   };
 }

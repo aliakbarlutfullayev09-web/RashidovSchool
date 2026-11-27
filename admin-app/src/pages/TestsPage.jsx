@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   ClipboardList,
   Plus,
@@ -7,12 +7,9 @@ import {
   CheckCircle2,
   Clock,
   Award,
-  ArrowLeft,
   Save,
   Eye,
   EyeOff,
-  Sliders,
-  Upload,
   FileText,
   X,
   Check,
@@ -25,7 +22,7 @@ import {
   formatDurationLabel,
   normalizeSubjectKey
 } from '../api/examDefaults';
-import { compressImageFileToDataUrl } from '../utils/mediaUtils';
+import { useTelegram } from '../hooks/useTelegram';
 
 const BADGE_PRESETS = [
   { label: 'Oltin (A+ Daraja)', value: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
@@ -42,6 +39,9 @@ const DIFFICULTY_STYLES = {
 
 export default function TestsPage({ user }) {
   const isSuperAdmin = user?.role === 'superadmin' || user?.role === 'admin';
+  const { setBackButton } = useTelegram();
+  const questionFormRef = useRef(null);
+  const questionTextareaRef = useRef(null);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -51,9 +51,6 @@ export default function TestsPage({ user }) {
   const [portalData, setPortalData] = useState(null);
   const [selectedSubjectKey, setSelectedSubjectKey] = useState('biologiya');
   const [selectedMode, setSelectedMode] = useState('sertifikat'); // 'sertifikat' | 'dtm'
-
-  // Collapsible mode config editor
-  const [showModeSettings, setShowModeSettings] = useState(false);
 
   // Add / Edit Variant Modal or Drawer
   const [editingVariant, setEditingVariant] = useState(null); // null or variant object / { __isNew: true }
@@ -82,6 +79,26 @@ export default function TestsPage({ user }) {
   useEffect(() => {
     loadAll();
   }, [user?.assigned_subject_id, isSuperAdmin]);
+
+  useEffect(() => {
+    if (activeVariantId) {
+      setBackButton(true, () => {
+        setActiveVariantId(null);
+        setEditingQuestionIdx(null);
+        setEditingMatchIndices([]);
+        setQType('choice');
+        setQText('');
+        setQImageUrl('');
+        setQOptions(['', '', '', '']);
+        setQCorrectIndex(0);
+        setQCorrectAnswer('');
+        setQTextbookRef('');
+      });
+    } else {
+      setBackButton(false);
+    }
+    return () => setBackButton(false);
+  }, [activeVariantId, setBackButton]);
 
   const loadAll = async () => {
     setLoading(true);
@@ -178,7 +195,7 @@ export default function TestsPage({ user }) {
     const variantPayload = {
       id: formValues.id || `${selectedSubjectKey}-${selectedMode}-${Date.now()}`,
       title: cleanTitle,
-      badge: formValues.badge?.trim() || 'Milliy Sertifikat',
+      badge: formValues.badge?.trim() || '',
       badgeColor: formValues.badgeColor || BADGE_PRESETS[0].value,
       questionCount: Math.max(1, parseInt(formValues.questionCount, 10) || 40),
       durationMinutes: Math.max(1, parseInt(formValues.durationMinutes, 10) || 100),
@@ -268,6 +285,10 @@ export default function TestsPage({ user }) {
         correctIndex: siblings[i]?.correctIndex ?? i
       })));
       setQTextbookRef(q.textbookRef || '');
+      requestAnimationFrame(() => {
+        questionFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        setTimeout(() => questionTextareaRef.current?.focus(), 120);
+      });
       return;
     }
 
@@ -284,16 +305,10 @@ export default function TestsPage({ user }) {
     setQCorrectIndex(q.correctIndex ?? 0);
     setQCorrectAnswer(q.correctAnswer || '');
     setQTextbookRef(q.textbookRef || '');
-  };
-
-  const handlePickQuestionImage = async (file) => {
-    if (!file) return;
-    try {
-      const dataUrl = await compressImageFileToDataUrl(file, 720, 0.78);
-      setQImageUrl(dataUrl);
-    } catch (err) {
-      alert(err.message || 'Rasmni yuklashda xatolik');
-    }
+    requestAnimationFrame(() => {
+      questionFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setTimeout(() => questionTextareaRef.current?.focus(), 120);
+    });
   };
 
   const handleSaveQuestion = (e) => {
@@ -428,24 +443,13 @@ export default function TestsPage({ user }) {
 
     return (
       <div className="space-y-6 pb-24 text-white">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <button
-            onClick={() => {
-              setActiveVariantId(null);
-              resetQuestionForm();
-            }}
-            className="flex items-center gap-2 text-xs font-bold text-[#8E8E93] hover:text-white bg-[#1C1C1E] border border-white/10 px-4 py-2.5 rounded-2xl transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Variantlarga qaytish</span>
-          </button>
-
-          {saveNotice && (
+        {saveNotice && (
+          <div className="flex items-center justify-end">
             <div className={`px-3.5 py-2 rounded-full text-xs font-bold border ${saveNotice.ok ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' : 'bg-red-500/15 text-red-300 border-red-500/30'}`}>
               {saveNotice.text}
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         <div className="bg-[#1C1C1E] border border-white/10 rounded-3xl p-5 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -483,7 +487,15 @@ export default function TestsPage({ user }) {
         </div>
 
         {/* Add / Edit Question Form */}
-        <form onSubmit={handleSaveQuestion} className="bg-[#1C1C1E] border border-white/10 rounded-3xl p-5 space-y-4 shadow-xl">
+        <form
+          ref={questionFormRef}
+          onSubmit={handleSaveQuestion}
+          className={`bg-[#1C1C1E] border rounded-3xl p-5 space-y-4 shadow-xl transition-all scroll-mt-4 ${
+            editingQuestionIdx !== null || editingMatchIndices.length > 0
+              ? 'border-[#007AFF] ring-2 ring-[#007AFF]/25'
+              : 'border-white/10'
+          }`}
+        >
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-white flex items-center gap-2">
               <Plus className="w-4 h-4 text-[#007AFF]" />
@@ -522,7 +534,12 @@ export default function TestsPage({ user }) {
                     key={tab.id}
                     type="button"
                     data-testid={`admin-qtype-${tab.id}`}
-                    onClick={() => setQType(tab.id)}
+                    onClick={() => {
+                      setQType(tab.id);
+                      if (tab.id !== 'matching_group') {
+                        setEditingMatchIndices([]);
+                      }
+                    }}
                     className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                       isSelectedTab
                         ? 'bg-[#007AFF] text-white'
@@ -543,6 +560,7 @@ export default function TestsPage({ user }) {
                 : 'Savol matni *'}
             </label>
             <textarea
+              ref={questionTextareaRef}
               rows={2}
               value={qText}
               onChange={(e) => setQText(e.target.value)}
@@ -556,27 +574,17 @@ export default function TestsPage({ user }) {
             />
           </div>
 
-          {/* Image Upload or URL */}
+          {/* Image URL (optional) */}
           <div>
-            <label className="block text-[11px] font-bold text-[#8E8E93] uppercase mb-1.5">Rasm (ixtiyoriy — URL yoki yuklash)</label>
+            <label className="block text-[11px] font-bold text-[#8E8E93] uppercase mb-1.5">Rasm havolasi (URL, ixtiyoriy)</label>
             <div className="flex flex-wrap gap-2">
               <input
                 type="text"
                 value={qImageUrl}
                 onChange={(e) => setQImageUrl(e.target.value)}
-                placeholder="https://... yoki fayldan tanlang"
+                placeholder="https://..."
                 className="input-field flex-1 min-w-[200px]"
               />
-              <label className="px-4 py-2.5 rounded-2xl bg-[#2C2C2E] hover:bg-[#3A3A3C] border border-white/10 text-xs font-bold text-white cursor-pointer flex items-center gap-1.5">
-                <Upload className="w-3.5 h-3.5 text-blue-400" />
-                <span>Rasm yuklash</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => handlePickQuestionImage(e.target.files?.[0])}
-                />
-              </label>
               {qImageUrl && (
                 <button
                   type="button"
@@ -826,9 +834,6 @@ export default function TestsPage({ user }) {
             <ClipboardList className="w-6 h-6 text-[#007AFF]" />
             <span>Testlar boshqaruvi</span>
           </h1>
-          <p className="text-xs text-[#8E8E93] mt-0.5">
-            Milliy Sertifikat va imtihon variantlarini qo‘shish, tahrirlash yoki olib tashlash
-          </p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -843,7 +848,7 @@ export default function TestsPage({ user }) {
               setEditingVariant({
                 __isNew: true,
                 title: `${variants.length + 1}-Variant: ${currentRow?.name || 'Biologiya'} ${modeConfig.title}`,
-                badge: selectedMode === 'sertifikat' ? 'A+ Daraja' : 'Standart DTM',
+                badge: '',
                 badgeColor: BADGE_PRESETS[0].value,
                 questionCount: modeConfig.questionCount || 40,
                 durationMinutes: modeConfig.durationMinutes || 100,
@@ -872,7 +877,6 @@ export default function TestsPage({ user }) {
                 key={row.id || key}
                 onClick={() => {
                   setSelectedSubjectKey(key);
-                  setShowModeSettings(false);
                 }}
                 className={`px-4 py-2 rounded-2xl text-xs font-bold transition-all whitespace-nowrap border ${
                   active
@@ -941,37 +945,6 @@ export default function TestsPage({ user }) {
         })}
       </div>
 
-      {/* Mode Settings Drawer Toggle */}
-      <div className="bg-[#1C1C1E] border border-white/10 rounded-3xl overflow-hidden">
-        <button
-          type="button"
-          onClick={() => setShowModeSettings(prev => !prev)}
-          className="w-full px-5 py-4 flex items-center justify-between text-xs font-bold text-white hover:bg-white/[0.02] transition-colors"
-        >
-          <span className="flex items-center gap-2">
-            <Sliders className="w-4 h-4 text-amber-400" />
-            <span>{modeConfig.title} — Karta va vaqt sozlamalari ({modeConfig.questionCount} ta, {formatDurationLabel(modeConfig.durationMinutes)}, {modeConfig.maxScore} ball)</span>
-          </span>
-          <span className="text-[#8E8E93]">{showModeSettings ? 'Yopish' : 'Sozlash'}</span>
-        </button>
-
-        {showModeSettings && (
-          <ModeSettingsEditor
-            modeConfig={modeConfig}
-            saving={saving}
-            onSave={(updatedMode) => {
-              updateSubjectBundle((sub) => ({
-                ...sub,
-                modes: {
-                  ...sub.modes,
-                  [selectedMode]: updatedMode
-                }
-              }), 'Yo‘nalish parametrlari saqlandi');
-            }}
-          />
-        )}
-      </div>
-
       {/* Variants List */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
@@ -998,9 +971,13 @@ export default function TestsPage({ user }) {
               >
                 <div className="space-y-2.5">
                   <div className="flex items-center justify-between gap-2">
-                    <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${variant.badgeColor || BADGE_PRESETS[0].value}`}>
-                      {variant.badge}
-                    </span>
+                    {variant.badge?.trim() ? (
+                      <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${variant.badgeColor || BADGE_PRESETS[0].value}`}>
+                        {variant.badge}
+                      </span>
+                    ) : (
+                      <span />
+                    )}
                     <span className="text-xs font-mono text-[#8E8E93]">#{idx + 1}</span>
                   </div>
 
@@ -1074,94 +1051,6 @@ export default function TestsPage({ user }) {
   );
 }
 
-function ModeSettingsEditor({ modeConfig, saving, onSave }) {
-  const [title, setTitle] = useState(modeConfig.title || '');
-  const [badge, setBadge] = useState(modeConfig.badge || '');
-  const [description, setDescription] = useState(modeConfig.description || '');
-  const [questionCount, setQuestionCount] = useState(modeConfig.questionCount || 40);
-  const [durationMinutes, setDurationMinutes] = useState(modeConfig.durationMinutes || 100);
-  const [maxScore, setMaxScore] = useState(modeConfig.maxScore || 75);
-  const [featuresText, setFeaturesText] = useState((modeConfig.features || []).join('\n'));
-
-  useEffect(() => {
-    setTitle(modeConfig.title || '');
-    setBadge(modeConfig.badge || '');
-    setDescription(modeConfig.description || '');
-    setQuestionCount(modeConfig.questionCount || 40);
-    setDurationMinutes(modeConfig.durationMinutes || 100);
-    setMaxScore(modeConfig.maxScore || 75);
-    setFeaturesText((modeConfig.features || []).join('\n'));
-  }, [modeConfig]);
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onSave({
-      ...modeConfig,
-      title: title.trim() || 'Milliy Sertifikat',
-      badge: badge.trim() || "Davlat Ta'lim Standarti",
-      description: description.trim(),
-      questionCount: Math.max(1, parseInt(questionCount, 10) || 40),
-      durationMinutes: Math.max(1, parseInt(durationMinutes, 10) || 100),
-      maxScore: Math.max(1, parseFloat(maxScore) || 75),
-      features: featuresText
-        .split('\n')
-        .map(s => s.trim())
-        .filter(Boolean)
-    });
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="p-5 pt-2 border-t border-white/5 space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-[11px] font-bold text-[#8E8E93] uppercase mb-1">Yo‘nalish nomi</label>
-          <input type="text" value={title} onChange={e => setTitle(e.target.value)} className="input-field" required />
-        </div>
-        <div>
-          <label className="block text-[11px] font-bold text-[#8E8E93] uppercase mb-1">Yuqori teg</label>
-          <input type="text" value={badge} onChange={e => setBadge(e.target.value)} className="input-field" />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div>
-          <label className="block text-[11px] font-bold text-[#8E8E93] uppercase mb-1">Savollar soni</label>
-          <input type="number" min={1} value={questionCount} onChange={e => setQuestionCount(e.target.value)} className="input-field" required />
-        </div>
-        <div>
-          <label className="block text-[11px] font-bold text-[#8E8E93] uppercase mb-1">
-            Vaqt (daq) → {formatDurationLabel(durationMinutes)}
-          </label>
-          <input type="number" min={1} value={durationMinutes} onChange={e => setDurationMinutes(e.target.value)} className="input-field" required />
-        </div>
-        <div>
-          <label className="block text-[11px] font-bold text-[#8E8E93] uppercase mb-1">Maksimal ball</label>
-          <input type="number" min={1} step="0.5" value={maxScore} onChange={e => setMaxScore(e.target.value)} className="input-field" required />
-        </div>
-      </div>
-
-      <div>
-        <label className="block text-[11px] font-bold text-[#8E8E93] uppercase mb-1">Qisqa tavsif</label>
-        <input type="text" value={description} onChange={e => setDescription(e.target.value)} className="input-field" />
-      </div>
-
-      <div>
-        <label className="block text-[11px] font-bold text-[#8E8E93] uppercase mb-1">Afzallik punktlari (har qatorda bitta)</label>
-        <textarea rows={2} value={featuresText} onChange={e => setFeaturesText(e.target.value)} className="input-field resize-none" />
-      </div>
-
-      <button
-        type="submit"
-        disabled={saving}
-        className="px-5 py-2.5 rounded-2xl bg-[#007AFF] hover:bg-blue-600 text-white text-xs font-bold flex items-center gap-2"
-      >
-        <Save className="w-3.5 h-3.5" />
-        <span>Sozlamalarni saqlash</span>
-      </button>
-    </form>
-  );
-}
-
 function VariantFormModal({ initial, saving, onClose, onSubmit }) {
   const [form, setForm] = useState(initial);
 
@@ -1195,29 +1084,28 @@ function VariantFormModal({ initial, saving, onClose, onSubmit }) {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[11px] font-bold text-[#8E8E93] uppercase mb-1">Badge matni</label>
-              <input
-                type="text"
-                value={form.badge || ''}
-                onChange={e => setForm(prev => ({ ...prev, badge: e.target.value }))}
-                className="input-field"
-              />
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-[11px] font-bold text-[#8E8E93] uppercase">
+                Badge matni (ixtiyoriy)
+              </label>
+              {form.badge && (
+                <button
+                  type="button"
+                  onClick={() => setForm(prev => ({ ...prev, badge: '' }))}
+                  className="text-[11px] font-bold text-blue-400 hover:text-blue-300"
+                >
+                  O‘tkazib yuborish
+                </button>
+              )}
             </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-[#8E8E93] uppercase mb-1">Qiyinlik darajasi</label>
-              <select
-                value={form.difficulty || 'Yuqori'}
-                onChange={e => setForm(prev => ({ ...prev, difficulty: e.target.value }))}
-                className="input-field"
-              >
-                <option value="O'rta">O'rta</option>
-                <option value="Yuqori">Yuqori</option>
-                <option value="Ekspert">Ekspert</option>
-              </select>
-            </div>
+            <input
+              type="text"
+              value={form.badge || ''}
+              onChange={e => setForm(prev => ({ ...prev, badge: e.target.value }))}
+              placeholder="Masalan: A+ Daraja (bo‘sh qoldirish mumkin)"
+              className="input-field"
+            />
           </div>
 
           <div className="grid grid-cols-3 gap-3">

@@ -6,7 +6,7 @@ import QuizBuilder from '../components/QuizBuilder';
 import { Layers, ArrowLeft } from 'lucide-react';
 
 export default function ContentPage({ user }) {
-  const isSuperAdmin = user?.role === 'superadmin';
+  const isSuperAdmin = user?.role === 'superadmin' || user?.role === 'admin';
   const initialView = isSuperAdmin ? 'subjects' : 'courses';
   
   const [view, setView] = useState(initialView); // subjects, courses, lessons, quiz
@@ -60,7 +60,6 @@ export default function ContentPage({ user }) {
               <Layers className="w-6 h-6 text-[#007AFF]" />
               <span>Kontent boshqaruvi</span>
             </h1>
-            <p className="text-xs text-[#8E8E93] mt-0.5">Fanlar, kurslar, video darslar va test savollari</p>
           </div>
         </div>
       </div>

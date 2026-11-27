@@ -9,7 +9,8 @@ export const mockTeacherUser = {
 export const mockSuperadminUser = {
   telegram_id: 999999,
   full_name: 'Администратор',
-  role: 'superadmin'
+  role: 'superadmin',
+  permissions: { can_promo: true, can_gift: true, can_send: true }
 };
 
 export const mockStats = {

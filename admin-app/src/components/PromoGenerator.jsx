@@ -9,26 +9,36 @@ export default function PromoGenerator({ user }) {
   const [promos, setPromos] = useState([]);
   const [copiedCode, setCopiedCode] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
     loadPromos();
   }, []);
 
   const loadPromos = async () => {
-    const { data } = await supabase
-      .from('promo_codes')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (data) {
-      setPromos(
-        data.map(p => ({
-          code: p.code,
-          bonus: p.bonus_amount,
-          maxUses: p.max_uses,
-          currentUses: p.current_uses || 0,
-          createdAt: p.created_at
-        }))
-      );
+    setLoadError('');
+    try {
+      const { data, error } = await supabase
+        .from('promo_codes')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) {
+        setLoadError(error.message || 'Promokodlarni yuklashda xatolik');
+        return;
+      }
+      if (data) {
+        setPromos(
+          data.map(p => ({
+            code: p.code,
+            bonus: p.bonus_amount,
+            maxUses: p.max_uses,
+            currentUses: p.current_uses || 0,
+            createdAt: p.created_at
+          }))
+        );
+      }
+    } catch (e) {
+      setLoadError(e?.message || 'Promokodlarni yuklashda xatolik');
     }
   };
 
@@ -85,13 +95,12 @@ export default function PromoGenerator({ user }) {
             </label>
             <div className="flex gap-2">
               <div className="relative flex-1">
-                <Hash className="w-4 h-4 text-[#8E8E93] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <Hash className="w-4 h-4 text-[#8E8E93] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input 
                   type="text" 
                   value={code} 
                   onChange={e => setCode(e.target.value.toUpperCase())} 
-                  className="input-field pl-10 uppercase font-mono tracking-wider font-bold" 
-                  placeholder="MASALAN: BIOMAY2026" 
+                  className="input-field !pl-10 uppercase font-mono tracking-wider font-bold" 
                   required
                 />
               </div>
@@ -151,6 +160,11 @@ export default function PromoGenerator({ user }) {
 
       {/* Promos List */}
       <div className="space-y-3">
+        {loadError && (
+          <div className="p-3 rounded-2xl bg-red-500/10 border border-red-500/30 text-xs text-red-300">
+            Promokodlar ro'yxatini yuklashda xatolik: {loadError}
+          </div>
+        )}
         <h3 className="text-base font-bold text-white flex items-center gap-2">
           <span>Faol promokodlar</span>
           <span className="bg-[#2C2C2E] text-xs font-semibold px-2.5 py-0.5 rounded-full text-[#8E8E93]">

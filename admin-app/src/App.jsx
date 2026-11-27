@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useTelegram } from './hooks/useTelegram';
 import { mockSuperadminUser, mockTeacherUser } from './mock/data';
 import Sidebar from './components/Sidebar';
-import DashboardPage from './pages/DashboardPage';
 import ContentPage from './pages/ContentPage';
 import TestsPage from './pages/TestsPage';
 import StaffPage from './pages/StaffPage';
@@ -14,9 +13,10 @@ import { Loader2 } from 'lucide-react';
 
 function App() {
   const { tg, user: tgUser } = useTelegram();
-  const [activeSection, setActiveSection] = useState('dashboard');
+  const [activeSection, setActiveSection] = useState('content');
   const [dbUser, setDbUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isDockHidden, setIsDockHidden] = useState(false);
 
   // Dev Mode Role Switcher
   const [mockRole, setMockRole] = useState('superadmin');
@@ -59,7 +59,7 @@ function App() {
 
   const toggleMockRole = () => {
     setMockRole(prev => prev === 'superadmin' ? 'teacher' : 'superadmin');
-    setActiveSection('dashboard');
+    setActiveSection('content');
   };
 
   if (loading || !dbUser) {
@@ -67,7 +67,7 @@ function App() {
       <div className="min-h-screen flex items-center justify-center bg-[#000000] text-white p-6 text-center">
         <div className="flex flex-col items-center">
           <Loader2 className="w-10 h-10 text-[#007AFF] animate-spin mb-4" />
-          <h2 className="text-xl font-bold mb-1">Rashidov LMS Admin</h2>
+          <h2 className="text-xl font-bold mb-1">Rashidov Studio</h2>
           <p className="text-[#8E8E93] text-xs">Boshqaruv paneli yuklanmoqda...</p>
         </div>
       </div>
@@ -75,23 +75,23 @@ function App() {
   }
 
   const effectiveSection = (() => {
-    if (activeSection === 'users' && dbUser.role !== 'superadmin' && dbUser.role !== 'admin' && !dbUser.permissions?.can_gift) return 'dashboard';
-    if (activeSection === 'staff' && dbUser.role !== 'superadmin' && dbUser.role !== 'admin') return 'dashboard';
-    if (activeSection === 'support' && dbUser.role !== 'superadmin' && dbUser.role !== 'admin') return 'dashboard';
-    if (activeSection === 'promo' && !dbUser.permissions?.can_promo) return 'dashboard';
+    const isAdminOrSuper = dbUser.role === 'superadmin' || dbUser.role === 'admin';
+    if (activeSection === 'users' && !isAdminOrSuper && !dbUser.permissions?.can_gift) return 'content';
+    if (activeSection === 'staff' && !isAdminOrSuper) return 'content';
+    if (activeSection === 'support' && !isAdminOrSuper) return 'content';
+    if (activeSection === 'promo' && !isAdminOrSuper && !dbUser.permissions?.can_promo) return 'content';
     return activeSection;
   })();
 
   const renderContent = () => {
     switch (effectiveSection) {
-      case 'dashboard': return <DashboardPage user={dbUser} />;
       case 'content': return <ContentPage user={dbUser} />;
       case 'tests': return <TestsPage user={dbUser} />;
       case 'promo': return <PromoGenerator user={dbUser} />;
       case 'users': return <UserList />;
       case 'staff': return <StaffPage />;
       case 'support': return <SupportSettings user={dbUser} />;
-      default: return <DashboardPage user={dbUser} />;
+      default: return <ContentPage user={dbUser} />;
     }
   };
 
@@ -101,7 +101,9 @@ function App() {
       <Sidebar 
         user={dbUser} 
         activeSection={effectiveSection} 
-        onSectionChange={setActiveSection} 
+        onSectionChange={setActiveSection}
+        isDockHidden={isDockHidden}
+        onToggleDock={() => setIsDockHidden(prev => !prev)}
       />
       
       {/* Main Workspace */}
