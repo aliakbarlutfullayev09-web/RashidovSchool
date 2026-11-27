@@ -11,6 +11,10 @@ export default function UserList() {
   const [profileLoadingId, setProfileLoadingId] = useState(null);
   const [tgProfiles, setTgProfiles] = useState({});
   const [selectedUserForProfile, setSelectedUserForProfile] = useState(null);
+  const [selectedUserForMessage, setSelectedUserForMessage] = useState(null);
+  const [directMessageText, setDirectMessageText] = useState('');
+  const [sendingMsg, setSendingMsg] = useState(false);
+  const [msgStatus, setMsgStatus] = useState(null);
   const [copiedId, setCopiedId] = useState(false);
 
   useEffect(() => {
@@ -22,10 +26,17 @@ export default function UserList() {
     setUsers(data);
   };
 
-  const filteredUsers = users.filter(u => 
-    (u.full_name || '').toLowerCase().includes((search || '').toLowerCase()) || 
-    (u.telegram_id || '').toString().includes(search || '')
-  );
+  const filteredUsers = users.filter((u) => {
+    const q = (search || '').trim().toLowerCase().replace(/^@/, '');
+    if (!q) return true;
+    const uname = (u.username || tgProfiles[u.telegram_id]?.username || '').toLowerCase();
+    return (
+      (u.full_name || '').toLowerCase().includes(q) ||
+      (u.telegram_id || '').toString().includes(q) ||
+      (u.class_group || '').toLowerCase().includes(q) ||
+      uname.includes(q)
+    );
+  });
 
   const handleSendGift = async (e) => {
     e.preventDefault();
@@ -90,12 +101,49 @@ export default function UserList() {
     setTimeout(() => setCopiedId(false), 1800);
   };
 
-  const handleMessageUser = (telegramId) => {
-    const url = `https://t.me/RashidovSchool_bot?start=msg_${telegramId}`;
-    if (window.Telegram?.WebApp?.openTelegramLink) {
-      window.Telegram.WebApp.openTelegramLink(url);
+  const handleMessageUser = async (student) => {
+    const target = typeof student === 'object' ? student : users.find(u => u.telegram_id === student) || { telegram_id: student };
+    const id = target.telegram_id;
+    const cachedUsername = (target.username || tgProfiles[id]?.username || '').trim().replace(/^@/, '');
+    if (cachedUsername) {
+      openTelegramUrl(`https://t.me/${cachedUsername}`);
+      return;
+    }
+
+    setProfileLoadingId(id);
+    const tgProfile = await api.getStudentTelegramProfile(id);
+    setProfileLoadingId(null);
+
+    if (tgProfile) {
+      setTgProfiles(prev => ({ ...prev, [id]: tgProfile }));
+      const resolvedUsername = (tgProfile.username || '').trim().replace(/^@/, '');
+      if (resolvedUsername) {
+        openTelegramUrl(`https://t.me/${resolvedUsername}`);
+        return;
+      }
+    }
+
+    setMsgStatus(null);
+    setDirectMessageText('');
+    setSelectedUserForMessage(target);
+  };
+
+  const handleSendDirectMessage = async (e) => {
+    e.preventDefault();
+    if (!selectedUserForMessage || !directMessageText.trim()) return;
+    setSendingMsg(true);
+    setMsgStatus(null);
+    const res = await api.sendMessageToStudent(selectedUserForMessage.telegram_id, directMessageText);
+    setSendingMsg(false);
+    if (res?.success) {
+      setMsgStatus({ ok: true, text: 'Xabar o‘quvchiga yuborildi!' });
+      setDirectMessageText('');
+      setTimeout(() => {
+        setSelectedUserForMessage(null);
+        setMsgStatus(null);
+      }, 1100);
     } else {
-      window.open(url, '_blank');
+      setMsgStatus({ ok: false, text: res?.error || 'Xabar yuborib bo‘lmadi' });
     }
   };
 
@@ -198,9 +246,9 @@ export default function UserList() {
                       </button>
 
                       <button 
-                        onClick={() => handleMessageUser(u.telegram_id)}
+                        onClick={() => handleMessageUser(u)}
                         className="bg-blue-500/10 hover:bg-blue-500 hover:text-white border border-blue-500/20 text-blue-400 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 active:scale-95"
-                        title="Bot orqali yozish"
+                        title="O'quvchiga yozish"
                       >
                         <Send className="w-3.5 h-3.5" />
                         <span>Yozish</span>
@@ -287,11 +335,11 @@ export default function UserList() {
 
             <div className="flex flex-col gap-2 pt-1">
               <a
-                href={`tg://user?id=${selectedUserForProfile.telegram_id}`}
+                href={`tg://openmessage?user_id=${selectedUserForProfile.telegram_id}`}
                 className="btn-primary w-full py-2.5 text-xs justify-center"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
-                <span>Telegram ilovasida ochish</span>
+                <span>Telegramda topish (ID orqali)</span>
               </a>
               <div className="grid grid-cols-2 gap-2">
                 <button
@@ -308,7 +356,13 @@ export default function UserList() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleMessageUser(selectedUserForProfile.telegram_id)}
+                  onClick={() => {
+                    const target = selectedUserForProfile;
+                    setSelectedUserForProfile(null);
+                    setMsgStatus(null);
+                    setDirectMessageText('');
+                    setSelectedUserForMessage(target);
+                  }}
                   className="btn-secondary py-2.5 text-xs"
                 >
                   <Send className="w-3.5 h-3.5 text-blue-400" />
@@ -316,6 +370,85 @@ export default function UserList() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Direct Message Modal (for students without public @username) */}
+      {selectedUserForMessage && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="card p-6 bg-[#1C1C1E] border border-white/10 rounded-3xl max-w-md w-full space-y-4 shadow-2xl relative">
+            <button
+              type="button"
+              onClick={() => setSelectedUserForMessage(null)}
+              className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white/70 absolute top-4 right-4"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-blue-500/20 text-blue-400 flex items-center justify-center">
+                <Send className="w-5 h-5" />
+              </div>
+              <div className="min-w-0 pr-6">
+                <h3 className="text-white font-bold text-sm truncate">
+                  {selectedUserForMessage.full_name || `ID ${selectedUserForMessage.telegram_id}`}
+                </h3>
+                <p className="text-xs text-[#8E8E93] font-mono">
+                  ID: {selectedUserForMessage.telegram_id}
+                </p>
+              </div>
+            </div>
+
+            <a
+              href={`tg://openmessage?user_id=${selectedUserForMessage.telegram_id}`}
+              className="btn-secondary w-full py-2.5 text-xs justify-center"
+            >
+              <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
+              <span>Telegramda lichkani ochish (ID orqali)</span>
+            </a>
+
+            <form onSubmit={handleSendDirectMessage} className="space-y-3 pt-1 border-t border-white/10">
+              <label className="block text-xs font-semibold text-[#8E8E93]">
+                Yoki bot orqali to‘g‘ridan-to‘g‘ri xabar yuboring:
+              </label>
+              <textarea
+                rows={3}
+                value={directMessageText}
+                onChange={e => setDirectMessageText(e.target.value)}
+                placeholder="Xabar matnini yozing..."
+                className="input-field resize-none text-xs"
+                required
+              />
+
+              {msgStatus && (
+                <div className={`p-2.5 rounded-xl text-xs font-semibold border ${
+                  msgStatus.ok
+                    ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                    : 'bg-red-500/15 border-red-500/30 text-red-300'
+                }`}>
+                  {msgStatus.text}
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedUserForMessage(null)}
+                  className="btn-secondary flex-1 py-2.5 text-xs"
+                >
+                  Bekor qilish
+                </button>
+                <button
+                  type="submit"
+                  disabled={sendingMsg || !directMessageText.trim()}
+                  className="btn-primary flex-1 py-2.5 text-xs"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>{sendingMsg ? 'Yuborilmoqda...' : 'Yuborish'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

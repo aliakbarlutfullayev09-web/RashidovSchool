@@ -7,11 +7,47 @@ import {
   getUser,
   incrementBalance,
   logTransaction,
+  setBotState,
 } from '../lib/supabase.js';
 
 export default async function (query) {
   const data = query.data || '';
   const userId = query.from.id;
+
+  if (data === 'direct_msg:cancel') {
+    await clearBotState(userId);
+    await api.answerCallbackQuery({ callback_query_id: query.id, text: 'Отменено' });
+    if (query.message) {
+      await api.sendMessage({
+        chat_id: query.message.chat.id,
+        text: '❌ Отправка сообщения отменена.',
+        parse_mode: 'HTML',
+      });
+    }
+    return;
+  }
+
+  if (data.startsWith('quick_msg:')) {
+    const targetId = Number(data.split(':')[1]);
+    const ctx = await getAdminContext(userId);
+    if (!ctx) {
+      await api.answerCallbackQuery({ callback_query_id: query.id, text: '⛔ Доступ запрещён', show_alert: true });
+      return;
+    }
+    await setBotState(userId, 'waiting_direct_msg', { target_id: targetId });
+    await api.answerCallbackQuery({ callback_query_id: query.id });
+    if (query.message) {
+      await api.sendMessage({
+        chat_id: query.message.chat.id,
+        text: `✉️ Отправьте сообщение для ученика <code>${targetId}</code>:`,
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [[{ text: '❌ Отмена', callback_data: 'direct_msg:cancel' }]],
+        },
+      });
+    }
+    return;
+  }
 
   if (data.startsWith('quick_gift:')) {
     const [, uidStr, amountStr] = data.split(':');

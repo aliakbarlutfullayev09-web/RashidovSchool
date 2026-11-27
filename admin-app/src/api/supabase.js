@@ -560,6 +560,30 @@ export const api = {
       return null;
     }
   },
+
+  sendMessageToStudent: async (telegramId, text) => {
+    const id = Number(telegramId);
+    const cleanText = (text || '').trim();
+    if (!id || !cleanText) return { success: false, error: 'ID yoki xabar bo‘sh' };
+    const botToken = import.meta.env.VITE_STUDENT_BOT_TOKEN || '8656707475:AAFW4jrRdgKdFYVoXuLXnb5GKNC2tp_EyLw';
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: id,
+          text: cleanText,
+        }),
+      });
+      const json = await res.json();
+      if (!json?.ok) {
+        return { success: false, error: json?.description || 'Telegram yuborishda xatolik' };
+      }
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e?.message || 'Tarmoq xatoligi' };
+    }
+  },
   
   updateUserBalance: async (telegramId, newBalance, giftAmount = null) => {
     const { data } = await supabase.from('users').update({ balance: newBalance }).eq('telegram_id', telegramId).select().single();

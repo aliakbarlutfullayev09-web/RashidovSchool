@@ -115,18 +115,18 @@ async def _send_student_profile_card(
 
     display_name = student.get("full_name") or tg_name or f"ID {uid}"
     safe_name = html.escape(display_name)
-    profile_link = f"https://t.me/{username}" if username else f"tg://user?id={uid}"
     username_line = f"🔗 <b>Username:</b> @{html.escape(username)}\n" if username else ""
+    no_username_line = (
+        f"🔗 <b>Чат без username:</b> <code>tg://openmessage?user_id={uid}</code>\n"
+        if not username
+        else ""
+    )
     balance = f"{int(student.get('balance') or 0):,}".replace(",", " ")
 
-    rows: list[list[InlineKeyboardButton]] = [
-        [
-            InlineKeyboardButton(
-                text=f"👤 Открыть @{username}" if username else "👤 Профиль в Telegram",
-                url=profile_link,
-            )
-        ]
-    ]
+    rows: list[list[InlineKeyboardButton]] = []
+    if username:
+        rows.append([InlineKeyboardButton(text=f"👤 Открыть @{username}", url=f"https://t.me/{username}")])
+    rows.append([InlineKeyboardButton(text="✉️ Написать ученику", callback_data=f"quick_msg:{uid}")])
     if ctx.is_superadmin or ctx.can_gift:
         rows.append(
             [
@@ -137,9 +137,10 @@ async def _send_student_profile_card(
 
     await message.answer(
         text=(
-            f"👤 <b>Ученик:</b> <a href=\"tg://user?id={uid}\">{safe_name}</a>\n"
+            f"👤 <b>Ученик:</b> {safe_name}\n"
             f"{username_line}"
             f"🆔 <b>Telegram ID:</b> <code>{uid}</code>\n"
+            f"{no_username_line}"
             f"🎓 <b>Класс:</b> {html.escape(str(student.get('class_group') or 'Abituriyent'))}\n"
             f"🛡 <b>Роль:</b> <code>{html.escape(str(student.get('role') or 'student'))}</code>\n"
             f"🧠 <b>Баланс:</b> {balance}\n"
@@ -217,6 +218,16 @@ async def cmd_user(
         return
 
     matches = await sb.find_users_by_query(query)
+    if not matches and not query.isdigit():
+        try:
+            tg_chat = await student_bot.get_chat(f"@{query}")
+            if tg_chat and tg_chat.id:
+                by_id = await sb.get_user(tg_chat.id)
+                if by_id:
+                    matches = [by_id]
+        except Exception:
+            pass
+
     if not matches:
         await message.answer(
             f"❗️ Ученик по запросу <code>{html.escape(query)}</code> не найден.",
@@ -229,7 +240,7 @@ async def cmd_user(
         return
 
     lines = [
-        f"• <a href=\"tg://user?id={u['telegram_id']}\">{html.escape(u.get('full_name') or str(u['telegram_id']))}</a>"
+        f"• <b>{html.escape(u.get('full_name') or str(u['telegram_id']))}</b>"
         f" — <code>{u['telegram_id']}</code> (🧠 {int(u.get('balance') or 0)})"
         for u in matches[:8]
     ]

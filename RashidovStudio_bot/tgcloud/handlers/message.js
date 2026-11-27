@@ -34,13 +34,14 @@ async function sendStudentProfileCard(chatId, student, ctx) {
     [tgChat?.first_name, tgChat?.last_name].filter(Boolean).join(' ') ||
     `ID ${uid}`;
   const safeName = escapeHtml(displayName);
-  const profileLink = username ? `https://t.me/${username}` : `tg://user?id=${uid}`;
   const usernameLine = username ? `🔗 <b>Username:</b> @${escapeHtml(username)}\n` : '';
   const balance = Number(student.balance || 0).toLocaleString('ru-RU');
 
-  const inlineKeyboard = [
-    [{ text: username ? `👤 Открыть @${username}` : '👤 Профиль в Telegram', url: profileLink }],
-  ];
+  const inlineKeyboard = [];
+  if (username) {
+    inlineKeyboard.push([{ text: `👤 Открыть @${username}`, url: `https://t.me/${username}` }]);
+  }
+  inlineKeyboard.push([{ text: '✉️ Написать ученику', callback_data: `quick_msg:${uid}` }]);
   if (ctx.isSuperadmin || ctx.canGift) {
     inlineKeyboard.push([
       { text: '🎁 +100 🧠', callback_data: `quick_gift:${uid}:100` },
@@ -51,9 +52,10 @@ async function sendStudentProfileCard(chatId, student, ctx) {
   await api.sendMessage({
     chat_id: chatId,
     text:
-      `👤 <b>Ученик:</b> <a href="tg://user?id=${uid}">${safeName}</a>\n` +
+      `👤 <b>Ученик:</b> ${safeName}\n` +
       usernameLine +
       `🆔 <b>Telegram ID:</b> <code>${uid}</code>\n` +
+      (!username ? `🔗 <b>Чат без username:</b> <code>tg://openmessage?user_id=${uid}</code>\n` : '') +
       `🎓 <b>Класс:</b> ${escapeHtml(student.class_group || 'Abituriyent')}\n` +
       `🛡 <b>Роль:</b> <code>${escapeHtml(student.role || 'student')}</code>\n` +
       `🧠 <b>Баланс:</b> ${balance}\n` +
@@ -69,13 +71,23 @@ async function handleUserLookup(message, ctx, argsText) {
   if (!query) {
     await api.sendMessage({
       chat_id: message.chat.id,
-      text: '❗️ Укажите Telegram ID или имя ученика:\n<code>/user 123456789</code>\n<code>/user Алишер</code>',
+      text: '❗️ Укажите Telegram ID, @username или имя ученика:\n<code>/user 123456789</code>\n<code>/user Алишер</code>',
       parse_mode: 'HTML',
     });
     return;
   }
 
-  const matches = await findUsersByQuery(query);
+  let matches = await findUsersByQuery(query);
+  if (!matches.length && !/^\d+$/.test(query)) {
+    try {
+      const tgChat = await callStudentBot('getChat', { chat_id: `@${query}` });
+      if (tgChat?.id) {
+        const byId = await getUser(tgChat.id);
+        if (byId) matches = [byId];
+      }
+    } catch {}
+  }
+
   if (!matches.length) {
     await api.sendMessage({
       chat_id: message.chat.id,
@@ -92,7 +104,7 @@ async function handleUserLookup(message, ctx, argsText) {
 
   const lines = matches.slice(0, 8).map((u) => {
     const uname = escapeHtml(u.full_name || `ID ${u.telegram_id}`);
-    return `• <a href="tg://user?id=${u.telegram_id}">${uname}</a> — <code>${u.telegram_id}</code> (🧠 ${Number(u.balance || 0)})`;
+    return `• <b>${uname}</b> — <code>${u.telegram_id}</code> (🧠 ${Number(u.balance || 0)})`;
   });
   await api.sendMessage({
     chat_id: message.chat.id,
@@ -353,5 +365,34 @@ export default async function (message) {
   const botState = await getBotState(tgUser.id);
   if (botState?.state === 'waiting_broadcast_content') {
     await handleBroadcastDraft(message, botState);
+  } else if (botState?.state === 'waiting_direct_msg') {
+    const targetId = Number(botState?.data?.target_id);
+    const msgText = (message.text || '').trim();
+    if (!targetId || !msgText) {
+      await api.sendMessage({
+        chat_id: message.chat.id,
+        text: '❗️ Отправьте текстовое сообщение для ученика.',
+        parse_mode: 'HTML',
+      });
+      return;
+    }
+    await setBotState(tgUser.id, null, {});
+    try {
+      await callStudentBot('sendMessage', {
+        chat_id: targetId,
+        text: msgText,
+      });
+      await api.sendMessage({
+        chat_id: message.chat.id,
+        text: `✅ Сообщение отправлено ученику <code>${targetId}</code>.`,
+        parse_mode: 'HTML',
+      });
+    } catch (err) {
+      await api.sendMessage({
+        chat_id: message.chat.id,
+        text: `❌ Не удалось отправить: ${escapeHtml(err?.message || 'Ошибка Telegram')}`,
+        parse_mode: 'HTML',
+      });
+    }
   }
 }
