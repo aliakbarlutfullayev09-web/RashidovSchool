@@ -3,11 +3,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import VideoPlayer from '../components/VideoPlayer';
 import RashidovLogo from '../components/RashidovLogo';
 import SubjectBannerEffects from '../components/SubjectBannerEffects';
-import { getSubjects, getCoursesAndLessons, getProgress, getVideoCheckpoints, getQuestions, saveLessonQuizProgress } from '../api/supabase';
+import { getSubjects, getCoursesAndLessons, getProgress, getVideoCheckpoints, getQuestions, saveLessonQuizProgress, sendLessonVideoToBot } from '../api/supabase';
 import { mockSubjects } from '../mock/data';
 import { 
   Play, Search, X, Bookmark, BookmarkCheck, Clock, 
-  ChevronRight, MoreHorizontal, Trophy, RotateCcw 
+  ChevronRight, MoreHorizontal, Trophy, RotateCcw,
+  Download, Loader2, Check
 } from 'lucide-react';
 import ConfettiBurst from '../components/ConfettiBurst';
 import ExamMistakeReview from '../components/ExamMistakeReview';
@@ -141,10 +142,13 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
   const [lastWatchedLesson, setLastWatchedLesson] = useState(null);
   const [lastWatchedPct, setLastWatchedPct] = useState(0);
 
-  // Video playback state
+  // Video playback & bot download state
   const [playingLesson, setPlayingLesson] = useState(null);
   const [checkpoints, setCheckpoints] = useState([]);
   const [lessonQuiz, setLessonQuiz] = useState(null);
+  const [downloadingLessonId, setDownloadingLessonId] = useState(null);
+  const [downloadedLessonIds, setDownloadedLessonIds] = useState([]);
+  const [downloadToast, setDownloadToast] = useState(null);
 
   // Carousel touch swipe handling
   const touchStartXRef = useRef(0);
@@ -282,6 +286,74 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
       localStorage.setItem('rb_saved_lessons', JSON.stringify(updated));
       return updated;
     });
+  };
+
+  const showDownloadNotice = (text, tone = 'info') => {
+    setDownloadToast({ text, tone });
+    setTimeout(() => {
+      setDownloadToast((curr) => (curr?.text === text ? null : curr));
+    }, 3500);
+  };
+
+  const handleDownloadLessonToBot = async (e, lesson) => {
+    e.stopPropagation();
+    impactLight();
+    if (!lesson || downloadingLessonId === lesson.id) return;
+
+    if (!lesson.video_url) {
+      showDownloadNotice(
+        lang === 'ru'
+          ? 'Видео для этого урока пока не добавлено'
+          : 'Ushbu dars uchun video hali yuklanmagan',
+        'error'
+      );
+      return;
+    }
+
+    const uid = user?.telegram_id || user?.id;
+    setDownloadingLessonId(lesson.id);
+
+    const res = await sendLessonVideoToBot({
+      userId: uid,
+      lessonId: lesson.id,
+      videoUrl: lesson.video_url,
+      title: lesson.title,
+    });
+
+    setDownloadingLessonId(null);
+
+    if (res?.ok) {
+      setDownloadedLessonIds((prev) => (prev.includes(lesson.id) ? prev : [...prev, lesson.id]));
+      showDownloadNotice(
+        lang === 'ru'
+          ? 'Видеоурок отправлен вам в бот!'
+          : 'Video dars Telegram botga yuborildi!',
+        'success'
+      );
+      return;
+    }
+
+    // Fallback inside Telegram Mini App: open bot deep link to receive protected video
+    if (tg && tg.initData && lesson.id && (res?.code === 'BOT_TOKEN_MISSING' || res?.code === 'ENDPOINT_UNAVAILABLE' || res?.code === 'BOT_NOT_STARTED')) {
+      const deepLink = `https://t.me/RashidovSchool_bot?start=video_${lesson.id}`;
+      if (typeof tg.openTelegramLink === 'function') {
+        tg.openTelegramLink(deepLink);
+      } else {
+        window.open(deepLink, '_blank');
+      }
+      return;
+    }
+
+    showDownloadNotice(
+      res?.code === 'BOT_NOT_STARTED'
+        ? (lang === 'ru'
+          ? 'Сначала запустите @RashidovSchool_bot в Telegram (/start)'
+          : 'Avval Telegramda @RashidovSchool_bot ga /start bosing')
+        : (lang === 'ru'
+          ? 'Не удалось отправить видео в бот. Попробуйте в Telegram'
+          : 'Videoni botga yuborib bo‘lmadi. Telegram ichida urinib ko‘ring'),
+      'error'
+    );
   };
 
   const handleStartLesson = async (lesson) => {
@@ -1103,20 +1175,41 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
                         </span>
                       </div>
 
-                      {/* Bookmark Button */}
-                      <button
-                        onClick={(e) => toggleBookmark(e, lesson.id)}
-                        className={`w-8 h-8 rounded-full flex items-center justify-center active:scale-90 transition-transform flex-shrink-0 ${
-                          isLight ? 'bg-gray-100 text-gray-600' : 'bg-[#2C2C2E] text-white/80'
-                        }`}
-                        title={t('saqlash')}
-                      >
-                        {isSaved ? (
-                          <BookmarkCheck className="w-4 h-4 text-amber-500" />
-                        ) : (
-                          <Bookmark className="w-4 h-4 text-[#8E8E93]" />
-                        )}
-                      </button>
+                      {/* Bookmark & Download to Bot Buttons */}
+                      <div className="flex flex-col gap-1.5 flex-shrink-0">
+                        <button
+                          onClick={(e) => toggleBookmark(e, lesson.id)}
+                          className={`w-8 h-8 rounded-full flex items-center justify-center active:scale-90 transition-transform ${
+                            isLight ? 'bg-gray-100 text-gray-600' : 'bg-[#2C2C2E] text-white/80'
+                          }`}
+                          title={t('saqlash')}
+                        >
+                          {isSaved ? (
+                            <BookmarkCheck className="w-4 h-4 text-amber-500" />
+                          ) : (
+                            <Bookmark className="w-4 h-4 text-[#8E8E93]" />
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          data-testid={`lesson-download-mobile-${lesson.id}`}
+                          onClick={(e) => handleDownloadLessonToBot(e, lesson)}
+                          disabled={downloadingLessonId === lesson.id}
+                          className={`w-8 h-8 rounded-full flex items-center justify-center active:scale-90 transition-transform disabled:opacity-70 ${
+                            isLight ? 'bg-gray-100 text-gray-600' : 'bg-[#2C2C2E] text-white/80'
+                          }`}
+                          title={lang === 'ru' ? 'Отправить в бот' : 'Botga yuklab olish'}
+                        >
+                          {downloadingLessonId === lesson.id ? (
+                            <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
+                          ) : downloadedLessonIds.includes(lesson.id) ? (
+                            <Check className="w-4 h-4 text-emerald-500" />
+                          ) : (
+                            <Download className={`w-4 h-4 ${isLight ? 'text-gray-600' : 'text-[#8E8E93]'}`} />
+                          )}
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
@@ -1143,8 +1236,8 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-black/15" />
 
-                      {/* Top Row: Real Duration Badge + Bookmark Button */}
-                      <div className="absolute top-3 left-3 right-3 flex items-center justify-between">
+                      {/* Top Row: Real Duration Badge + Bookmark & Download Buttons */}
+                      <div className="absolute top-3 left-3 right-3 flex items-start justify-between">
                         {realDuration ? (
                           <div className="bg-black/70 backdrop-blur-md border border-white/10 px-2.5 py-1 rounded-full text-[11px] font-mono font-bold text-white flex items-center gap-1.5 shadow">
                             <Play className="w-2.5 h-2.5 fill-white" />
@@ -1154,17 +1247,36 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
                           <div />
                         )}
 
-                        <button
-                          onClick={(e) => toggleBookmark(e, lesson.id)}
-                          className="w-8 h-8 rounded-full bg-black/60 hover:bg-black/80 backdrop-blur-md border border-white/15 flex items-center justify-center text-white active:scale-90 transition-all"
-                          title={t('saqlash')}
-                        >
-                          {isSaved ? (
-                            <BookmarkCheck className="w-4 h-4 text-amber-400" />
-                          ) : (
-                            <Bookmark className="w-4 h-4 text-white/80" />
-                          )}
-                        </button>
+                        <div className="flex flex-col gap-2">
+                          <button
+                            onClick={(e) => toggleBookmark(e, lesson.id)}
+                            className="w-8 h-8 rounded-full bg-black/60 hover:bg-black/80 backdrop-blur-md border border-white/15 flex items-center justify-center text-white active:scale-90 transition-all"
+                            title={t('saqlash')}
+                          >
+                            {isSaved ? (
+                              <BookmarkCheck className="w-4 h-4 text-amber-400" />
+                            ) : (
+                              <Bookmark className="w-4 h-4 text-white/80" />
+                            )}
+                          </button>
+
+                          <button
+                            type="button"
+                            data-testid={`lesson-download-${lesson.id}`}
+                            onClick={(e) => handleDownloadLessonToBot(e, lesson)}
+                            disabled={downloadingLessonId === lesson.id}
+                            className="w-8 h-8 rounded-full bg-black/60 hover:bg-black/80 backdrop-blur-md border border-white/15 flex items-center justify-center text-white active:scale-90 transition-all disabled:opacity-70 cursor-pointer"
+                            title={lang === 'ru' ? 'Отправить в бот' : 'Botga yuklab olish'}
+                          >
+                            {downloadingLessonId === lesson.id ? (
+                              <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
+                            ) : downloadedLessonIds.includes(lesson.id) ? (
+                              <Check className="w-4 h-4 text-emerald-400" />
+                            ) : (
+                              <Download className="w-4 h-4 text-white/80" />
+                            )}
+                          </button>
+                        </div>
                       </div>
 
                       {/* Bottom Lesson Title & Category */}
@@ -1222,6 +1334,23 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
             </div>
           )}
 
+        </div>
+      )}
+
+      {/* Bot Download Toast */}
+      {downloadToast && (
+        <div
+          data-testid="lesson-download-toast"
+          className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-[120] px-4 py-2.5 rounded-2xl text-xs font-bold shadow-2xl border backdrop-blur-xl flex items-center gap-2 animate-in fade-in zoom-in-95 duration-200 max-w-[90vw] ${
+            downloadToast.tone === 'success'
+              ? 'bg-emerald-950/90 border-emerald-500/40 text-emerald-200'
+              : downloadToast.tone === 'error'
+              ? 'bg-red-950/90 border-red-500/40 text-red-200'
+              : 'bg-[#1C1C1E]/95 border-white/15 text-white'
+          }`}
+        >
+          {downloadToast.tone === 'success' && <Check className="w-4 h-4 text-emerald-400 shrink-0" />}
+          <span>{downloadToast.text}</span>
         </div>
       )}
 

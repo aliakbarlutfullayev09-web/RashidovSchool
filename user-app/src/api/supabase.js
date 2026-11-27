@@ -560,6 +560,57 @@ export const createStarsInvoiceLink = async (stars, userId) => {
   };
 };
 
+/**
+ * Sends a lesson video directly to the student via Telegram Bot with protect_content=true
+ * (blocks saving to gallery and forwarding) and lesson title as caption.
+ */
+export const sendLessonVideoToBot = async ({ userId, lessonId, videoUrl, title }) => {
+  const apiUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, '');
+  const endpoints = apiUrl
+    ? [`${apiUrl}/api/lessons/send-video`, '/api/send-lesson-video']
+    : ['/api/send-lesson-video'];
+
+  let lastError = null;
+  let lastCode = null;
+
+  for (const url of endpoints) {
+    try {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, lessonId, videoUrl, title })
+      });
+      const contentType = resp.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        continue;
+      }
+      const data = await resp.json();
+      if (resp.ok && data?.ok) {
+        return { ok: true };
+      }
+      if (data?.code) lastCode = data.code;
+      if (data?.error || data?.detail) lastError = data.error || data.detail;
+    } catch (e) {
+      lastError = e?.message || 'Network error';
+    }
+  }
+
+  try {
+    const { data, error } = await supabase.functions.invoke('send-lesson-video', {
+      body: { userId, lessonId, videoUrl, title }
+    });
+    if (!error && data?.ok) {
+      return { ok: true };
+    }
+  } catch {}
+
+  return {
+    ok: false,
+    code: lastCode || 'ENDPOINT_UNAVAILABLE',
+    error: lastError || 'Video yuborish xizmati topilmadi'
+  };
+};
+
 export const createInvoice = async (userId, amount) => {
   return createStarsInvoiceLink(amount, userId);
 };

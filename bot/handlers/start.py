@@ -39,9 +39,14 @@ async def start_handler(message: Message, command: CommandObject, db_user: dict,
                     if lesson and lesson['video_url']:
                         await message.answer("🔄 Загрузка видео...")
                         try:
-                            await message.answer_video(lesson['video_url'], caption=lesson['title'])
+                            await message.answer_video(
+                                lesson['video_url'],
+                                caption=lesson['title'],
+                                supports_streaming=True,
+                                protect_content=True,
+                            )
                         except Exception as e:
-                            await message.answer(f"📹 {lesson['title']}\nСмотреть: {lesson['video_url']}")
+                            await message.answer("Video faylini yuklab bo'lmadi. Iltimos, platformada tomosha qiling.", protect_content=True)
                     else:
                         await message.answer("Видео не найдено.")
                 return
