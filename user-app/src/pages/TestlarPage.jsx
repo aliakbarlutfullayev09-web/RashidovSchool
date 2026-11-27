@@ -1237,22 +1237,6 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
           paddingBottom: 'calc(var(--safe-area-bottom, 0px) + 88px)'
         }}
       >
-        <div className="flex items-center justify-between pt-1">
-          <button
-            type="button"
-            onClick={() => {
-              impactLight();
-              setReviewEntry(null);
-            }}
-            className={`flex items-center gap-1.5 text-xs sm:text-sm transition-colors cursor-pointer ${
-              isLight ? 'text-gray-600 hover:text-[#1C1C1E]' : 'text-[#8E8E93] hover:text-white'
-            }`}
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>{lang === 'ru' ? 'К вариантам' : 'Variantlarga qaytish'}</span>
-          </button>
-        </div>
-
         {/* Saved Result Summary Card */}
         <div
           className={`border rounded-3xl p-6 text-center space-y-4 shadow-lg ${
