@@ -752,20 +752,14 @@ export default function VideoPlayer({
             impactLight();
             setIsGlossaryOpen(prev => !prev);
           }}
-          className={`flex items-center backdrop-blur-xl border shadow-xl transition-all active:scale-95 h-9 px-3.5 rounded-full gap-1.5 text-xs font-semibold cursor-pointer ${
+          className={`w-9 h-9 rounded-full flex items-center justify-center backdrop-blur-xl border-[1.5px] shadow-xl transition-all active:scale-95 cursor-pointer ${
             isGlossaryOpen
-              ? 'bg-purple-600/40 border-purple-400/60 text-white shadow-purple-500/25'
-              : 'bg-black/65 hover:bg-black/85 border-white/20 text-white/95'
+              ? 'bg-[#0F1E40]/85 border-[#1D4ED8] text-blue-200 shadow-blue-900/40'
+              : 'bg-black/65 hover:bg-black/85 border-[#1E3A8A] text-blue-300'
           }`}
           title={lang === 'ru' ? 'Термины урока' : 'Dars terminlari'}
         >
-          <BookOpen className="w-4 h-4 text-purple-300 shrink-0" />
-          <span>{lang === 'ru' ? 'Термины' : 'Terminlar'}</span>
-          {terms.length > 0 && (
-            <span className="bg-purple-500/40 text-purple-200 text-[10px] px-1.5 py-0.2 rounded-full font-bold ml-0.5">
-              {terms.length}
-            </span>
-          )}
+          <BookOpen className="w-4 h-4 shrink-0" />
         </button>
       </div>
 
@@ -926,52 +920,36 @@ export default function VideoPlayer({
               onTouchEnd={(e) => e.stopPropagation()}
               className={`absolute z-30 right-3 sm:right-4 ${
                 isOverlayLayout ? 'top-16 sm:top-[68px]' : 'top-3'
-              } w-[min(310px,calc(100%-24px))] bg-[#121216]/88 backdrop-blur-xl border border-purple-400/40 rounded-2xl p-3 sm:p-3.5 shadow-[0_12px_36px_rgba(0,0,0,0.6)] cursor-pointer select-none`}
+              } w-[min(310px,calc(100%-24px))] bg-[#121216]/88 backdrop-blur-xl border-[1.5px] border-[#1E3A8A] rounded-2xl p-3 sm:p-3.5 shadow-[0_12px_36px_rgba(0,0,0,0.6)] cursor-pointer select-none`}
             >
-              <div className="flex items-center justify-between gap-2 mb-1.5">
-                <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-purple-500/20 border border-purple-400/30 text-purple-200">
-                  <BookOpen className="w-3 h-3 text-purple-300" />
-                  <span>
-                    {lang === 'ru' ? 'Термин' : 'Termin'} • {formatTime(activeTermPopup._ts ?? 0)}
-                  </span>
-                </span>
+              <div className="flex items-start justify-between gap-2">
+                <div className="font-bold text-xs sm:text-sm text-white leading-snug tracking-wide min-w-0 flex-1">
+                  <span>{typedTermTitle}</span>
+                  {isTypingTerm && typedTermTitle.length < activeTermPopup._title.length && (
+                    <span className="inline-block w-[2px] h-[1em] align-middle ml-0.5 bg-blue-400 animate-pulse" />
+                  )}
+                </div>
                 <button
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     setActiveTermPopup(null);
                   }}
-                  className="w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/75 hover:text-white transition-colors"
+                  className="w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/75 hover:text-white transition-colors shrink-0"
                   aria-label="Close term"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
               </div>
 
-              <div className="font-bold text-xs sm:text-sm text-white leading-snug tracking-wide">
-                <span>{typedTermTitle}</span>
-                {isTypingTerm && typedTermTitle.length < activeTermPopup._title.length && (
-                  <span className="inline-block w-[2px] h-[1em] align-middle ml-0.5 bg-purple-400 animate-pulse" />
-                )}
-              </div>
-
               {(typedTermDef || (isTypingTerm && typedTermTitle.length >= activeTermPopup._title.length && activeTermPopup._def)) && (
-                <p className="mt-1 text-[11px] sm:text-xs text-white/80 leading-relaxed">
+                <p className="mt-1.5 text-[11px] sm:text-xs text-white/80 leading-relaxed">
                   <span>{typedTermDef}</span>
                   {isTypingTerm && typedTermTitle.length >= activeTermPopup._title.length && (
-                    <span className="inline-block w-[2px] h-[1em] align-middle ml-0.5 bg-purple-400 animate-pulse" />
+                    <span className="inline-block w-[2px] h-[1em] align-middle ml-0.5 bg-blue-400 animate-pulse" />
                   )}
                 </p>
               )}
-
-              <div className="mt-2 pt-1.5 border-t border-white/10 flex items-center justify-between text-[10px] font-medium text-purple-300/90">
-                <span>
-                  {lang === 'ru'
-                    ? 'Сохранено во вкладке «Термины»'
-                    : '«Terminlar» bo‘limida saqlandi'}
-                </span>
-                <span>→</span>
-              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -993,6 +971,7 @@ export default function VideoPlayer({
             className="z-30"
           >
             <CheckpointModal 
+              key={`${activeCheckpoint.id}_${activeCheckpoint.trigger_time_sec}`}
               checkpoint={activeCheckpoint} 
               onAnswer={handleAnswerCheckpoint} 
             />
