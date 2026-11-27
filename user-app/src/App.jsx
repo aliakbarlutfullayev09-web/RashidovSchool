@@ -16,7 +16,7 @@ import { Loader2 } from 'lucide-react';
 
 function MainApp() {
   const { resolvedTheme } = useTheme();
-  const { lang } = useLanguage();
+  const { lang, setSyncUserId, syncLanguageFromDb } = useLanguage();
   const isLight = resolvedTheme === 'light';
   const [activeTab, setActiveTab] = useState(0);
   const { tg, isTelegram, user: tgUser, setBackButton } = useTelegram();
@@ -137,10 +137,15 @@ function MainApp() {
       try {
         const synced = await syncUserSession(rawUser);
         if (mounted && synced) {
+          const uid = synced.telegram_id || resolvedId;
+          setSyncUserId(uid);
+          if (synced.language === 'ru' || synced.language === 'uz') {
+            syncLanguageFromDb(synced.language);
+          }
           setDbUser({
             ...synced,
             photo_url: synced.photo_url || photoUrl,
-            profile_color: getSavedProfileColor(synced.telegram_id || resolvedId)
+            profile_color: getSavedProfileColor(uid)
           });
           setLoading(false);
           return;
@@ -149,6 +154,7 @@ function MainApp() {
         console.warn('Session sync warning:', e);
       }
       
+      setSyncUserId(resolvedId);
       setDbUser({
         telegram_id: resolvedId,
         full_name: firstName,
@@ -167,7 +173,35 @@ function MainApp() {
     getSupportContacts().catch(() => {});
 
     return () => { mounted = false; };
-  }, [tgUser]);
+  }, [tgUser, setSyncUserId, syncLanguageFromDb]);
+
+  // Keep app language synced with bot /lang changes when app regains focus
+  useEffect(() => {
+    const uid = dbUser?.telegram_id;
+    if (!uid) return;
+
+    const refreshLangFromSupabase = async () => {
+      try {
+        const { data } = await getUserData(uid);
+        if (data?.language === 'ru' || data?.language === 'uz') {
+          syncLanguageFromDb(data.language);
+        }
+      } catch {}
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        refreshLangFromSupabase();
+      }
+    };
+
+    window.addEventListener('focus', refreshLangFromSupabase);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      window.removeEventListener('focus', refreshLangFromSupabase);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [dbUser?.telegram_id, syncLanguageFromDb]);
 
   if (loading || !dbUser) {
     return (

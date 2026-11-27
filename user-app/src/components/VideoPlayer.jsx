@@ -729,18 +729,22 @@ export default function VideoPlayer({
       className="fixed inset-0 z-50 bg-[#000000] text-white flex flex-col justify-between overflow-hidden select-none video-player-container"
     >
 
-      {/* ── TOP TELEGRAM-STYLE "TERMINLAR" BUTTON (Always visible on desktop & portrait) ── */}
+      {/* ── TOP TELEGRAM-STYLE "TERMINLAR" BUTTON (Fades in/out with player controls) ── */}
       <div 
         onTouchStart={(e) => e.stopPropagation()}
         onTouchEnd={(e) => e.stopPropagation()}
         className={`absolute z-40 pointer-events-auto transition-all duration-300 ${
           isOverlayLayout ? 'right-4' : 'right-3'
         } ${
-          isOverlayLayout && !isDesktop && !showControls && !isGlossaryOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'
+          ((!showControls && !isGlossaryOpen) || Boolean(activeCheckpoint))
+            ? 'opacity-0 pointer-events-none scale-95'
+            : 'opacity-100 scale-100'
         }`}
         style={{
-          top: isOverlayLayout 
-            ? 'max(calc(var(--safe-area-top, 0px) + 20px), 24px)' 
+          top: isOverlayLayout
+            ? (isDesktop
+                ? 'max(calc(var(--safe-area-top, 0px) + 20px), 24px)'
+                : 'max(calc(var(--safe-area-top, 0px) + 52px), 56px)')
             : 'max(calc(var(--safe-area-top, 0px) + 54px), 80px)'
         }}
       >
@@ -919,7 +923,9 @@ export default function VideoPlayer({
               onTouchStart={(e) => e.stopPropagation()}
               onTouchEnd={(e) => e.stopPropagation()}
               className={`absolute z-30 right-3 sm:right-4 ${
-                isOverlayLayout ? 'top-16 sm:top-[68px]' : 'top-3'
+                isOverlayLayout
+                  ? (isDesktop ? 'top-16 sm:top-[68px]' : 'top-[104px] sm:top-[110px]')
+                  : 'top-3'
               } w-[min(310px,calc(100%-24px))] bg-[#121216]/88 backdrop-blur-xl border-[1.5px] border-[#1E3A8A] rounded-2xl p-3 sm:p-3.5 shadow-[0_12px_36px_rgba(0,0,0,0.6)] cursor-pointer select-none`}
             >
               <div className="flex items-start justify-between gap-2">
@@ -961,23 +967,23 @@ export default function VideoPlayer({
             <span>{toastMessage}</span>
           </div>
         )}
-
-        {/* Stop-Test Checkpoint Overlay */}
-        {activeCheckpoint && (
-          <div
-            onClick={(e) => e.stopPropagation()}
-            onTouchStart={(e) => e.stopPropagation()}
-            onTouchEnd={(e) => e.stopPropagation()}
-            className="z-30"
-          >
-            <CheckpointModal 
-              key={`${activeCheckpoint.id}_${activeCheckpoint.trigger_time_sec}`}
-              checkpoint={activeCheckpoint} 
-              onAnswer={handleAnswerCheckpoint} 
-            />
-          </div>
-        )}
       </div>
+
+      {/* Stop-Test Checkpoint Overlay (outside video-wrapper stacking context so player controls never sit above it) */}
+      {activeCheckpoint && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
+          className="relative z-[150]"
+        >
+          <CheckpointModal 
+            key={`${activeCheckpoint.id}_${activeCheckpoint.trigger_time_sec}`}
+            checkpoint={activeCheckpoint} 
+            onAnswer={handleAnswerCheckpoint} 
+          />
+        </div>
+      )}
 
       {/* ── CONTROLS & ENHANCED SEEKBAR (Full width horizontally across tablet & PC) ── */}
       <div 
@@ -989,7 +995,7 @@ export default function VideoPlayer({
             ? 'absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black/80 to-transparent' 
             : 'bg-[#121214] border-b border-white/[0.06]'
         } ${
-          showControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'
+          showControls && !activeCheckpoint ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'
         }`}
         style={{
           paddingBottom: isOverlayLayout ? 'max(calc(var(--safe-area-bottom, 0px) + 12px), 16px)' : '10px',
@@ -1182,12 +1188,11 @@ export default function VideoPlayer({
         </div>
       )}
 
-      {/* ── PORTRAIT MODE: TERMS BELOW VIDEO ── */}
-      {!isOverlayLayout && (
+      {/* ── PORTRAIT MODE: TERMS BELOW VIDEO (shown when opened via top-right Terminlar icon) ── */}
+      {!isOverlayLayout && isGlossaryOpen && (
         <div className="flex-1 overflow-y-auto bg-[#000000] flex flex-col no-scrollbar">
-          {isGlossaryOpen ? (
-            /* Dedicated Terms List Section displayed below video */
-            <div className="p-4 sm:px-8 space-y-3 flex-1 flex flex-col">
+          {/* Dedicated Terms List Section displayed below video */}
+          <div className="p-4 sm:px-8 space-y-3 flex-1 flex flex-col">
               <div className="flex items-center justify-between pb-2 border-b border-white/[0.08]">
                 <div className="flex items-center gap-2">
                   <div className="w-7 h-7 rounded-lg bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-300">
@@ -1293,27 +1298,7 @@ export default function VideoPlayer({
                     : 'Ushbu dars uchun terminlar lug‘ati kiritilmagan.'}
                 </div>
               )}
-            </div>
-          ) : (
-            /* Tap to open terms button (always accessible below video in portrait mode) */
-            <div className="p-4 sm:px-8">
-              <button
-                type="button"
-                onClick={() => setIsGlossaryOpen(true)}
-                className="w-full py-3 px-4 rounded-2xl bg-[#1C1C1E] hover:bg-[#242426] border border-purple-500/25 flex items-center justify-between text-xs font-bold text-purple-300 active:scale-[0.98] transition-all cursor-pointer"
-              >
-                <div className="flex items-center gap-2.5">
-                  <BookOpen className="w-4 h-4 text-purple-400" />
-                  <span>{lang === 'ru' ? 'Список терминов урока' : 'Dars terminlari ro‘yxati'}</span>
-                </div>
-                <span className="bg-purple-500/20 text-purple-200 text-[10px] px-2 py-0.5 rounded-full">
-                  {lang === 'ru'
-                    ? `${unlockedTermsCount}/${normalizedTerms.length} терм.`
-                    : `${unlockedTermsCount}/${normalizedTerms.length} ta termin`}
-                </span>
-              </button>
-            </div>
-          )}
+          </div>
         </div>
       )}
 

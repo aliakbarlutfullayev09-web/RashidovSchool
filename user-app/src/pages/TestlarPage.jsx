@@ -132,16 +132,16 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
     ? (lang === 'ru' ? 'МАТЕМАТИКА' : 'MATEMATIKA')
     : (activeSubject?.name || (lang === 'ru' ? 'ПРЕДМЕТ' : 'FAN')).toUpperCase();
 
-  // Distinct custom high-res background & video per subject
+  // Distinct custom high-res background & video per subject (Matematika has no photo)
   let subjectImage = activeSubject?.image_url;
-  if (!subjectImage || subjectImage.includes('unsplash.com/photo-1530026405186') || subjectImage.includes('photo-1635070041078')) {
-    subjectImage = isBio 
-      ? '/banners/biologiya_banner.jpg'
-      : isKimyo
-      ? '/banners/kimyo_banner.jpg'
-      : isMatem
-      ? 'https://images.unsplash.com/photo-1633424974203-6c91b2a651ee?auto=format&fit=crop&w=1200&q=85'
-      : 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1200&q=85';
+  if (isBio) {
+    subjectImage = '/banners/biologiya_banner.jpg';
+  } else if (isKimyo) {
+    subjectImage = '/banners/kimyo_banner.jpg';
+  } else if (isMatem) {
+    subjectImage = null;
+  } else if (!subjectImage || subjectImage.includes('unsplash.com/photo-1530026405186') || subjectImage.includes('photo-1635070041078')) {
+    subjectImage = 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1200&q=85';
   }
 
   const subjectVideo = isBio 
@@ -1364,11 +1364,11 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
           isLight ? 'text-[#1C1C1E]' : 'text-white'
         }`}
         style={{
-          paddingBottom: 'calc(var(--safe-area-bottom, 0px) + 74px)'
+          paddingBottom: 'calc(var(--safe-area-bottom, 0px) + 92px)'
         }}
       >
         <div 
-          className="h-full flex-1 flex flex-col justify-between items-center px-4 pt-1 pb-1 w-full max-w-md sm:max-w-xl mx-auto overflow-hidden select-none"
+          className="h-full flex-1 flex flex-col items-center px-4 pt-2 pb-2 w-full max-w-md sm:max-w-xl mx-auto overflow-hidden select-none gap-3"
           onTouchStart={(e) => {
             touchStartXRef.current = e.touches[0].clientX;
             touchStartYRef.current = e.touches[0].clientY;
@@ -1383,32 +1383,30 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
           }}
         >
           {/* Stretched Vertical Card Container: flex-1 min-h-0 fills exact screen height with zero overflow */}
-          <div className="relative w-full flex-1 min-h-0 my-1 overflow-hidden">
-            <AnimatePresence initial={false} custom={slideDirection}>
+          <div className="relative w-full flex-1 min-h-0 overflow-hidden rounded-[28px]">
+            <AnimatePresence initial={false} custom={slideDirection} mode="sync">
               <motion.div 
                 key={activeSubjectIndex}
                 custom={slideDirection}
                 variants={{
                   enter: (dir) => ({
-                    x: dir > 0 ? '100%' : '-100%',
+                    x: dir > 0 ? 'calc(100% + 20px)' : 'calc(-100% - 20px)',
                     opacity: 1,
-                    scale: 1,
                   }),
                   center: {
                     x: 0,
                     opacity: 1,
-                    scale: 1,
                     transition: {
-                      x: { type: "spring", stiffness: 320, damping: 32, mass: 0.8 },
+                      x: { type: "tween", ease: [0.32, 0.72, 0, 1], duration: 0.4 },
+                      opacity: { duration: 0 },
                     }
                   },
                   exit: (dir) => ({
-                    x: dir > 0 ? '-100%' : '100%',
-                    opacity: 0.9,
-                    scale: 0.98,
+                    x: dir > 0 ? 'calc(-100% - 20px)' : 'calc(100% + 20px)',
+                    opacity: 1,
                     transition: {
-                      x: { type: "spring", stiffness: 320, damping: 32, mass: 0.8 },
-                      opacity: { duration: 0.28 }
+                      x: { type: "tween", ease: [0.32, 0.72, 0, 1], duration: 0.4 },
+                      opacity: { duration: 0 },
                     }
                   })
                 }}
@@ -1423,7 +1421,7 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
                   isolation: 'isolate',
                   WebkitMaskImage: '-webkit-radial-gradient(white, black)'
                 }}
-                className={`absolute inset-0 w-full h-full rounded-[28px] overflow-hidden border ${cardBorderClass} ${cardShadowClass} bg-gradient-to-b ${cardBgGradient} cursor-pointer group active:scale-[0.99] transition-transform duration-200 flex flex-col justify-between p-5 sm:p-6 select-none`}
+                className={`absolute inset-0 w-full h-full rounded-[28px] overflow-hidden border ${cardBorderClass} ${cardShadowClass} bg-gradient-to-b ${cardBgGradient} cursor-pointer group active:scale-[0.99] transition-transform duration-150 flex flex-col justify-between p-5 sm:p-6 select-none`}
               >
                 {/* Background Subject Artwork */}
                 <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -1439,13 +1437,13 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
                       preload="auto"
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 opacity-85" 
                     />
-                  ) : (
+                  ) : subjectImage ? (
                     <img 
                       src={subjectImage} 
                       alt={currentSubjectTitle} 
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 opacity-80" 
                     />
-                  )}
+                  ) : null}
                   {/* Deep Cinematic Vignette Overlays */}
                   <div className="absolute inset-0 bg-gradient-to-t from-black via-black/45 to-transparent" />
                   <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black" />
@@ -1481,7 +1479,7 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
           </div>
 
           {/* Carousel Pagination Dots */}
-          <div className="flex items-center justify-center gap-2 pt-1 pb-1 flex-shrink-0">
+          <div className="relative z-10 flex items-center justify-center gap-2 py-1.5 flex-shrink-0 w-full">
             {(subjects.length > 0 ? subjects : [1, 2, 3]).map((s, idx) => (
               <button
                 key={s.id || idx}
@@ -1490,16 +1488,16 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
                   setSlideDirection(idx >= activeSubjectIndex ? 1 : -1);
                   setActiveSubjectIndex(idx);
                 }}
-                className={`transition-all duration-300 rounded-full ${
+                className={`h-1.5 rounded-full transition-all duration-300 ${
                   idx === activeSubjectIndex 
                     ? isLight
-                      ? 'w-7 h-2 bg-[#007AFF] shadow-[0_0_8px_rgba(0,122,255,0.45)]'
-                      : 'w-7 h-2 bg-white shadow-[0_0_10px_rgba(255,255,255,0.8)]'
+                      ? 'w-6 bg-[#007AFF] shadow-[0_0_8px_rgba(0,122,255,0.45)]'
+                      : 'w-6 bg-white shadow-[0_0_8px_white]'
                     : isLight
-                    ? 'w-2 h-2 bg-black/20 hover:bg-black/35'
-                    : 'w-2 h-2 bg-white/30 hover:bg-white/50'
+                    ? 'w-1.5 bg-black/20'
+                    : 'w-1.5 bg-white/30'
                 }`}
-                aria-label={lang === 'ru' ? `Перейти к слайду ${idx + 1}` : `Go to slide ${idx + 1}`}
+                aria-label={lang === 'ru' ? `Предмет ${idx + 1}` : `Fan ${idx + 1}`}
               />
             ))}
           </div>

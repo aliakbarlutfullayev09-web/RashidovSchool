@@ -280,14 +280,14 @@ export default function DesktopSubjectCarousel({
               ? (lang === 'ru' ? 'МАТЕМАТИКА' : 'MATEMATIKA')
               : (subject.name || (lang === 'ru' ? 'ПРЕДМЕТ' : 'FAN')).toUpperCase();
 
-            // Strict static background image: Biologiya is ALWAYS the verified DNA particle banner
+            // Strict static background image: Biologiya is ALWAYS the verified DNA particle banner; Matematika has no photo
             let image = subject.image_url;
             if (isBio) {
               image = '/banners/biologiya_banner.jpg';
             } else if (isChem) {
               image = '/banners/kimyo_banner.jpg';
             } else if (isMath) {
-              image = 'https://images.unsplash.com/photo-1633424974203-6c91b2a651ee?auto=format&fit=crop&w=1200&q=85';
+              image = null;
             } else if (!image || image.includes('photo-1451187580459')) {
               image = '/banners/biologiya_banner.jpg';
             }
@@ -350,13 +350,13 @@ export default function DesktopSubjectCarousel({
                       preload="auto"
                       className="w-full h-full object-cover" 
                     />
-                  ) : (
+                  ) : image ? (
                     <img 
                       src={image} 
                       alt={title} 
                       className="w-full h-full object-cover" 
                     />
-                  )}
+                  ) : null}
                   {/* Vignette gradients */}
                   <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
                   <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black" />

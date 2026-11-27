@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { updateUserProfile } from '../api/supabase';
 
 const translations = {
   uz: {
@@ -146,20 +147,41 @@ const translations = {
 const LanguageContext = createContext();
 
 export function LanguageProvider({ children, initialLang = 'uz' }) {
-  const [lang, setLang] = useState(() => {
-    return localStorage.getItem('rb_lang') || initialLang || 'uz';
+  const [lang, setLangState] = useState(() => {
+    const saved = localStorage.getItem('rb_lang');
+    return saved === 'ru' || saved === 'uz' ? saved : (initialLang === 'ru' ? 'ru' : 'uz');
   });
+  const [syncUserId, setSyncUserId] = useState(null);
 
   useEffect(() => {
     localStorage.setItem('rb_lang', lang);
   }, [lang]);
+
+  const syncLanguageFromDb = useCallback((dbLang) => {
+    if (dbLang !== 'ru' && dbLang !== 'uz') return;
+    setLangState(prev => (prev === dbLang ? prev : dbLang));
+    try {
+      localStorage.setItem('rb_lang', dbLang);
+    } catch {}
+  }, []);
+
+  const setLang = useCallback((nextLang) => {
+    const normalized = nextLang === 'ru' ? 'ru' : 'uz';
+    setLangState(normalized);
+    try {
+      localStorage.setItem('rb_lang', normalized);
+    } catch {}
+    if (syncUserId) {
+      updateUserProfile(syncUserId, { language: normalized }).catch(() => {});
+    }
+  }, [syncUserId]);
 
   const t = (key) => {
     return translations[lang]?.[key] || translations.uz?.[key] || key;
   };
 
   return (
-    <LanguageContext.Provider value={{ lang, setLang, t }}>
+    <LanguageContext.Provider value={{ lang, setLang, setSyncUserId, syncLanguageFromDb, t }}>
       {children}
     </LanguageContext.Provider>
   );

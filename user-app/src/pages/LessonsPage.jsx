@@ -501,7 +501,13 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
         >
           <ConfettiBurst active={true} duration={6500} />
 
-          <div className="w-full max-w-lg sm:max-w-3xl desktop:max-w-5xl mx-auto p-4 sm:px-6 pt-6 pb-28 space-y-5">
+          <div
+            className="w-full max-w-lg sm:max-w-3xl desktop:max-w-5xl mx-auto px-4 sm:px-6 space-y-5"
+            style={{
+              paddingTop: isDesktop ? '24px' : 'max(calc(var(--safe-area-top, 16px) + 52px), 64px)',
+              paddingBottom: 'calc(var(--safe-area-bottom, 16px) + 28px)'
+            }}
+          >
             {/* Final Results Banner Card matching DTM Mock */}
             <div
               className={`border rounded-3xl p-6 sm:p-8 text-center space-y-5 shadow-lg ${
@@ -590,6 +596,8 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
       );
     }
 
+    const progressPct = Math.round(((lessonQuiz.currentQ + 1) / (lessonQuiz.questions.length || 1)) * 100);
+
     return (
       <div
         data-testid="lesson-quiz-runner"
@@ -597,48 +605,70 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
           isLight ? 'bg-[#F2F2F7] text-[#1C1C1E]' : 'bg-[#000000] text-white'
         }`}
       >
-        <div className="min-h-full w-full max-w-md sm:max-w-2xl desktop:max-w-4xl mx-auto p-4 sm:px-6 pb-20 flex flex-col">
-          <div className={`flex items-center justify-center py-3 border-b shrink-0 ${
-            isLight ? 'border-black/10' : 'border-white/10'
+        <div
+          className="min-h-full w-full max-w-md sm:max-w-2xl desktop:max-w-4xl mx-auto px-4 sm:px-6 flex flex-col"
+          style={{
+            paddingTop: isDesktop ? '24px' : 'max(calc(var(--safe-area-top, 16px) + 52px), 64px)',
+            paddingBottom: 'calc(var(--safe-area-bottom, 16px) + 28px)'
+          }}
+        >
+          {/* Telegram-aligned Quiz Progress Header */}
+          <div className={`rounded-2xl border p-3.5 mb-5 shrink-0 ${
+            isLight ? 'bg-white border-black/[0.08] shadow-sm' : 'bg-[#1C1C1E] border-white/[0.08]'
           }`}>
-            <span className="text-xs font-bold text-[#007AFF]">
-              {lang === 'ru'
-                ? `Вопрос ${lessonQuiz.currentQ + 1} / ${lessonQuiz.questions.length}`
-                : `Savol ${lessonQuiz.currentQ + 1} / ${lessonQuiz.questions.length}`}
-            </span>
+            <div className="flex items-center justify-between gap-2 mb-2.5">
+              <span className={`text-xs font-semibold truncate ${isLight ? 'text-gray-600' : 'text-[#8E8E93]'}`}>
+                {lessonQuiz.lesson?.title || (lang === 'ru' ? 'Тест урока' : 'Dars testi')}
+              </span>
+              <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-[#007AFF]/15 text-[#007AFF] shrink-0">
+                {lang === 'ru'
+                  ? `Вопрос ${lessonQuiz.currentQ + 1} / ${lessonQuiz.questions.length}`
+                  : `Savol ${lessonQuiz.currentQ + 1} / ${lessonQuiz.questions.length}`}
+              </span>
+            </div>
+            <div className={`w-full h-1.5 rounded-full overflow-hidden ${isLight ? 'bg-gray-200' : 'bg-[#2C2C2E]'}`}>
+              <div
+                className="h-full bg-[#007AFF] rounded-full transition-all duration-300"
+                style={{ width: `${progressPct}%` }}
+              />
+            </div>
           </div>
 
-          <div className="my-auto py-6">
-            {q.image_url && !q.image_url.startsWith('cp_meta:') && (
-              <div className={`relative w-full aspect-video rounded-2xl overflow-hidden mb-4 border bg-black ${
-                isLight ? 'border-black/10' : 'border-white/10'
-              }`}>
-                <img src={q.image_url} alt="" className="w-full h-full object-contain" />
-              </div>
-            )}
+          <div className="my-auto pb-4 space-y-5">
+            <div className={`rounded-3xl border p-4 sm:p-6 space-y-4 shadow-lg ${
+              isLight ? 'bg-white border-black/[0.08]' : 'bg-[#1C1C1E] border-white/[0.08]'
+            }`}>
+              {q.image_url && !q.image_url.startsWith('cp_meta:') && (
+                <div className={`relative w-full rounded-2xl overflow-hidden border flex items-center justify-center ${
+                  isLight ? 'bg-[#F2F2F7] border-black/[0.06]' : 'bg-[#121214] border-white/[0.06]'
+                }`}>
+                  <img src={q.image_url} alt="" className="w-full max-h-60 object-contain" />
+                </div>
+              )}
 
-            <h3 className={`text-lg font-bold mb-6 leading-snug ${isLight ? 'text-[#1C1C1E]' : 'text-white'}`}>
-              {q.text}
-            </h3>
+              <h3 className={`text-base sm:text-lg font-bold leading-snug ${isLight ? 'text-[#1C1C1E]' : 'text-white'}`}>
+                {q.text}
+              </h3>
+            </div>
 
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               {(q.options || []).map((opt, optIdx) => (
                 <button
                   key={optIdx}
                   type="button"
                   onClick={() => handleAnswerQuiz(optIdx)}
-                  className={`w-full p-4 rounded-2xl border hover:border-[#007AFF]/50 text-left text-sm font-semibold flex items-center gap-3 active:scale-[0.98] transition-all cursor-pointer ${
+                  className={`w-full p-3.5 sm:p-4 rounded-2xl border hover:border-[#007AFF]/60 text-left text-sm font-semibold flex items-center gap-3 active:scale-[0.98] transition-all cursor-pointer ${
                     isLight
-                      ? 'bg-white border-black/[0.08] text-[#1C1C1E] shadow-sm'
-                      : 'bg-[#1C1C1E] border-white/10 text-white'
+                      ? 'bg-white border-black/[0.08] text-[#1C1C1E] shadow-sm hover:bg-blue-50/40'
+                      : 'bg-[#1C1C1E] border-white/[0.08] text-white hover:bg-[#242428]'
                   }`}
                 >
-                  <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
-                    isLight ? 'bg-gray-100 text-gray-700' : 'bg-[#2C2C2E] text-white/70'
+                  <span className={`w-7 h-7 rounded-xl flex items-center justify-center text-xs font-extrabold shrink-0 ${
+                    isLight ? 'bg-[#F2F2F7] text-[#1C1C1E]' : 'bg-[#2C2C2E] text-white/90'
                   }`}>
                     {['A', 'B', 'C', 'D'][optIdx]}
                   </span>
-                  <span className="flex-1">{opt}</span>
+                  <span className="flex-1 leading-snug">{opt}</span>
                 </button>
               ))}
             </div>
@@ -691,14 +721,14 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
     ? (lang === 'ru' ? 'МАТЕМАТИКА' : 'MATEMATIKA')
     : (activeSubject?.name || (lang === 'ru' ? 'ПРЕДМЕТ' : 'FAN')).toUpperCase();
 
-  // Distinct custom high-res background & video per subject
+  // Distinct custom high-res background & video per subject (Matematika has no photo)
   let subjectImage = activeSubject?.image_url;
   if (isBio) {
     subjectImage = '/banners/biologiya_banner.jpg';
   } else if (isKimyo) {
     subjectImage = '/banners/kimyo_banner.jpg';
   } else if (isMatem) {
-    subjectImage = 'https://images.unsplash.com/photo-1633424974203-6c91b2a651ee?auto=format&fit=crop&w=1200&q=85';
+    subjectImage = null;
   } else if (!subjectImage || subjectImage.includes('unsplash.com/photo-1530026405186') || subjectImage.includes('photo-1635070041078') || subjectImage.includes('photo-1451187580459')) {
     subjectImage = '/banners/biologiya_banner.jpg';
   }
@@ -751,7 +781,7 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
         paddingBottom: isDesktop
           ? '0px'
           : (currentView === 'carousel' 
-              ? 'calc(var(--safe-area-bottom, 0px) + 74px)' 
+              ? 'calc(var(--safe-area-bottom, 0px) + 92px)' 
               : 'calc(var(--safe-area-bottom, 0px) + 88px)')
       }}
     >
@@ -851,13 +881,13 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
                       preload="auto"
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 opacity-85" 
                     />
-                  ) : (
+                  ) : subjectImage ? (
                     <img 
                       src={subjectImage} 
                       alt={currentSubjectTitle} 
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 opacity-80" 
                     />
-                  )}
+                  ) : null}
                   {/* Deep Cinematic Vignette Overlays */}
                   <div className="absolute inset-0 bg-gradient-to-t from-black via-black/45 to-transparent" />
                   <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black" />
@@ -895,7 +925,7 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
           </div>
 
           {/* Carousel Pagination Dots — always below card, never overlapping */}
-          <div className="relative z-10 flex items-center justify-center gap-2 py-0.5 flex-shrink-0 w-full">
+          <div className="relative z-10 flex items-center justify-center gap-2 py-1.5 flex-shrink-0 w-full">
             {subjects.map((s, idx) => (
               <button
                 key={s.id || idx}

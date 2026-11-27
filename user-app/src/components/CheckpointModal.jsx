@@ -54,7 +54,7 @@ export default function CheckpointModal({ checkpoint, onAnswer }) {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[120] bg-black/85 backdrop-blur-xl overflow-y-auto select-none"
+        className="fixed inset-0 z-[150] bg-black/85 backdrop-blur-xl overflow-y-auto select-none"
       >
         <div className="min-h-full w-full flex items-center justify-center p-3 sm:p-6">
           <motion.div
