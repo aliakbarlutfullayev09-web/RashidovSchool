@@ -744,8 +744,8 @@ export default function VideoPlayer({
           top: isOverlayLayout
             ? (isDesktop
                 ? 'max(calc(var(--safe-area-top, 0px) + 20px), 24px)'
-                : 'max(calc(var(--safe-area-top, 0px) + 52px), 56px)')
-            : 'max(calc(var(--safe-area-top, 0px) + 54px), 80px)'
+                : 'max(calc(var(--safe-area-top, 0px) + 24px), 84px)')
+            : 'max(calc(var(--safe-area-top, 0px) + 58px), 86px)'
         }}
       >
         <button
@@ -924,7 +924,7 @@ export default function VideoPlayer({
               onTouchEnd={(e) => e.stopPropagation()}
               className={`absolute z-30 right-3 sm:right-4 ${
                 isOverlayLayout
-                  ? (isDesktop ? 'top-16 sm:top-[68px]' : 'top-[104px] sm:top-[110px]')
+                  ? (isDesktop ? 'top-16 sm:top-[68px]' : 'top-[130px] sm:top-[134px]')
                   : 'top-3'
               } w-[min(310px,calc(100%-24px))] bg-[#121216]/88 backdrop-blur-xl border-[1.5px] border-[#1E3A8A] rounded-2xl p-3 sm:p-3.5 shadow-[0_12px_36px_rgba(0,0,0,0.6)] cursor-pointer select-none`}
             >
