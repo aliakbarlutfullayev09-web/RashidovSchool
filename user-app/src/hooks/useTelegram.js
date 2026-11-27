@@ -76,12 +76,31 @@ export function useTelegram() {
     docStyle.setProperty('--app-viewport-stable-height', `${stableHeight}px`);
   }, [tg, isTelegram]);
 
+  const preventAccidentalClose = useCallback(() => {
+    if (!tg) return;
+    try {
+      if (typeof tg.disableVerticalSwipes === 'function') {
+        tg.disableVerticalSwipes();
+      }
+      if (typeof tg.enableClosingConfirmation === 'function') {
+        tg.enableClosingConfirmation();
+      }
+    } catch (e) {
+      console.warn('Prevent close error:', e);
+    }
+  }, [tg]);
+
   // 2. Initialize Telegram WebApp settings & event listeners
   useEffect(() => {
     if (!tg) {
       updateGeometry();
       return;
     }
+
+    const syncGeometryAndSwipeLock = () => {
+      updateGeometry();
+      preventAccidentalClose();
+    };
 
     try {
       tg.ready();
@@ -110,43 +129,42 @@ export function useTelegram() {
         }
       }
 
-      // Accidental closure prevention via vertical swipes (v7.7+)
-      if (tg.isVersionAtLeast && tg.isVersionAtLeast('7.7')) {
-        if (typeof tg.disableVerticalSwipes === 'function') {
-          tg.disableVerticalSwipes();
-        }
-      }
-
+      // Accidental closure prevention via vertical swipes (v7.7+) and closing confirmation (v6.2+)
+      preventAccidentalClose();
       updateGeometry();
 
-      // Subscribe to Telegram geometry and fullscreen events
+      // Subscribe to Telegram geometry, fullscreen, and activation events
       if (typeof tg.onEvent === 'function') {
         tg.onEvent('safeAreaChanged', updateGeometry);
         tg.onEvent('contentSafeAreaChanged', updateGeometry);
-        tg.onEvent('viewportChanged', updateGeometry);
-        tg.onEvent('fullscreenChanged', updateGeometry);
-        tg.onEvent('fullscreenFailed', updateGeometry);
+        tg.onEvent('viewportChanged', syncGeometryAndSwipeLock);
+        tg.onEvent('fullscreenChanged', syncGeometryAndSwipeLock);
+        tg.onEvent('fullscreenFailed', syncGeometryAndSwipeLock);
+        tg.onEvent('activated', preventAccidentalClose);
       }
 
       window.addEventListener('resize', updateGeometry);
-      window.addEventListener('orientationchange', updateGeometry);
+      window.addEventListener('orientationchange', syncGeometryAndSwipeLock);
+      window.addEventListener('focus', preventAccidentalClose);
 
       return () => {
         if (typeof tg.offEvent === 'function') {
           tg.offEvent('safeAreaChanged', updateGeometry);
           tg.offEvent('contentSafeAreaChanged', updateGeometry);
-          tg.offEvent('viewportChanged', updateGeometry);
-          tg.offEvent('fullscreenChanged', updateGeometry);
-          tg.offEvent('fullscreenFailed', updateGeometry);
+          tg.offEvent('viewportChanged', syncGeometryAndSwipeLock);
+          tg.offEvent('fullscreenChanged', syncGeometryAndSwipeLock);
+          tg.offEvent('fullscreenFailed', syncGeometryAndSwipeLock);
+          tg.offEvent('activated', preventAccidentalClose);
         }
         window.removeEventListener('resize', updateGeometry);
-        window.removeEventListener('orientationchange', updateGeometry);
+        window.removeEventListener('orientationchange', syncGeometryAndSwipeLock);
+        window.removeEventListener('focus', preventAccidentalClose);
       };
     } catch (e) {
       console.warn('Telegram WebApp setup error:', e);
       updateGeometry();
     }
-  }, [tg, updateGeometry]);
+  }, [tg, updateGeometry, preventAccidentalClose]);
 
   // 3. BackButton single-handler management
   const setBackButton = useCallback((shouldShow, onClickHandler) => {

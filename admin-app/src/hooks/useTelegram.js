@@ -12,9 +12,19 @@ export function useTelegram() {
 
   useEffect(() => {
     if (tg) {
+      const lockSwipes = () => {
+        try {
+          tg.disableVerticalSwipes?.();
+          tg.enableClosingConfirmation?.();
+        } catch {}
+      };
       try {
         tg.ready();
         tg.expand();
+        lockSwipes();
+        tg.onEvent?.('viewportChanged', lockSwipes);
+        tg.onEvent?.('fullscreenChanged', lockSwipes);
+        tg.onEvent?.('activated', lockSwipes);
         if (tg.initDataUnsafe?.user) {
            setUser({
               ...tg.initDataUnsafe.user,
@@ -22,6 +32,12 @@ export function useTelegram() {
               permissions: { can_promo: true, can_gift: true, can_send: true }
            });
         }
+        setReady(true);
+        return () => {
+          tg.offEvent?.('viewportChanged', lockSwipes);
+          tg.offEvent?.('fullscreenChanged', lockSwipes);
+          tg.offEvent?.('activated', lockSwipes);
+        };
       } catch (e) {
         console.warn('Telegram WebApp is not fully available:', e);
       }

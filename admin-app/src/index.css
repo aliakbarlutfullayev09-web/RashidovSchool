@@ -10,6 +10,7 @@
 /* Prevent unnecessary scroll bounce */
 html, body, #root {
   min-height: 100%;
+  overscroll-behavior: none;
   background: #000000;
   color: #FFFFFF;
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
