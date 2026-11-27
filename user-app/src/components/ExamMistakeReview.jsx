@@ -44,6 +44,67 @@ export function evaluateQuestionAnswer(q, userAns) {
   return userAns === expectedIndex;
 }
 
+/**
+ * Per-question point weight for Milliy Sertifikat (40 questions, total = 75):
+ * 1-10 -> 1.3, 11-35 -> 2.0, 36-40 -> 2.4.
+ */
+export function getSertifikatQuestionWeight(index) {
+  if (index < 10) return 1.3;
+  if (index < 35) return 2.0;
+  return 2.4;
+}
+
+/**
+ * Milliy Sertifikat grade thresholds by numeric score:
+ * < 46 -> null, 46-49.99 -> C, 50-54.99 -> C+, 55-59.99 -> B,
+ * 60-64.99 -> B+, 65-69.99 -> A, 70-75 -> A+.
+ */
+export function getSertifikatGrade(numericScore) {
+  const score = Number(numericScore) || 0;
+  if (score < 46) return null;
+  if (score < 50) return 'C';
+  if (score < 55) return 'C+';
+  if (score < 60) return 'B';
+  if (score < 65) return 'B+';
+  if (score < 70) return 'A';
+  return 'A+';
+}
+
+/**
+ * Calculates exam score, accuracy, and Milliy Sertifikat grade from answers.
+ */
+export function calculateExamMetrics(questions = [], userAnswers = {}, mode = 'sertifikat', maxScore) {
+  const isDtm = mode === 'dtm';
+  const totalQuestions = questions.length;
+  const resolvedMaxScore = maxScore || (isDtm ? 93 : 75);
+  let correctCount = 0;
+  let rawScore = 0;
+
+  questions.forEach((q, idx) => {
+    if (evaluateQuestionAnswer(q, userAnswers[idx])) {
+      correctCount++;
+      rawScore += isDtm ? 3.1 : getSertifikatQuestionWeight(idx);
+    }
+  });
+
+  const numericScore = Math.round(rawScore * 100) / 100;
+  const score = numericScore.toFixed(1);
+  const ratio = correctCount / (totalQuestions || 1);
+  const percentage = Math.min(100, Math.round(ratio * 100));
+  const certGrade = isDtm ? null : getSertifikatGrade(numericScore);
+
+  return {
+    correctCount,
+    totalQuestions,
+    numericScore,
+    score,
+    maxScore: resolvedMaxScore,
+    percentage,
+    ratio,
+    certGrade,
+  };
+}
+
 export function formatOptionText(q, answerValue, lang = 'uz') {
   if (q?.type === 'input') {
     if (answerValue === undefined || answerValue === null || String(answerValue).trim() === '') {

@@ -10,7 +10,9 @@ import SubjectBannerEffects from '../components/SubjectBannerEffects';
 import ConfettiBurst from '../components/ConfettiBurst';
 import ExamMistakeReview, {
   buildExamResultKey,
+  calculateExamMetrics,
   evaluateQuestionAnswer,
+  getSertifikatGrade,
   loadSavedExamResults,
   saveExamResultLocal
 } from '../components/ExamMistakeReview';
@@ -255,20 +257,14 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
 
     const uid = user?.telegram_id || user?.id;
     const targetMaxScore = selectedTest?.maxScore || activeModeConfig?.maxScore || (selectedMode === 'dtm' ? 93 : 75);
-    const qWeight = selectedMode === 'dtm' ? 3.1 : (targetMaxScore / (activeQuestions.length || 1));
-    let cCount = 0;
-    activeQuestions.forEach((q, idx) => {
-      if (evaluateQuestionAnswer(q, latestAnswers[idx])) cCount++;
-    });
-    const score = (cCount * qWeight).toFixed(1);
-    const ratio = cCount / (activeQuestions.length || 1);
-    const percentage = Math.min(100, Math.round(ratio * 100));
+    const {
+      correctCount: cCount,
+      score,
+      percentage,
+      ratio,
+      certGrade: grade,
+    } = calculateExamMetrics(activeQuestions, latestAnswers, selectedMode, targetMaxScore);
     const stars = ratio >= 0.8 ? 3 : ratio >= 0.5 ? 2 : 1;
-    let grade = 'C';
-    if (percentage >= 90) grade = 'A+';
-    else if (percentage >= 80) grade = 'A';
-    else if (percentage >= 70) grade = 'B+';
-    else if (percentage >= 60) grade = 'B';
 
     const testId = selectedTest?.id || 'exam-1';
     const nextMap = saveExamResultLocal(uid, selectedSubjectKey, selectedMode, testId, {
@@ -635,29 +631,12 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
   };
 
   // Results Calculation
-  let correctCount = 0;
-  activeQuestions.forEach((q, idx) => {
-    const userAns = userAnswers[idx];
-    if (q.type === 'input') {
-      if (userAns && isUzbekMatch(userAns, q.correctAnswer)) {
-        correctCount++;
-      }
-    } else {
-      if (userAns === q.correctIndex) {
-        correctCount++;
-      }
-    }
-  });
-
-  const questionWeight = selectedMode === 'dtm' ? 3.1 : (examMaxScore / (activeQuestions.length || 1));
-  const totalScore = (correctCount * questionWeight).toFixed(1);
-  const grantProb = Math.min(100, Math.round((correctCount / (activeQuestions.length || 1)) * 100));
-
-  let certGrade = 'C';
-  if (grantProb >= 90) certGrade = 'A+';
-  else if (grantProb >= 80) certGrade = 'A';
-  else if (grantProb >= 70) certGrade = 'B+';
-  else if (grantProb >= 60) certGrade = 'B';
+  const {
+    correctCount,
+    score: totalScore,
+    percentage: grantProb,
+    certGrade,
+  } = calculateExamMetrics(activeQuestions, userAnswers, selectedMode, examMaxScore);
 
   // ──────────────────────────────────────────────────────────
   // SCREEN 4: EXAM RUNNER
@@ -1166,7 +1145,7 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
                   : (lang === 'ru' ? 'Сертификат:' : 'Sertifikat:')}
               </span>
               <span className={`font-bold text-lg ${isLight ? 'text-amber-600' : 'text-amber-400'}`}>
-                {selectedMode === 'dtm' ? examMaxScore : certGrade}
+                {selectedMode === 'dtm' ? examMaxScore : (certGrade || '—')}
               </span>
             </div>
           </div>
@@ -1177,9 +1156,13 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
             }`}>
               <Award className="w-4 h-4" />
               <span>
-                {lang === 'ru'
-                  ? `Уровень сертификата: ${certGrade} (${grantProb}%)`
-                  : `Sertifikat darajasi: ${certGrade} (${grantProb}%)`}
+                {certGrade
+                  ? (lang === 'ru'
+                      ? `Уровень сертификата: ${certGrade} (${totalScore} / ${examMaxScore})`
+                      : `Sertifikat darajasi: ${certGrade} (${totalScore} / ${examMaxScore})`)
+                  : (lang === 'ru'
+                      ? `Ниже 46 баллов — сертификат не выдаётся (${totalScore} / ${examMaxScore})`
+                      : `46 balldan past — sertifikat berilmaydi (${totalScore} / ${examMaxScore})`)}
               </span>
             </div>
           )}
@@ -1280,7 +1263,9 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
                   : (lang === 'ru' ? 'Сертификат:' : 'Sertifikat:')}
               </span>
               <span className={`font-bold text-base sm:text-lg ${isLight ? 'text-amber-600' : 'text-amber-400'}`}>
-                {selectedMode === 'dtm' ? `${revRes?.percentage ?? 0}%` : (revRes?.certGrade || 'C')}
+                {selectedMode === 'dtm'
+                  ? `${revRes?.percentage ?? 0}%`
+                  : ((revRes && 'certGrade' in revRes ? revRes.certGrade : getSertifikatGrade(revRes?.score)) || '—')}
               </span>
             </div>
           </div>
