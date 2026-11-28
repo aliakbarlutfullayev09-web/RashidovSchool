@@ -14,3 +14,7 @@ class AdminStates(StatesGroup):
     waiting_for_gift_comment = State()
     waiting_for_gift_id = State()
     confirming_gift = State()
+
+    # Для команды /refund
+    waiting_for_refund_charge = State()
+    confirming_refund = State()

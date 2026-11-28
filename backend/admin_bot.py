@@ -18,6 +18,7 @@ from aiogram.types import (
 )
 
 from config import Settings
+from payment_logic import assess_refund_risk
 from supabase_client import SupabaseRest
 
 logger = logging.getLogger(__name__)
@@ -567,3 +568,115 @@ async def cb_broadcast_confirm(
     report = f"✅ Доставлено: {sent} | Заблокировали: {failed}"
     if callback.message:
         await callback.message.answer(report, parse_mode=ParseMode.HTML)
+
+
+@admin_router.message(Command("refund"))
+async def cmd_admin_refund(
+    message: Message,
+    command: CommandObject,
+    sb: SupabaseRest,
+) -> None:
+    if not message.from_user:
+        return
+    ctx = await _get_admin_context(sb, message.from_user.id)
+    if not ctx or not ctx.is_superadmin:
+        await message.answer("⛔ Команда /refund доступна только администраторам.", parse_mode=None)
+        return
+
+    lookup = (command.args or "").strip() if command else ""
+    if not lookup:
+        await message.answer("Использование: /refund <telegram_payment_charge_id | merchant_trans_id>", parse_mode=None)
+        return
+
+    payment = await sb.get_payment_by_charge_or_order(lookup)
+    user = await sb.get_user(int(payment["user_id"])) if payment else None
+    risk = assess_refund_risk(payment, user)
+    if not risk.get("ok"):
+        reason = risk.get("reason")
+        if reason == "already_refunded":
+            await message.answer("ℹ️ Этот платёж уже возвращён.", parse_mode=None)
+        else:
+            await message.answer("❌ Платёж не найден или недоступен для возврата.", parse_mode=None)
+        return
+
+    await sb.set_bot_state(
+        message.from_user.id,
+        "waiting_refund_confirm",
+        {
+            "user_id": risk["user_id"],
+            "total_stars": risk["total_stars"],
+            "charge_id": risk["telegram_payment_charge_id"],
+            "requires_debt": risk["requires_debt_confirmation"],
+        },
+    )
+
+    if risk["requires_debt_confirmation"]:
+        prompt = (
+            f"⚠️ У пользователя {risk['balance']} 🧠, по заказу начислено {risk['xp_credited']} 🧠.\n"
+            f"Автоматический возврат НЕ выполнен: при возврате {risk['deducted']} 🧠 спишется, "
+            f"а {risk['shortfall']} 🧠 запишется в долг (debt={risk['projected_debt']}).\n"
+            "Подтвердить возврат с долгом?"
+        )
+        btn_text = "✅ Подтвердить возврат с долгом"
+    else:
+        prompt = (
+            f"↩️ Возврат {risk['total_stars']} ⭐.\n"
+            f"Спишется {risk['deducted']} 🧠 (остаток баланса: {risk['projected_balance']} 🧠). Подтвердить?"
+        )
+        btn_text = "✅ Подтвердить возврат"
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=btn_text, callback_data="refund:confirm")],
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="refund:cancel")],
+    ])
+    await message.answer(prompt, reply_markup=kb, parse_mode=None)
+
+
+@admin_router.callback_query(F.data == "refund:cancel")
+async def cb_refund_cancel(callback: CallbackQuery, sb: SupabaseRest) -> None:
+    if not callback.from_user:
+        return
+    await sb.clear_bot_state(callback.from_user.id)
+    if callback.message:
+        await callback.message.edit_text("❌ Возврат отменён.", parse_mode=None)
+    await callback.answer()
+
+
+@admin_router.callback_query(F.data == "refund:confirm")
+async def cb_refund_confirm(callback: CallbackQuery, student_bot: Bot, sb: SupabaseRest) -> None:
+    if not callback.from_user:
+        return
+    ctx = await _get_admin_context(sb, callback.from_user.id)
+    if not ctx or not ctx.is_superadmin:
+        await callback.answer("Forbidden", show_alert=True)
+        return
+
+    st = await sb.get_bot_state(callback.from_user.id)
+    if not st or st.get("state") != "waiting_refund_confirm":
+        await callback.answer("Сессия возврата не найдена.", show_alert=True)
+        return
+
+    data = st.get("data") or {}
+    await sb.clear_bot_state(callback.from_user.id)
+
+    try:
+        user_id = int(data["user_id"])
+        total_stars = int(data["total_stars"])
+        charge_id = str(data["charge_id"])
+        await student_bot.refund_star_payment(user_id=user_id, telegram_payment_charge_id=charge_id)
+        res = await sb.refund_stars_payment(
+            user_id=user_id,
+            total_stars=total_stars,
+            telegram_charge_id=charge_id,
+        )
+        if callback.message:
+            await callback.message.edit_text(
+                f"✅ Возврат выполнен. Списано: {res.get('xp_deducted', 0)} 🧠 | "
+                f"Долг: {res.get('new_debt', 0)} 🧠 | Баланс: {res.get('new_balance', 0)} 🧠",
+                parse_mode=None,
+            )
+    except Exception as exc:
+        logger.warning("Admin refund failed: %s", type(exc).__name__)
+        if callback.message:
+            await callback.message.edit_text("❌ Ошибка выполнения возврата Stars.", parse_mode=None)
+    await callback.answer()

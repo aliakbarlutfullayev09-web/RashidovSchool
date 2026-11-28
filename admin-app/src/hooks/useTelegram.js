@@ -1,12 +1,9 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { mockTeacherUser, mockSuperadminUser } from '../mock/data';
 
 export function useTelegram() {
-  const tg = window.Telegram?.WebApp;
-  
-  // В dev режиме используем мок-данные по умолчанию
-  const initialUser = tg?.initDataUnsafe?.user || mockSuperadminUser;
-  const [user, setUser] = useState(initialUser);
+  const tg = typeof window !== 'undefined' ? window.Telegram?.WebApp : null;
+  const [user, setUser] = useState(tg?.initDataUnsafe?.user || null);
+  const [initData, setInitData] = useState(tg?.initData || '');
   const [ready, setReady] = useState(false);
   const backButtonHandlerRef = useRef(null);
 
@@ -26,11 +23,10 @@ export function useTelegram() {
         tg.onEvent?.('fullscreenChanged', lockSwipes);
         tg.onEvent?.('activated', lockSwipes);
         if (tg.initDataUnsafe?.user) {
-           setUser({
-              ...tg.initDataUnsafe.user,
-              role: tg.initDataUnsafe.start_param || 'teacher',
-              permissions: { can_promo: true, can_gift: true, can_send: true }
-           });
+          setUser(tg.initDataUnsafe.user);
+        }
+        if (tg.initData) {
+          setInitData(tg.initData);
         }
         setReady(true);
         return () => {
@@ -67,15 +63,11 @@ export function useTelegram() {
     }
   }, [tg]);
 
-  const toggleMockRole = () => {
-    setUser(prev => prev.role === 'superadmin' ? mockTeacherUser : mockSuperadminUser);
-  };
-
   return {
     tg,
     user,
+    initData,
     ready,
     setBackButton,
-    toggleMockRole,
   };
 }

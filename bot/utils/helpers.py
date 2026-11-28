@@ -1,4 +1,4 @@
-import random
+import secrets
 import string
 
 def calculate_stars(correct: int, total: int) -> int:
@@ -15,7 +15,8 @@ def calculate_stars(correct: int, total: int) -> int:
         return 3
 
 def generate_promo_code(length=8) -> str:
-    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
+    alphabet = string.ascii_uppercase + string.digits
+    return ''.join(secrets.choice(alphabet) for _ in range(length))
 
 def format_neurons(amount: int) -> str:
     return f'🧠 {amount} Нейронов'

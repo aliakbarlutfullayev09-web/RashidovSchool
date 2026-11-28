@@ -127,7 +127,7 @@ export default function ExamMistakeReview({ questions = [], userAnswers = {}, is
 
   const evaluated = questions.map((q, idx) => {
     const userAns = userAnswers[idx];
-    const isCorrect = evaluateQuestionAnswer(q, userAns);
+    const isCorrect = typeof q?.isCorrect === 'boolean' ? q.isCorrect : evaluateQuestionAnswer(q, userAns);
     const isUnanswered = userAns === undefined || userAns === null || String(userAns).trim() === '';
     return {
       q,
@@ -217,10 +217,15 @@ export default function ExamMistakeReview({ questions = [], userAnswers = {}, is
         <div className="space-y-3">
           {visibleItems.map(({ q, idx, userAns, isCorrect, isUnanswered }) => {
             const expectedIndex = q.correctIndex !== undefined ? q.correctIndex : q.correct_option_index;
-            const correctDisplay =
+            const hasRevealedAnswer =
               q.type === 'input'
-                ? String(q.correctAnswer || '')
-                : formatOptionText(q, expectedIndex, lang);
+                ? q.correctAnswer !== undefined && String(q.correctAnswer).trim() !== ''
+                : expectedIndex !== undefined && expectedIndex !== null;
+            const correctDisplay = hasRevealedAnswer
+              ? (q.type === 'input'
+                  ? String(q.correctAnswer || '')
+                  : formatOptionText(q, expectedIndex, lang))
+              : null;
             const userDisplay = formatOptionText(q, userAns, lang);
 
             return (
@@ -301,18 +306,20 @@ export default function ExamMistakeReview({ questions = [], userAnswers = {}, is
                     </div>
                   )}
 
-                  <div
-                    className={`p-2.5 rounded-xl border ${isCorrect ? 'sm:col-span-2' : ''} ${
-                      isLight
-                        ? 'bg-emerald-50 border-emerald-500/20 text-emerald-800'
-                        : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
-                    }`}
-                  >
-                    <span className="text-[10px] uppercase tracking-wider opacity-75 block mb-0.5">
-                      {lang === 'ru' ? 'Правильный ответ' : "To'g'ri javob"}
-                    </span>
-                    <span className="font-bold">{correctDisplay}</span>
-                  </div>
+                  {correctDisplay !== null && (
+                    <div
+                      className={`p-2.5 rounded-xl border ${isCorrect ? 'sm:col-span-2' : ''} ${
+                        isLight
+                          ? 'bg-emerald-50 border-emerald-500/20 text-emerald-800'
+                          : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+                      }`}
+                    >
+                      <span className="text-[10px] uppercase tracking-wider opacity-75 block mb-0.5">
+                        {lang === 'ru' ? 'Правильный ответ' : "To'g'ri javob"}
+                      </span>
+                      <span className="font-bold">{correctDisplay}</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Textbook reference / explanation if present */}

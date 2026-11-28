@@ -10,12 +10,12 @@ import { useIsDesktop } from '../hooks/useIsDesktop';
 import { applyPromoCode, createStarsInvoiceLink, getUserData } from '../api/supabase';
 
 const STARS_PACKAGES = [
-  { stars: 5, neyrons: 1250 },
-  { stars: 100, neyrons: 25000 },
-  { stars: 400, neyrons: 100000 },
-  { stars: 600, neyrons: 150000 },
-  { stars: 1000, neyrons: 250000 },
-  { stars: 3500, neyrons: 1000000, hit: true }
+  { id: 'stars_5', stars: 5, neyrons: 1250 },
+  { id: 'stars_100', stars: 100, neyrons: 25000 },
+  { id: 'stars_400', stars: 400, neyrons: 100000 },
+  { id: 'stars_600', stars: 600, neyrons: 150000 },
+  { id: 'stars_1000', stars: 1000, neyrons: 250000 },
+  { id: 'stars_3500', stars: 3500, neyrons: 1000000, hit: true }
 ];
 
 // Crisp SVG Neuron / Brain icon (replaces brain emoji)
@@ -146,7 +146,7 @@ export default function TopUpModal({ isOpen, onClose, user, onUpdateUser, inline
         return;
       }
 
-      const res = await createStarsInvoiceLink(pkg.stars, user?.telegram_id);
+      const res = await createStarsInvoiceLink(pkg.id);
       if (!res?.ok || !res?.invoiceUrl) {
         notificationError();
         setStarsFeedback({

@@ -8,7 +8,7 @@ import LeaderboardPage from './pages/LeaderboardPage';
 import ProfilePage from './pages/ProfilePage';
 import { useTelegram } from './hooks/useTelegram';
 import { useIsDesktop } from './hooks/useIsDesktop';
-import { getUserData, syncUserSession, getSupportContacts } from './api/supabase';
+import { authenticateTelegram, getUserData, syncUserSession, getSupportContacts } from './api/supabase';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { getSavedProfileColor } from './utils/profileColors';
@@ -25,6 +25,7 @@ function MainApp() {
   );
   const [dbUser, setDbUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState(null);
 
   // Video playback active flag (hides TabBar)
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
@@ -116,57 +117,79 @@ function MainApp() {
       await new Promise(resolve => setTimeout(resolve, 80));
       if (!mounted) return;
 
-      const urlParams = new URLSearchParams(window.location.search);
-      const urlUserId = urlParams.get('user_id');
-
       const tgApp = window.Telegram?.WebApp;
+      const initData = tgApp?.initData || '';
       const tgUserObj = tgApp?.initDataUnsafe?.user;
-      
-      const telegramId = urlUserId ? parseInt(urlUserId, 10) : (tgUserObj?.id || tgUser?.id || tgUser?.telegram_id);
-      const firstName = tgUserObj?.first_name || tgUser?.first_name || 'Aliakbar Lutfullayev';
       const photoUrl = tgUserObj?.photo_url || tgUser?.photo_url || null;
-      const resolvedId = telegramId || 123456789;
 
-      const rawUser = {
-        id: resolvedId,
-        telegram_id: resolvedId,
-        first_name: firstName,
-        photo_url: photoUrl
-      };
+      if (!initData) {
+        if (import.meta.env.DEV && import.meta.env.VITE_DEV_ALLOW_MOCK === 'true' && tgUserObj?.id) {
+          const synced = await syncUserSession({
+            id: tgUserObj.id,
+            telegram_id: tgUserObj.id,
+            first_name: tgUserObj.first_name || 'Student',
+            photo_url: photoUrl,
+          });
+          if (mounted && synced) {
+            const uid = synced.telegram_id || tgUserObj.id;
+            setSyncUserId(uid);
+            setDbUser({ ...synced, photo_url: synced.photo_url || photoUrl, profile_color: getSavedProfileColor(uid) });
+            setLoading(false);
+            return;
+          }
+        }
+        if (mounted) {
+          setAuthError('TELEGRAM_REQUIRED');
+          setLoading(false);
+        }
+        return;
+      }
+
+      const auth = await authenticateTelegram(initData);
+      if (!mounted) return;
+
+      if (!auth.ok || !auth.user?.telegram_id) {
+        setAuthError(auth.error || 'AUTH_FAILED');
+        setLoading(false);
+        return;
+      }
+
+      const verifiedUser = auth.user;
+      const resolvedId = Number(verifiedUser.telegram_id);
 
       try {
-        const synced = await syncUserSession(rawUser);
-        if (mounted && synced) {
-          const uid = synced.telegram_id || resolvedId;
+        const synced = await syncUserSession({
+          ...verifiedUser,
+          id: resolvedId,
+          telegram_id: resolvedId,
+          photo_url: photoUrl
+        });
+        const finalUser = synced || verifiedUser;
+        if (mounted) {
+          const uid = finalUser.telegram_id || resolvedId;
           setSyncUserId(uid);
-          if (synced.language === 'ru' || synced.language === 'uz') {
-            syncLanguageFromDb(synced.language);
+          if (finalUser.language === 'ru' || finalUser.language === 'uz') {
+            syncLanguageFromDb(finalUser.language);
           }
           setDbUser({
-            ...synced,
-            photo_url: synced.photo_url || photoUrl,
+            ...finalUser,
+            photo_url: finalUser.photo_url || photoUrl,
             profile_color: getSavedProfileColor(uid)
           });
           setLoading(false);
-          return;
         }
       } catch (e) {
         console.warn('Session sync warning:', e);
+        if (mounted) {
+          setSyncUserId(resolvedId);
+          setDbUser({
+            ...verifiedUser,
+            photo_url: verifiedUser.photo_url || photoUrl,
+            profile_color: getSavedProfileColor(resolvedId)
+          });
+          setLoading(false);
+        }
       }
-      
-      setSyncUserId(resolvedId);
-      setDbUser({
-        telegram_id: resolvedId,
-        full_name: firstName,
-        photo_url: photoUrl,
-        profile_color: getSavedProfileColor(resolvedId),
-        balance: 0,
-        streak_days: 1,
-        class_group: '11-A',
-        language: 'uz',
-        role: 'student'
-      });
-      setLoading(false);
     }
     
     fetchUser();
@@ -202,6 +225,23 @@ function MainApp() {
       document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [dbUser?.telegram_id, syncLanguageFromDb]);
+
+  if (authError || (!loading && !dbUser)) {
+    return (
+      <div className={`h-screen w-full flex items-center justify-center p-6 text-center ${
+        isLight ? 'bg-[#F2F2F7] text-[#1C1C1E]' : 'bg-[#000000] text-white'
+      }`}>
+        <div className="flex flex-col items-center max-w-xs">
+          <h2 className="text-xl font-bold mb-2">Rashidov School</h2>
+          <p className={`text-sm ${isLight ? 'text-[#6E6E73]' : 'text-[#8E8E93]'}`}>
+            {lang === 'ru'
+              ? 'Пожалуйста, откройте приложение внутри Telegram-бота и подтвердите авторизацию.'
+              : 'Iltimos, ilovani Telegram bot orqali oching.'}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (loading || !dbUser) {
     return (

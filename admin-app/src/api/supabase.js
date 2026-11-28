@@ -2,10 +2,76 @@ import { createClient } from '@supabase/supabase-js';
 import { mockStats, mockRedZones, mockCourses, mockLessons, mockTeachers, mockAllUsers } from '../mock/data';
 import { mergeExamPortalData } from './examDefaults';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://rcpbepcdgbxjncpxeowx.supabase.co';
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjcGJlcGNkZ2J4am5jcHhlb3d4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwMTQyNTAsImV4cCI6MjEwMzU5MDI1MH0.icLRyq0piPK_aITPZDu42nFOG9_jyfzVc7lwuckubbM';
+const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL || '').trim();
+const supabaseKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+let sessionJwt = null;
+let cachedInitData = '';
+
+export function setSupabaseAuthToken(token) {
+  sessionJwt = token || null;
+}
+
+export function setTelegramInitData(initData) {
+  cachedInitData = initData || '';
+}
+
+const authedFetch = (input, init = {}) => {
+  const headers = new Headers(init.headers || {});
+  if (sessionJwt) {
+    headers.set('Authorization', `Bearer ${sessionJwt}`);
+  }
+  return fetch(input, { ...init, headers });
+};
+
+export const supabase =
+  supabaseUrl && supabaseKey
+    ? createClient(supabaseUrl, supabaseKey, { global: { fetch: authedFetch } })
+    : createClient('https://invalid.supabase.local', 'missing-anon-key', {
+        global: {
+          fetch: async () => {
+            throw new Error('VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are not configured');
+          },
+        },
+      });
+
+export async function authenticateTelegramAdmin(initData) {
+  if (!initData) {
+    return { ok: false, status: 401, error: 'Missing Telegram initData' };
+  }
+  setTelegramInitData(initData);
+  const apiUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, '');
+  const endpoints = apiUrl
+    ? [`${apiUrl}/api/auth/telegram`, '/api/auth/telegram']
+    : ['/api/auth/telegram'];
+
+  let lastError = 'Authorization failed';
+  let lastStatus = 401;
+  for (const url of endpoints) {
+    try {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ initData, app: 'admin' }),
+      });
+      const contentType = resp.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) continue;
+      const data = await resp.json();
+      if (resp.ok && data?.ok && data?.user) {
+        if (data.token) {
+          setSupabaseAuthToken(data.token);
+        }
+        return { ok: true, status: 200, token: data.token || null, user: data.user };
+      }
+      lastStatus = resp.status;
+      lastError = data?.error || data?.detail || lastError;
+      if (resp.status === 401 || resp.status === 403) break;
+    } catch (e) {
+      lastError = e?.message || lastError;
+    }
+  }
+  return { ok: false, status: lastStatus, error: lastError };
+}
 
 export const api = {
   // Video Checkpoints (with questions table fallback for resilient cloud persistence)
@@ -486,11 +552,12 @@ export const api = {
 
     // 4. Upsert into subject_admins
     if (assigned_subject_id) {
-      await supabase.from('subject_admins').upsert({
+      const { error: saErr } = await supabase.from('subject_admins').upsert({
         user_id: telegramId,
         subject_id: assigned_subject_id,
         permissions: permissions
-      }, { onConflict: 'user_id, subject_id' }).catch(() => {});
+      }, { onConflict: 'user_id, subject_id' });
+      if (saErr) console.warn('subject_admins upsert warning:', saErr.message);
     }
     
     return { 
@@ -511,7 +578,8 @@ export const api = {
     } catch {
       await supabase.from('users').update({ role: 'student' }).eq('telegram_id', telegramId);
     }
-    await supabase.from('subject_admins').delete().eq('user_id', telegramId).catch(() => {});
+    const { error: rmSaErr } = await supabase.from('subject_admins').delete().eq('user_id', telegramId);
+    if (rmSaErr) console.warn('subject_admins delete warning:', rmSaErr.message);
     return true;
   },
   
@@ -545,59 +613,82 @@ export const api = {
   getStudentTelegramProfile: async (telegramId) => {
     const id = Number(telegramId);
     if (!id || Number.isNaN(id)) return null;
-    const botToken = import.meta.env.VITE_STUDENT_BOT_TOKEN || '8656707475:AAFW4jrRdgKdFYVoXuLXnb5GKNC2tp_EyLw';
-    try {
-      const res = await fetch(`https://api.telegram.org/bot${botToken}/getChat?chat_id=${encodeURIComponent(id)}`);
-      const json = await res.json();
-      if (!json?.ok || !json?.result) return null;
-      return {
-        username: json.result.username || (Array.isArray(json.result.active_usernames) ? json.result.active_usernames[0] : '') || '',
-        first_name: json.result.first_name || '',
-        last_name: json.result.last_name || '',
-        bio: json.result.bio || '',
-      };
-    } catch {
-      return null;
+    const apiUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, '');
+    const endpoints = apiUrl
+      ? [
+          `${apiUrl}/api/admin/student-profile/${encodeURIComponent(id)}`,
+          `/api/admin/student-profile?telegramId=${encodeURIComponent(id)}`,
+        ]
+      : [`/api/admin/student-profile?telegramId=${encodeURIComponent(id)}`];
+    const authHeaders = {};
+    if (sessionJwt) authHeaders.Authorization = `Bearer ${sessionJwt}`;
+    if (cachedInitData) authHeaders['X-Telegram-Init-Data'] = cachedInitData;
+
+    for (const url of endpoints) {
+      try {
+        const res = await fetch(url, { headers: authHeaders });
+        const contentType = res.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) continue;
+        const json = await res.json();
+        if (json?.ok && json?.profile) {
+          return json.profile;
+        }
+      } catch {}
     }
+    return null;
   },
 
   sendMessageToStudent: async (telegramId, text) => {
     const id = Number(telegramId);
     const cleanText = (text || '').trim();
     if (!id || !cleanText) return { success: false, error: 'ID yoki xabar bo‘sh' };
-    const botToken = import.meta.env.VITE_STUDENT_BOT_TOKEN || '8656707475:AAFW4jrRdgKdFYVoXuLXnb5GKNC2tp_EyLw';
-    try {
-      const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: id,
-          text: cleanText,
-        }),
-      });
-      const json = await res.json();
-      if (!json?.ok) {
-        return { success: false, error: json?.description || 'Telegram yuborishda xatolik' };
+
+    const apiUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, '');
+    const endpoints = apiUrl
+      ? [`${apiUrl}/api/admin/send-message`, '/api/admin/send-message']
+      : ['/api/admin/send-message'];
+    const headers = { 'Content-Type': 'application/json' };
+    if (sessionJwt) headers.Authorization = `Bearer ${sessionJwt}`;
+    if (cachedInitData) headers['X-Telegram-Init-Data'] = cachedInitData;
+
+    let lastError = 'Xabar yuborish xizmati topilmadi';
+    for (const url of endpoints) {
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ telegramId: id, text: cleanText }),
+        });
+        const contentType = res.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) continue;
+        const json = await res.json();
+        if (res.ok && json?.ok) {
+          return { success: true };
+        }
+        lastError = json?.error || json?.detail || lastError;
+      } catch (e) {
+        lastError = e?.message || lastError;
       }
-      return { success: true };
-    } catch (e) {
-      return { success: false, error: e?.message || 'Tarmoq xatoligi' };
     }
+    return { success: false, error: lastError };
   },
   
   updateUserBalance: async (telegramId, newBalance, giftAmount = null) => {
-    const { data } = await supabase.from('users').update({ balance: newBalance }).eq('telegram_id', telegramId).select().single();
-    
-    if (giftAmount !== null) {
-      await supabase.from('transactions').insert([{
-        user_id: telegramId,
-        amount: giftAmount,
-        type: 'gift',
-        description: `Ustoz / Admin tomonidan neyronlar kiritildi: ${giftAmount > 0 ? '+' : ''}${giftAmount} 🧠`
-      }]).catch(() => {});
+    let delta = giftAmount;
+    if (delta === null || delta === undefined) {
+      const { data: curr } = await supabase.from('users').select('balance').eq('telegram_id', telegramId).single();
+      delta = Number(newBalance || 0) - Number(curr?.balance || 0);
     }
-
-    return data;
+    const { data: rpcRes, error } = await supabase.rpc('admin_gift_balance', {
+      p_target_user_id: Number(telegramId),
+      p_delta: Math.trunc(Number(delta || 0)),
+      p_description: delta !== null ? `Ustoz / Admin tomonidan neyronlar kiritildi: ${delta > 0 ? '+' : ''}${delta} 🧠` : null
+    });
+    if (error) {
+      console.error('admin_gift_balance error:', error);
+      return null;
+    }
+    return { telegram_id: telegramId, balance: rpcRes?.new_balance ?? newBalance };
   },
 
   getAllStats: async () => {

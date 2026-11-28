@@ -1,0 +1,10 @@
+# Шаблон для git filter-repo --replace-text replace.txt
+# НИКОГДА не коммитьте заполненный файл replace.txt в репозиторий!
+# Вставьте слева точные старые значения скомпрометированных секретов (из вашей локальной ротации), справа — текст замены.
+
+<OLD_STUDENT_BOT_TOKEN>==>***REMOVED_BOT_TOKEN***
+<OLD_ADMIN_BOT_TOKEN>==>***REMOVED_ADMIN_BOT_TOKEN***
+<OLD_DEPLOY_EXAMPLE_BOT_TOKEN>==>***REMOVED_EXAMPLE_BOT_TOKEN***
+<OLD_SUPABASE_ANON_OR_SERVICE_KEY_JWT>==>***REMOVED_SUPABASE_KEY***
+<OLD_GEMINI_API_KEY>==>***REMOVED_GEMINI_API_KEY***
+<OLD_CLICK_SECRET_KEY>==>***REMOVED_CLICK_SECRET***

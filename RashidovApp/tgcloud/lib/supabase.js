@@ -7,7 +7,12 @@ export const DEFAULT_SUPPORT_CONTACTS = {
   tech: { telegram: '@rashidov_support', phone: '+998 95 889 78 88' },
 };
 
-const REST_BASE = `${CONFIG.SUPABASE_URL.replace(/\/$/, '')}/rest/v1`;
+function getRestBase() {
+  if (!CONFIG.SUPABASE_URL || !CONFIG.SUPABASE_KEY) {
+    throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY/SUPABASE_KEY env vars are required');
+  }
+  return `${CONFIG.SUPABASE_URL.replace(/\/$/, '')}/rest/v1`;
+}
 
 function headers(extra = {}) {
   return {
@@ -19,7 +24,7 @@ function headers(extra = {}) {
 }
 
 async function sbRequest(path, options = {}) {
-  const res = await fetch(`${REST_BASE}${path}`, {
+  const res = await fetch(`${getRestBase()}${path}`, {
     ...options,
     headers: headers(options.headers),
   });
@@ -77,6 +82,37 @@ export async function logTransaction({ userId, amount, type, description }) {
       amount,
       type,
       description,
+    }),
+  });
+}
+
+export async function getPaymentByMerchantTransId(merchantTransId, signal) {
+  const rows = await sbRequest(
+    `/payments?merchant_trans_id=eq.${encodeURIComponent(merchantTransId)}&select=*&limit=1`,
+    signal ? { signal } : {}
+  );
+  return rows?.[0] ?? null;
+}
+
+export async function completeStarsPayment({ merchantTransId, userId, totalStars, telegramChargeId }) {
+  return sbRequest('/rpc/complete_stars_payment', {
+    method: 'POST',
+    body: JSON.stringify({
+      p_merchant_trans_id: merchantTransId,
+      p_user_id: userId,
+      p_total_stars: totalStars,
+      p_telegram_charge_id: telegramChargeId,
+    }),
+  });
+}
+
+export async function refundStarsPayment({ userId, totalStars, telegramChargeId }) {
+  return sbRequest('/rpc/refund_stars_payment', {
+    method: 'POST',
+    body: JSON.stringify({
+      p_user_id: userId,
+      p_total_stars: totalStars,
+      p_telegram_charge_id: telegramChargeId,
     }),
   });
 }

@@ -3,11 +3,16 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.filters import CommandStart, CommandObject
 from aiogram.fsm.context import FSMContext
 from bot.states.onboarding import OnboardingStates
-from bot.db import create_user, create_referral
+from bot.db import create_user, create_referral, get_user
 from bot.keyboards.inline import language_keyboard
 from bot.keyboards.reply import main_menu_reply_keyboard
 from bot.utils.messages import msg
 from bot.config import config
+from bot.services.phase4_guards import (
+    extract_clean_text,
+    parse_referrer_id,
+    sanitize_referral_tx_description,
+)
 
 router = Router()
 
@@ -19,38 +24,49 @@ async def start_handler(message: Message, command: CommandObject, db_user: dict,
     # Сохранить реферальный ID если есть
     args = command.args
     if args:
-        if args.startswith("ref_"):
-            try:
-                await state.update_data(referrer_id=int(args[4:]))
-            except ValueError:
-                pass
+        if args.startswith("ref_") and message.from_user:
+            parsed_ref = parse_referrer_id(args, message.from_user.id)
+            if parsed_ref:
+                await state.update_data(referrer_id=parsed_ref)
         elif args.startswith("buy_"):
             try:
                 stars = int(args[4:])
-                await send_stars_invoice(message, stars)
+                await send_stars_invoice(message, pool, f"stars_{stars}")
                 return
             except ValueError:
                 pass
         elif args.startswith("video_"):
             try:
                 lesson_id = int(args[6:])
+                user_id = message.from_user.id if message.from_user else 0
                 async with pool.acquire() as conn:
-                    lesson = await conn.fetchrow("SELECT title, video_url FROM lessons WHERE id = $1", lesson_id)
-                    if lesson and lesson['video_url']:
+                    raw = await conn.fetchval(
+                        "SELECT public.check_lesson_access($1, $2)",
+                        user_id,
+                        lesson_id,
+                    )
+                    import json as _json
+
+                    access = _json.loads(raw) if isinstance(raw, str) else dict(raw)
+                    if not access.get("found"):
+                        await message.answer("Видео не найдено.")
+                    elif not access.get("allowed"):
+                        await message.answer("⛔ Ushbu video dars faqat sotib olingan yoki ochilgan kurslar uchun.")
+                    elif access.get("video_url"):
                         await message.answer("🔄 Загрузка видео...")
                         try:
                             await message.answer_video(
-                                lesson['video_url'],
-                                caption=lesson['title'],
+                                access["video_url"],
+                                caption=access.get("title") or "Video dars",
                                 supports_streaming=True,
                                 protect_content=True,
                             )
-                        except Exception as e:
+                        except Exception:
                             await message.answer("Video faylini yuklab bo'lmadi. Iltimos, platformada tomosha qiling.", protect_content=True)
                     else:
                         await message.answer("Видео не найдено.")
                 return
-            except Exception as e:
+            except Exception:
                 pass
         elif args.startswith("msg_"):
             try:
@@ -65,8 +81,8 @@ async def start_handler(message: Message, command: CommandObject, db_user: dict,
                 return
             except Exception as e:
                 import logging
-                logging.error(f"Error in msg_ deep link: {e}")
-                await message.answer(f"Ошибка: {e}")
+                logging.error("Error in msg_ deep link: %s", type(e).__name__)
+                await message.answer("❌ Не удалось открыть диалог.")
                 return
 
     if db_user:
@@ -96,32 +112,54 @@ async def lang_chosen(call: CallbackQuery, state: FSMContext):
 
 @router.message(OnboardingStates.entering_name)
 async def name_entered(message: Message, state: FSMContext):
-    await state.update_data(full_name=message.text.strip())
     data = await state.get_data()
     lang = data.get('language', 'ru')
+    full_name = extract_clean_text(getattr(message, 'text', None))
+    if not full_name:
+        await message.answer(msg('enter_name', lang))
+        return
+    await state.update_data(full_name=full_name[:120])
     await message.answer(msg('enter_class', lang))
     await state.set_state(OnboardingStates.entering_class)
 
 
 @router.message(OnboardingStates.entering_class)
 async def class_entered(message: Message, state: FSMContext, pool):
-    class_group = message.text.strip()
     data = await state.get_data()
     lang = data.get('language', 'ru')
-    full_name = data.get('full_name')
+    class_group = extract_clean_text(getattr(message, 'text', None))
+    if not class_group:
+        await message.answer(msg('enter_class', lang))
+        return
+
+    full_name = data.get('full_name') or 'Student'
     referrer_id = data.get('referrer_id')
+    user_id = message.from_user.id
 
-    # Создать юзера в БД
-    await create_user(pool, message.from_user.id, full_name, class_group, lang)
+    existing = await get_user(pool, user_id)
+    is_new_user = existing is None
+    if is_new_user:
+        await create_user(pool, user_id, full_name, class_group[:60], lang)
 
-    # Реферальный бонус обоим
-    if referrer_id:
-        await create_referral(pool, referrer_id, message.from_user.id)
-        from bot.services.economy import add_neurons
-        await add_neurons(pool, referrer_id, config.REFERRAL_BONUS, 'referral',
-                          f'Реферал: {full_name}')
-        await add_neurons(pool, message.from_user.id, config.REFERRAL_BONUS, 'referral',
-                          'Бонус за регистрацию по реферальной ссылке')
+    # Реферальный бонус строго 1 раз для нового пользователя и без самореферала / PII
+    if is_new_user and referrer_id and int(referrer_id) != int(user_id):
+        created_ref = await create_referral(pool, int(referrer_id), user_id)
+        if created_ref:
+            from bot.services.economy import add_neurons
+            await add_neurons(
+                pool,
+                int(referrer_id),
+                config.REFERRAL_BONUS,
+                'referral',
+                sanitize_referral_tx_description(is_referrer=True),
+            )
+            await add_neurons(
+                pool,
+                user_id,
+                config.REFERRAL_BONUS,
+                'referral',
+                sanitize_referral_tx_description(is_referrer=False),
+            )
 
     await message.answer(
         msg('registered', lang),

@@ -1,11 +1,13 @@
 import { api } from 'sdk';
-import { CONFIG, STARS_PRICES } from '../lib/config.js';
+import { CONFIG } from '../lib/config.js';
 import {
+  completeStarsPayment,
   createUser,
   getLesson,
   getUser,
   incrementBalance,
   logTransaction,
+  refundStarsPayment,
 } from '../lib/supabase.js';
 import {
   escapeHtml,
@@ -25,18 +27,6 @@ function parseRefId(arg, selfId) {
   if (!/^\d+$/.test(raw)) return null;
   const refId = Number(raw);
   return refId !== selfId ? refId : null;
-}
-
-function parseNeuronsFromPayload(payload) {
-  const s = String(payload || '').trim();
-  if (s.startsWith('buy_neurons_')) {
-    const stars = Number(s.split('_')[2]);
-    return STARS_PRICES[stars] ?? stars * 250;
-  }
-  if (/^\d+$/.test(s)) return Number(s);
-  if (s.startsWith('{')) return Number(JSON.parse(s).amount);
-  if (s.includes(':')) return Number(s.split(':').pop());
-  throw new Error(`Unsupported invoice_payload: ${payload}`);
 }
 
 async function handleStart(message, startArg) {
@@ -207,15 +197,25 @@ async function handleSuccessfulPayment(message) {
   const sp = message.successful_payment;
   if (!tgUser || !sp) return;
 
-  const amount = parseNeuronsFromPayload(sp.invoice_payload);
-  const newBalance = await incrementBalance(tgUser.id, amount);
-  await logTransaction({
-    userId: tgUser.id,
-    amount,
-    type: 'stars_topup',
-    description: `Telegram Stars payment ${sp.telegram_payment_charge_id}`,
-  });
+  let result;
+  try {
+    result = await completeStarsPayment({
+      merchantTransId: sp.invoice_payload,
+      userId: tgUser.id,
+      totalStars: sp.total_amount,
+      telegramChargeId: sp.telegram_payment_charge_id,
+    });
+  } catch {
+    console.warn('stars_complete failed', { orderId: sp.invoice_payload });
+    return;
+  }
 
+  if (result?.already_paid) {
+    return;
+  }
+
+  const amount = Number(result?.xp_credited || 0);
+  const newBalance = Number(result?.new_balance || 0);
   const user = await getUser(tgUser.id);
   const lang = normLang(user?.language);
   const partyEmoji = '<tg-emoji emoji-id="5436040291507247633">🎉</tg-emoji>';
@@ -232,9 +232,38 @@ async function handleSuccessfulPayment(message) {
   });
 }
 
+async function handleRefundedPayment(message) {
+  const tgUser = message.from;
+  const rp = message.refunded_payment;
+  if (!tgUser || !rp) return;
+
+  let result;
+  try {
+    result = await refundStarsPayment({
+      userId: tgUser.id,
+      totalStars: rp.total_amount,
+      telegramChargeId: rp.telegram_payment_charge_id,
+    });
+  } catch {
+    console.warn('stars_refund failed', { orderId: rp.invoice_payload });
+    return;
+  }
+
+  if (result?.already_refunded) return;
+  const deducted = Number(result?.xp_deducted || 0);
+  await api.sendMessage({
+    chat_id: message.chat.id,
+    text: `↩️ Возврат по оплате выполнен. Списано ${deducted} 🧠.`,
+  });
+}
+
 export default async function (message) {
   if (message.successful_payment) {
     await handleSuccessfulPayment(message);
+    return;
+  }
+  if (message.refunded_payment) {
+    await handleRefundedPayment(message);
     return;
   }
 

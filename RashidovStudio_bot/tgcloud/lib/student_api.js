@@ -2,6 +2,9 @@ import { fetch, FormData, InputFile } from 'sdk';
 import { CONFIG } from './config.js';
 
 export async function callStudentBot(method, payload) {
+  if (!CONFIG.STUDENT_BOT_TOKEN) {
+    throw new Error('STUDENT_BOT_TOKEN env var is not configured');
+  }
   const res = await fetch(
     `https://api.telegram.org/bot${CONFIG.STUDENT_BOT_TOKEN}/${method}`,
     {
@@ -20,6 +23,9 @@ export async function callStudentBot(method, payload) {
 }
 
 export async function sendStudentPhotoBytes({ chatId, bytes, caption, captionEntities }) {
+  if (!CONFIG.STUDENT_BOT_TOKEN) {
+    throw new Error('STUDENT_BOT_TOKEN env var is not configured');
+  }
   const form = new FormData();
   form.append('chat_id', String(chatId));
   form.append('photo', new InputFile(bytes, 'broadcast.jpg', { type: 'image/jpeg' }));

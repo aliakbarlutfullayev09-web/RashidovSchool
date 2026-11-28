@@ -115,12 +115,10 @@ async def answer_handler(call: CallbackQuery, state: FSMContext, pool, db_user, 
         else:
             error_text = msg('test_incorrect', lang)
 
-        # Контекст для AI помощника (скрытый в сообщении)
+        # Контекст для AI помощника: сохраняем только qid и выбор ученика (без ответа 'c'!)
         context = json.dumps({
-            'q': question['text'],
-            'o': options,
-            'c': question['correct_option_index'],
-            'u': opt_idx
+            'qid': question.get('id'),
+            'u': opt_idx,
         }, ensure_ascii=False)
 
         ai_hint = msg('test_ai_hint', lang)

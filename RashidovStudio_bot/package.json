@@ -9,6 +9,6 @@
     "fetch": "npx tgcloud fetch"
   },
   "devDependencies": {
-    "@tgcloud/cli": "latest"
+    "@tgcloud/cli": "0.2.0"
   }
 }

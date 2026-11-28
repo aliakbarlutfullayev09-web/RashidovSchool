@@ -3,17 +3,20 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle2, XCircle, HelpCircle } from 'lucide-react';
 import { useHaptic } from '../hooks/useHaptic';
 import { useLanguage } from '../context/LanguageContext';
+import { verifyCheckpointAnswer } from '../api/supabase';
 
 export default function CheckpointModal({ checkpoint, onAnswer }) {
   const { lang } = useLanguage();
   const [selectedIdx, setSelectedIdx] = useState(null);
   const [status, setStatus] = useState(null); // 'correct' | 'wrong'
+  const [submitting, setSubmitting] = useState(false);
   const { notificationSuccess, notificationError, impactMedium } = useHaptic();
 
   // Reset selection whenever a new/re-triggered checkpoint opens
   useEffect(() => {
     setSelectedIdx(null);
     setStatus(null);
+    setSubmitting(false);
   }, [checkpoint?.id, checkpoint?.trigger_time_sec]);
 
   if (!checkpoint) return null;
@@ -21,7 +24,7 @@ export default function CheckpointModal({ checkpoint, onAnswer }) {
   const options = Array.isArray(checkpoint.options) ? checkpoint.options : [];
   const rawCorrect = checkpoint.correct_option_index ?? checkpoint.correct_option;
 
-  const isOptionCorrect = (option, idx) => {
+  const isOptionCorrectLocal = (option, idx) => {
     if (typeof rawCorrect === 'number') return idx === rawCorrect;
     if (rawCorrect !== undefined && rawCorrect !== null && rawCorrect !== '' && !Number.isNaN(Number(rawCorrect))) {
       return idx === Number(rawCorrect);
@@ -29,12 +32,19 @@ export default function CheckpointModal({ checkpoint, onAnswer }) {
     return option === rawCorrect;
   };
 
-  const handleSelect = (option, idx) => {
-    if (selectedIdx !== null) return;
+  const handleSelect = async (option, idx) => {
+    if (selectedIdx !== null || submitting) return;
     setSelectedIdx(idx);
+    setSubmitting(true);
     impactMedium();
 
-    const isCorrect = isOptionCorrect(option, idx);
+    let isCorrect = false;
+    if (rawCorrect !== undefined && rawCorrect !== null) {
+      isCorrect = isOptionCorrectLocal(option, idx);
+    } else {
+      const res = await verifyCheckpointAnswer(checkpoint.id, idx, checkpoint.lesson_id);
+      isCorrect = Boolean(res?.is_correct);
+    }
     setStatus(isCorrect ? 'correct' : 'wrong');
 
     if (isCorrect) {

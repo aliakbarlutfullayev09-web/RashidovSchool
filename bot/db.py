@@ -48,7 +48,14 @@ async def get_subject_admin(pool: asyncpg.Pool, user_id: int, subject_id: int):
     return await pool.fetchrow("SELECT * FROM subject_admins WHERE user_id = $1 AND subject_id = $2", user_id, subject_id)
 
 async def get_admin_subjects(pool: asyncpg.Pool, user_id: int):
-    return await pool.fetch("SELECT * FROM subject_admins WHERE user_id = $1", user_id)
+    query = """
+        SELECT s.id, s.name, sa.subject_id, sa.permissions
+        FROM subject_admins sa
+        JOIN subjects s ON s.id = sa.subject_id
+        WHERE sa.user_id = $1
+        ORDER BY s.id
+    """
+    return await pool.fetch(query, user_id)
 
 async def get_courses_by_subject(pool: asyncpg.Pool, subject_id: int):
     return await pool.fetch("SELECT * FROM courses WHERE subject_id = $1 ORDER BY order_index", subject_id)
@@ -92,23 +99,56 @@ async def create_promo(pool: asyncpg.Pool, code: str, bonus: int, max_uses: int,
     return await pool.fetchrow(query, code, bonus, max_uses, created_by)
 
 async def use_promo(pool: asyncpg.Pool, code: str, user_id: int):
+    norm_code = (code or "").strip().upper()
+    if not norm_code:
+        return None
     async with pool.acquire() as conn:
         async with conn.transaction():
-            promo = await conn.fetchrow("SELECT * FROM promo_codes WHERE code = $1 AND current_uses < max_uses FOR UPDATE", code)
+            promo = await conn.fetchrow(
+                """
+                SELECT * FROM promo_codes
+                WHERE UPPER(TRIM(code)) = $1
+                  AND current_uses < max_uses
+                  AND (expires_at IS NULL OR expires_at > NOW())
+                FOR UPDATE
+                """,
+                norm_code,
+            )
             if not promo:
                 return None
-            try:
-                await conn.execute("INSERT INTO promo_uses (promo_id, user_id) VALUES ($1, $2)", promo['id'], user_id)
-                await conn.execute("UPDATE promo_codes SET current_uses = current_uses + 1 WHERE id = $1", promo['id'])
-                return promo
-            except asyncpg.UniqueViolationError:
+            inserted_id = await conn.fetchval(
+                """
+                INSERT INTO promo_uses (promo_id, user_id)
+                VALUES ($1, $2)
+                ON CONFLICT (user_id, promo_id) DO NOTHING
+                RETURNING id
+                """,
+                promo['id'],
+                user_id,
+            )
+            if inserted_id is None:
                 return None
+            await conn.execute("UPDATE promo_codes SET current_uses = current_uses + 1 WHERE id = $1", promo['id'])
+            return promo
 
-async def create_referral(pool: asyncpg.Pool, referrer_id: int, referred_id: int):
-    try:
-        await pool.execute("INSERT INTO referrals (referrer_id, referred_id) VALUES ($1, $2)", referrer_id, referred_id)
-    except asyncpg.UniqueViolationError:
-        pass
+
+async def create_referral(pool: asyncpg.Pool, referrer_id: int, referred_id: int) -> bool:
+    if not referrer_id or not referred_id or int(referrer_id) == int(referred_id):
+        return False
+    ref_exists = await pool.fetchval("SELECT 1 FROM users WHERE telegram_id = $1", int(referrer_id))
+    if not ref_exists:
+        return False
+    inserted_id = await pool.fetchval(
+        """
+        INSERT INTO referrals (referrer_id, referred_id)
+        VALUES ($1, $2)
+        ON CONFLICT (referred_id) DO NOTHING
+        RETURNING id
+        """,
+        int(referrer_id),
+        int(referred_id),
+    )
+    return inserted_id is not None
 
 async def get_subject_students(pool: asyncpg.Pool, subject_id: int):
     query = """

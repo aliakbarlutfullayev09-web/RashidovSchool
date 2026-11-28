@@ -2,10 +2,71 @@ import { createClient } from '@supabase/supabase-js';
 import { mockSubjects, mockCourses, mockLessons, mockProgress } from '../mock/data';
 import { mergeExamPortalData } from './examDefaults';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://rcpbepcdgbxjncpxeowx.supabase.co';
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjcGJlcGNkZ2J4am5jcHhlb3d4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwMTQyNTAsImV4cCI6MjEwMzU5MDI1MH0.icLRyq0piPK_aITPZDu42nFOG9_jyfzVc7lwuckubbM';
+const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL || '').trim();
+const supabaseKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+let sessionJwt = null;
+
+export function setSupabaseAuthToken(token) {
+  sessionJwt = token || null;
+}
+
+export function getSessionToken() {
+  return sessionJwt;
+}
+
+const authedFetch = (input, init = {}) => {
+  const headers = new Headers(init.headers || {});
+  if (sessionJwt) {
+    headers.set('Authorization', `Bearer ${sessionJwt}`);
+  }
+  return fetch(input, { ...init, headers });
+};
+
+export const supabase =
+  supabaseUrl && supabaseKey
+    ? createClient(supabaseUrl, supabaseKey, { global: { fetch: authedFetch } })
+    : createClient('https://invalid.supabase.local', 'missing-anon-key', {
+        global: {
+          fetch: async () => {
+            throw new Error('VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are not configured');
+          },
+        },
+      });
+
+export async function authenticateTelegram(initData) {
+  if (!initData) {
+    return { ok: false, error: 'Missing Telegram initData' };
+  }
+  const apiUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, '');
+  const endpoints = apiUrl
+    ? [`${apiUrl}/api/auth/telegram`, '/api/auth/telegram']
+    : ['/api/auth/telegram'];
+
+  let lastError = 'Authentication failed';
+  for (const url of endpoints) {
+    try {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ initData, app: 'user' }),
+      });
+      const contentType = resp.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) continue;
+      const data = await resp.json();
+      if (resp.ok && data?.ok && data?.user) {
+        if (data.token) {
+          setSupabaseAuthToken(data.token);
+        }
+        return { ok: true, token: data.token || null, user: data.user };
+      }
+      lastError = data?.error || data?.detail || lastError;
+    } catch (e) {
+      lastError = e?.message || lastError;
+    }
+  }
+  return { ok: false, error: lastError };
+}
 
 /**
  * Ensures user is registered in Supabase and synchronizes streak / last active date.
@@ -17,87 +78,36 @@ export async function syncUserSession(rawUser) {
   const telegramId = Number(rawUser.id || rawUser.telegram_id);
   if (!telegramId || isNaN(telegramId)) return null;
 
-  const todayStr = new Date().toISOString().split('T')[0];
-  const firstName = rawUser.first_name || rawUser.full_name || 'Aliakbar Lutfullayev';
+  const firstName = rawUser.first_name || rawUser.full_name || 'Student';
 
   try {
-    // 1. Fetch user from Supabase
-    const { data: existingUser, error } = await supabase
+    const { data: rpcData, error: rpcErr } = await supabase.rpc('sync_daily_activity');
+    if (!rpcErr && rpcData?.ok && rpcData?.user) {
+      return rpcData.user;
+    }
+
+    const { data: existingUser } = await supabase
       .from('users')
       .select('*')
       .eq('telegram_id', telegramId)
       .maybeSingle();
 
     if (existingUser) {
-      // Calculate streak
-      let newStreak = existingUser.streak_days || 0;
-      const lastActive = existingUser.last_active_date;
-
-      if (!lastActive) {
-        newStreak = 1;
-      } else if (lastActive !== todayStr) {
-        const lastDate = new Date(lastActive);
-        const todayDate = new Date(todayStr);
-        const diffDays = Math.round((todayDate - lastDate) / (1000 * 60 * 60 * 24));
-
-        if (diffDays === 1) {
-          newStreak += 1;
-        } else if (diffDays > 1) {
-          const isFrozen = existingUser.frozen_until && new Date(existingUser.frozen_until) >= todayDate;
-          if (!isFrozen) {
-            newStreak = 1;
-          }
-        }
-      }
-
-      // Update last_active_date and streak in Supabase
-      const { data: updatedUser } = await supabase
-        .from('users')
-        .update({
-          last_active_date: todayStr,
-          streak_days: newStreak
-        })
-        .eq('telegram_id', telegramId)
-        .select()
-        .single();
-
-      return updatedUser || { ...existingUser, last_active_date: todayStr, streak_days: newStreak };
+      return existingUser;
     }
-
-    // 2. User does not exist in DB yet: insert new record
-    const newUser = {
-      telegram_id: telegramId,
-      role: 'student',
-      full_name: firstName,
-      class_group: '11-A',
-      balance: 0,
-      streak_days: 1,
-      last_active_date: todayStr,
-      language: 'uz'
-    };
-
-    const { data: createdUser, error: insertErr } = await supabase
-      .from('users')
-      .insert([newUser])
-      .select()
-      .single();
-
-    if (!insertErr && createdUser) {
-      return createdUser;
-    }
-    return newUser;
   } catch (err) {
     console.warn('syncUserSession network fallback:', err);
-    return {
-      telegram_id: telegramId,
-      full_name: firstName,
-      balance: 0,
-      streak_days: 1,
-      class_group: '11-A',
-      language: 'uz',
-      role: 'student'
-    };
   }
+  return {
+    telegram_id: telegramId,
+    full_name: firstName,
+    balance: 0,
+    debt: 0,
+    streak_days: 1,
+    class_group: '11-A',
+    language: 'uz',
+    role: 'student'
+  };
 }
 
 export const getUserData = async (telegramId) => {
@@ -118,65 +128,37 @@ export async function updateUserProfile(telegramId, data) {
 export async function applyPromoCode(telegramId, code, lang = 'uz') {
   const isRu = lang === 'ru';
   try {
-    if (!code || !telegramId) {
+    if (!code || !code.trim()) {
       return { success: false, message: isRu ? 'Введите промокод' : 'Kodni kiriting' };
     }
 
-    const { data: promos, error } = await supabase.from('promo_codes').select('*');
+    const { data, error } = await supabase.rpc('redeem_promo', { p_code: code.trim() });
     if (error) {
       return { success: false, message: isRu ? `Ошибка БД: ${error.message}` : `DB xatosi: ${error.message}` };
     }
 
-    const promo = promos?.find(p => p.code.trim().toLowerCase() === code.trim().toLowerCase());
-    if (!promo) {
-      return { success: false, message: isRu ? 'Промокод не найден' : 'Promo-kod topilmadi' };
-    }
-
-    if (promo.current_uses >= promo.max_uses) {
-      return { success: false, message: isRu ? 'Лимит активаций исчерпан' : 'Foydalanish limiti tugagan' };
-    }
-
-    const { data: uses, error: usesError } = await supabase
-      .from('promo_uses')
-      .select('*')
-      .eq('promo_id', promo.id)
-      .eq('user_id', telegramId);
-
-    if (!usesError && uses && uses.length > 0) {
+    if (!data?.ok) {
+      const msgMap = {
+        NOT_FOUND: isRu ? 'Промокод не найден' : 'Promo-kod topilmadi',
+        EXPIRED: isRu ? 'Срок действия промокода истёк' : 'Promo-kod muddati tugagan',
+        LIMIT_REACHED: isRu ? 'Лимит активаций исчерпан' : 'Foydalanish limiti tugagan',
+        ALREADY_USED: isRu ? 'Вы уже использовали этот промокод' : 'Siz bu promo-koddan allaqachon foydalangansiz',
+        RATE_LIMIT_EXCEEDED: isRu ? 'Слишком много попыток. Подождите немного.' : 'Juda ko‘p urinish. Biroz kuting.',
+      };
       return {
         success: false,
-        message: isRu ? 'Вы уже использовали этот промокод' : 'Siz bu promo-koddan allaqachon foydalangansiz'
+        code: data?.code,
+        message: msgMap[data?.code] || data?.message || (isRu ? 'Неверный промокод' : 'Xato promo-kod'),
       };
     }
 
-    const { data: user } = await supabase.from('users').select('balance').eq('telegram_id', telegramId).single();
-    if (!user) {
-      return { success: false, message: isRu ? 'Пользователь не найден' : 'Foydalanuvchi topilmadi' };
-    }
-
-    const newBalance = (user.balance || 0) + (promo.bonus_amount || 0);
-
-    // Update user balance
-    await supabase.from('users').update({ balance: newBalance }).eq('telegram_id', telegramId);
-    // Increment promo uses
-    await supabase.from('promo_codes').update({ current_uses: (promo.current_uses || 0) + 1 }).eq('id', promo.id);
-    // Record usage
-    await supabase.from('promo_uses').insert([{ promo_id: promo.id, user_id: telegramId }]).catch(() => {});
-    // Audit in transactions
-    await supabase.from('transactions').insert([{
-      user_id: telegramId,
-      amount: promo.bonus_amount,
-      type: 'promo',
-      description: `Promo-kod faollashtirildi: ${promo.code}`
-    }]).catch(() => {});
-
-    return { 
-      success: true, 
+    return {
+      success: true,
       message: isRu
-        ? `На ваш счёт начислено ${promo.bonus_amount} нейронов!`
-        : `${promo.bonus_amount} Neyron hisobingizga qo'shildi!`, 
-      bonus: promo.bonus_amount,
-      newBalance 
+        ? `На ваш счёт начислено ${data.bonus} нейронов!`
+        : `${data.bonus} Neyron hisobingizga qo'shildi!`,
+      bonus: Number(data.bonus || 0),
+      newBalance: Number(data.new_balance || 0),
     };
   } catch (err) {
     return {
@@ -191,10 +173,28 @@ export const applyPromo = async (code, userId) => {
   return applyPromoCode(userId, code);
 };
 
+async function fetchPublicSubjectsRaw() {
+  const { data: rpcRows, error: rpcErr } = await supabase.rpc('get_public_subjects');
+  if (!rpcErr && Array.isArray(rpcRows)) {
+    return rpcRows;
+  }
+  return null;
+}
+
+export const getStreakFreezeCost = async () => {
+  try {
+    const { data, error } = await supabase.rpc('get_streak_freeze_cost');
+    if (!error && data !== null && data !== undefined) {
+      return Number(data);
+    }
+  } catch {}
+  return null;
+};
+
 export const getSubjects = async () => {
   try {
-    const { data, error } = await supabase.from('subjects').select('*').order('id');
-    if (!error && data && data.length > 0) {
+    const data = await fetchPublicSubjectsRaw();
+    if (data && data.length > 0) {
       const mapped = data.map((d, idx) => {
         const rawName = (d.name || '').trim();
         const norm = rawName.toLowerCase();
@@ -285,14 +285,10 @@ export const getSubjects = async () => {
 
 const readSiteMetadata = async () => {
   try {
-    const { data, error } = await supabase
-      .from('subjects')
-      .select('id, description')
-      .eq('id', 1)
-      .maybeSingle();
-
-    if (!error && data?.description && typeof data.description === 'string') {
-      const parsed = JSON.parse(data.description);
+    const rows = await fetchPublicSubjectsRaw();
+    const primary = rows?.find((r) => Number(r.id) === 1);
+    if (primary?.description && typeof primary.description === 'string') {
+      const parsed = JSON.parse(primary.description);
       if (parsed && typeof parsed === 'object') {
         return parsed;
       }
@@ -301,14 +297,68 @@ const readSiteMetadata = async () => {
   return {};
 };
 
-export const getExamPortalData = async (subjectRows = []) => {
-  try {
-    const meta = await readSiteMetadata();
-    return mergeExamPortalData(meta?.exam_portal_data || null, subjectRows);
-  } catch (e) {
-    console.warn('Error fetching exam portal data:', e);
-    return mergeExamPortalData(null, subjectRows);
+function buildApiAuthHeaders() {
+  const headers = { 'Content-Type': 'application/json' };
+  if (sessionJwt) {
+    headers.Authorization = `Bearer ${sessionJwt}`;
   }
+  const initData = typeof window !== 'undefined' ? window.Telegram?.WebApp?.initData : '';
+  if (initData) {
+    headers['X-Telegram-Init-Data'] = initData;
+  }
+  return headers;
+}
+
+export const getExamPortalData = async (subjectRows = []) => {
+  const apiUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, '');
+  const endpoints = apiUrl
+    ? [`${apiUrl}/api/exams/questions`, '/api/exams/questions']
+    : ['/api/exams/questions'];
+  const headers = buildApiAuthHeaders();
+
+  for (const url of endpoints) {
+    try {
+      const resp = await fetch(url, { method: 'GET', headers });
+      const contentType = resp.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) continue;
+      const data = await resp.json();
+      if (resp.ok && data?.ok && data?.portalData) {
+        return data.portalData;
+      }
+    } catch {}
+  }
+
+  // Offline / mock fallback uses stripped defaults (zero answer keys in client bundle)
+  return mergeExamPortalData(null, subjectRows);
+};
+
+export const submitExamAttempt = async ({ attemptId, subjectKey, mode, testId, answers }) => {
+  const apiUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, '');
+  const endpoints = apiUrl
+    ? [`${apiUrl}/api/exams/submit`, '/api/exams/submit']
+    : ['/api/exams/submit'];
+  const headers = buildApiAuthHeaders();
+
+  let lastError = 'Exam submit failed';
+  for (const url of endpoints) {
+    try {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ attemptId, subjectKey, mode, testId, answers }),
+      });
+      const contentType = resp.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) continue;
+      const data = await resp.json();
+      if (resp.ok && data?.ok) {
+        return data;
+      }
+      lastError = data?.error || data?.detail || lastError;
+    } catch (e) {
+      lastError = e?.message || lastError;
+    }
+  }
+  return { ok: false, error: lastError };
 };
 
 export const getCourses = async (subjectId, prefetchedMeta = null) => {
@@ -336,13 +386,14 @@ export const getCourses = async (subjectId, prefetchedMeta = null) => {
 
 export const getLessons = async (courseId) => {
   try {
-    let query = supabase.from('lessons').select('*').order('order_index');
-    if (courseId) {
-      query = query.eq('course_id', courseId);
-    }
-    const [{ data, error }, meta] = await Promise.all([query, readSiteMetadata()]);
+    const [{ data, error }, meta] = await Promise.all([
+      supabase.rpc('get_lessons_catalog', {
+        p_course_id: courseId ? Number(courseId) : null,
+      }),
+      readSiteMetadata(),
+    ]);
     const lessonMeta = meta?.lesson_meta || {};
-    if (!error && data && data.length > 0) {
+    if (!error && Array.isArray(data) && data.length > 0) {
       return data.map(l => {
         const m = lessonMeta[String(l.id)] || {};
         return {
@@ -379,16 +430,14 @@ export const getCoursesAndLessons = async (subjectId) => {
       return acc;
     }, {});
 
-    const courseIds = dbCourses.map(c => c.id);
-    const { data: dbLessons, error } = await supabase
-      .from('lessons')
-      .select('*')
-      .in('course_id', courseIds)
-      .order('order_index');
+    const courseIds = dbCourses.map(c => Number(c.id));
+    const { data: dbLessons, error } = await supabase.rpc('get_lessons_catalog', {
+      p_course_ids: courseIds,
+    });
 
     const lessonMeta = meta?.lesson_meta || {};
 
-    if (!error && dbLessons && dbLessons.length > 0) {
+    if (!error && Array.isArray(dbLessons) && dbLessons.length > 0) {
       const hydrated = dbLessons.map(l => {
         const m = lessonMeta[String(l.id)] || {};
         const parentCourse = courseMap[l.course_id];
@@ -471,11 +520,7 @@ export const saveWatchProgress = async (
     localStorage.setItem(key, JSON.stringify(payload));
     if (userId) {
       try {
-        await supabase.from('progress').upsert({
-          user_id: userId,
-          lesson_id: lessonId,
-          is_unlocked: true
-        }, { onConflict: 'user_id,lesson_id' });
+        await supabase.rpc('record_lesson_watch', { p_lesson_id: Number(lessonId) });
       } catch {}
     }
     return { success: true, localOnly: true };
@@ -485,39 +530,45 @@ export const saveWatchProgress = async (
   }
 };
 
-export const freezeStreak = async (userId) => {
+export const freezeStreak = async (_userId) => {
   try {
-    const { data: user } = await supabase.from('users').select('balance, frozen_until').eq('telegram_id', userId).single();
-    if (!user || user.balance < 10000) return { success: false };
-
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    
-    await supabase.from('users').update({ 
-      balance: user.balance - 10000,
-      frozen_until: tomorrow.toISOString().split('T')[0]
-    }).eq('telegram_id', userId);
-    
-    try {
-      await supabase.from('transactions').insert([{
-        user_id: userId,
-        amount: -10000,
-        type: 'spend',
-        description: 'Muzlatish (Streak Freeze) xaridi'
-      }]);
-    } catch {}
-
-    return { success: true, newBalance: user.balance - 10000 };
+    const { data, error } = await supabase.rpc('freeze_streak_rpc');
+    if (error || !data?.ok) {
+      return {
+        success: false,
+        code: data?.code || 'FAILED',
+        error: data?.error || error?.message || 'Streak freeze failed',
+      };
+    }
+    return {
+      success: true,
+      cost: Number(data.cost || 10000),
+      newBalance: Number(data.new_balance || 0),
+      frozenUntil: data.frozen_until,
+    };
   } catch {
     return { success: false };
   }
 };
 
-export const createStarsInvoiceLink = async (stars, userId) => {
+export const createStarsInvoiceLink = async (productIdOrStars) => {
+  const productId =
+    typeof productIdOrStars === 'string' && productIdOrStars.startsWith('stars_')
+      ? productIdOrStars
+      : `stars_${Number(productIdOrStars)}`;
   const apiUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, '');
   const endpoints = apiUrl
     ? [`${apiUrl}/api/payments/create-stars-invoice`, '/api/create-invoice']
     : ['/api/create-invoice'];
+
+  const headers = { 'Content-Type': 'application/json' };
+  if (sessionJwt) {
+    headers.Authorization = `Bearer ${sessionJwt}`;
+  }
+  const initData = typeof window !== 'undefined' ? window.Telegram?.WebApp?.initData : '';
+  if (initData) {
+    headers['X-Telegram-Init-Data'] = initData;
+  }
 
   let lastError = null;
   let lastCode = null;
@@ -526,8 +577,8 @@ export const createStarsInvoiceLink = async (stars, userId) => {
     try {
       const resp = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stars: Number(stars), userId })
+        headers,
+        body: JSON.stringify({ productId })
       });
       const contentType = resp.headers.get('content-type') || '';
       if (!contentType.includes('application/json')) {
@@ -535,23 +586,14 @@ export const createStarsInvoiceLink = async (stars, userId) => {
       }
       const data = await resp.json();
       if (resp.ok && data?.ok && data?.invoiceUrl) {
-        return { ok: true, invoiceUrl: data.invoiceUrl };
+        return { ok: true, invoiceUrl: data.invoiceUrl, orderId: data.orderId };
       }
       if (data?.code) lastCode = data.code;
-      if (data?.error) lastError = data.error;
+      if (data?.error || data?.detail) lastError = data.error || data.detail;
     } catch (e) {
       lastError = e?.message || 'Network error';
     }
   }
-
-  try {
-    const { data, error } = await supabase.functions.invoke('create-stars-invoice', {
-      body: { stars: Number(stars), userId }
-    });
-    if (!error && data?.ok && data?.invoiceUrl) {
-      return { ok: true, invoiceUrl: data.invoiceUrl };
-    }
-  } catch {}
 
   return {
     ok: false,
@@ -564,11 +606,24 @@ export const createStarsInvoiceLink = async (stars, userId) => {
  * Sends a lesson video directly to the student via Telegram Bot with protect_content=true
  * (blocks saving to gallery and forwarding) and lesson title as caption.
  */
-export const sendLessonVideoToBot = async ({ userId, lessonId, videoUrl, title }) => {
+export const sendLessonVideoToBot = async (lessonIdOrPayload) => {
+  const lessonId =
+    typeof lessonIdOrPayload === 'object' && lessonIdOrPayload !== null
+      ? Number(lessonIdOrPayload.lessonId)
+      : Number(lessonIdOrPayload);
   const apiUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, '');
   const endpoints = apiUrl
     ? [`${apiUrl}/api/lessons/send-video`, '/api/send-lesson-video']
     : ['/api/send-lesson-video'];
+
+  const headers = { 'Content-Type': 'application/json' };
+  if (sessionJwt) {
+    headers.Authorization = `Bearer ${sessionJwt}`;
+  }
+  const initData = typeof window !== 'undefined' ? window.Telegram?.WebApp?.initData : '';
+  if (initData) {
+    headers['X-Telegram-Init-Data'] = initData;
+  }
 
   let lastError = null;
   let lastCode = null;
@@ -577,8 +632,8 @@ export const sendLessonVideoToBot = async ({ userId, lessonId, videoUrl, title }
     try {
       const resp = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, lessonId, videoUrl, title })
+        headers,
+        body: JSON.stringify({ lessonId })
       });
       const contentType = resp.headers.get('content-type') || '';
       if (!contentType.includes('application/json')) {
@@ -594,15 +649,6 @@ export const sendLessonVideoToBot = async ({ userId, lessonId, videoUrl, title }
       lastError = e?.message || 'Network error';
     }
   }
-
-  try {
-    const { data, error } = await supabase.functions.invoke('send-lesson-video', {
-      body: { userId, lessonId, videoUrl, title }
-    });
-    if (!error && data?.ok) {
-      return { ok: true };
-    }
-  } catch {}
 
   return {
     ok: false,
@@ -624,15 +670,10 @@ let videoCheckpointsUnavailable = false;
  */
 export const getVideoCheckpoints = async (lessonId) => {
   try {
-    if (!videoCheckpointsUnavailable) {
-      const { data, error } = await supabase
-        .from('video_checkpoints')
-        .select('*')
-        .eq('lesson_id', lessonId)
-        .order('trigger_time_sec');
-
-      if (!error && data) {
-        return data.map(cp => ({
+    const { data, error } = await supabase.rpc('get_lesson_checkpoints', { p_lesson_id: Number(lessonId) });
+    if (!error && Array.isArray(data) && data.length > 0) {
+      return data
+        .map((cp) => ({
           id: cp.id,
           lesson_id: cp.lesson_id,
           trigger_time_sec: cp.trigger_time_sec || 0,
@@ -640,48 +681,14 @@ export const getVideoCheckpoints = async (lessonId) => {
           question: cp.question || cp.question_text || '',
           question_text: cp.question || cp.question_text || '',
           options: Array.isArray(cp.options) ? cp.options : [],
-          correct_option: cp.correct_option ?? cp.correct_option_index ?? 0,
-          correct_option_index: cp.correct_option ?? cp.correct_option_index ?? 0
-        }));
-      }
-      if (error && (error.code === 'PGRST205' || error.code === '42P01' || String(error.message || '').includes('404'))) {
-        videoCheckpointsUnavailable = true;
-      }
-    }
-
-    // Fallback: Check if checkpoints are stored in 'questions' table
-    const { data: qData } = await supabase
-      .from('questions')
-      .select('*')
-      .eq('lesson_id', lessonId);
-
-    if (qData && qData.length > 0) {
-      const cps = [];
-      qData.forEach(q => {
-        if (q.image_url && q.image_url.startsWith('cp_meta:')) {
-          try {
-            const meta = JSON.parse(q.image_url.replace('cp_meta:', ''));
-            cps.push({
-              id: q.id,
-              lesson_id: q.lesson_id,
-              trigger_time_sec: meta.trigger_time_sec || 0,
-              rewind_time_sec: meta.rewind_time_sec || 0,
-              question: q.text,
-              question_text: q.text,
-              options: Array.isArray(q.options) ? q.options : [],
-              correct_option: q.correct_option_index,
-              correct_option_index: q.correct_option_index
-            });
-          } catch {}
-        }
-      });
-      if (cps.length > 0) return cps.sort((a, b) => a.trigger_time_sec - b.trigger_time_sec);
+        }))
+        .sort((a, b) => a.trigger_time_sec - b.trigger_time_sec);
     }
   } catch (e) {
     console.warn('Checkpoints fetch error:', e);
   }
 
-  // Only return default stop-test for lesson 11/1 or demo lesson
+  // Demo stop-test for lesson 11/1 when no DB checkpoints exist
   if (lessonId === 11 || lessonId === 1 || lessonId === '1') {
     return [
       {
@@ -700,19 +707,28 @@ export const getVideoCheckpoints = async (lessonId) => {
   return [];
 };
 
+export const verifyCheckpointAnswer = async (checkpointId, selectedIndex, lessonId = null) => {
+  try {
+    const { data, error } = await supabase.rpc('check_checkpoint_answer', {
+      p_checkpoint_id: Number(checkpointId),
+      p_selected_index: Number(selectedIndex),
+      p_lesson_id: lessonId ? Number(lessonId) : null,
+    });
+    if (!error && data) {
+      return data;
+    }
+  } catch {}
+  return { ok: false, is_correct: false };
+};
+
 /**
- * Retrieves quiz questions created by teachers for a lesson.
+ * Retrieves quiz questions (without answer keys) for a lesson via answerless RPC.
  */
 export const getQuestions = async (lessonId) => {
   try {
-    const { data, error } = await supabase
-      .from('questions')
-      .select('*')
-      .eq('lesson_id', lessonId);
-    
-    if (!error && data) {
-      // Filter out checkpoint metadata entries if any
-      return data.filter(q => !q.image_url || !q.image_url.startsWith('cp_meta:'));
+    const { data, error } = await supabase.rpc('get_lesson_questions', { p_lesson_id: Number(lessonId) });
+    if (!error && Array.isArray(data)) {
+      return data;
     }
   } catch (e) {
     console.warn('Error fetching questions:', e);
@@ -721,20 +737,37 @@ export const getQuestions = async (lessonId) => {
 };
 
 /**
- * Saves lesson quiz / video completion progress (stars & unlock state; no Neyron payout).
+ * Grades a lesson quiz on the server idempotently via submit_lesson_quiz RPC.
  */
-export const saveLessonQuizProgress = async (userId, lessonId, stars = 3, score = 100) => {
-  if (!userId || !lessonId) return { success: false };
-
+export const submitLessonQuiz = async (attemptId, lessonId, answers = {}) => {
+  if (!attemptId || !lessonId) return { ok: false };
   try {
-    await supabase.from('progress').upsert({
-      user_id: userId,
-      lesson_id: lessonId,
-      stars: Math.max(1, Math.min(3, stars)),
-      is_unlocked: true
-    }, { onConflict: 'user_id,lesson_id' });
+    const { data, error } = await supabase.rpc('submit_lesson_quiz', {
+      p_attempt_id: String(attemptId),
+      p_lesson_id: Number(lessonId),
+      p_answers: answers,
+    });
+    if (!error && data?.ok) {
+      return data;
+    }
+    return { ok: false, error: error?.message || 'Quiz submit failed' };
+  } catch (e) {
+    console.error('submitLessonQuiz error:', e);
+    return { ok: false, error: e.message };
+  }
+};
 
-    return { success: true, rewardNeyrons: 0 };
+/**
+ * Saves lesson completion state via server RPC (stars >= 1; no Neyron payout).
+ */
+export const saveLessonQuizProgress = async (userId, lessonId) => {
+  if (!userId || !lessonId) return { success: false };
+  try {
+    const { data, error } = await supabase.rpc('record_lesson_watch', { p_lesson_id: Number(lessonId) });
+    if (!error && data?.ok) {
+      return { success: true, rewardNeyrons: 0 };
+    }
+    return { success: false };
   } catch (e) {
     console.error('saveLessonQuizProgress error:', e);
     return { success: false, error: e.message };
@@ -744,7 +777,7 @@ export const saveLessonQuizProgress = async (userId, lessonId, stars = 3, score 
 /**
  * Exam completion hook (DTM / Milliy sertifikat). Neyrons are never awarded for exams.
  */
-export const saveExamProgress = async (userId, subjectKey, mode, testId, score, stars = 3) => {
+export const saveExamProgress = async (userId) => {
   if (!userId) return { success: false };
   return { success: true, rewardNeyrons: 0 };
 };
@@ -768,13 +801,7 @@ export const completeQuest = async (userId, questType, xpReward) => {
 
 export const incrementViewCount = async (lessonId) => {
   try {
-    const { data: lesson } = await supabase.from('lessons').select('id').eq('id', lessonId).single();
-    if (lesson) {
-      // Safe check if view_count column exists
-      try {
-        await supabase.rpc('increment_lesson_view', { lesson_id: lessonId });
-      } catch {}
-    }
+    await supabase.rpc('increment_lesson_view', { lesson_id: lessonId });
   } catch {}
 };
 
@@ -828,29 +855,19 @@ export const getCachedSupportContacts = () => {
 
 export const getSupportContacts = async () => {
   try {
-    const { data, error } = await supabase
-      .from('subjects')
-      .select('id, description')
-      .eq('id', 1)
-      .maybeSingle();
-
-    if (!error && data?.description) {
+    const parsed = await readSiteMetadata();
+    if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+      const merged = {
+        bio: { ...DEFAULT_SUPPORT_CONTACTS.bio, ...(parsed.bio || {}) },
+        chem: { ...DEFAULT_SUPPORT_CONTACTS.chem, ...(parsed.chem || {}) },
+        tech: { ...DEFAULT_SUPPORT_CONTACTS.tech, ...(parsed.tech || {}) },
+        website: parsed.website || DEFAULT_SUPPORT_CONTACTS.website
+      };
+      cachedSupportContacts = merged;
       try {
-        const parsed = JSON.parse(data.description);
-        if (parsed && typeof parsed === 'object') {
-          const merged = {
-            bio: { ...DEFAULT_SUPPORT_CONTACTS.bio, ...(parsed.bio || {}) },
-            chem: { ...DEFAULT_SUPPORT_CONTACTS.chem, ...(parsed.chem || {}) },
-            tech: { ...DEFAULT_SUPPORT_CONTACTS.tech, ...(parsed.tech || {}) },
-            website: parsed.website || DEFAULT_SUPPORT_CONTACTS.website
-          };
-          cachedSupportContacts = merged;
-          try {
-            localStorage.setItem('rb_support_contacts', JSON.stringify(merged));
-          } catch {}
-          return merged;
-        }
+        localStorage.setItem('rb_support_contacts', JSON.stringify(merged));
       } catch {}
+      return merged;
     }
   } catch (e) {
     console.warn('getSupportContacts error:', e);
@@ -860,23 +877,4 @@ export const getSupportContacts = async () => {
   if (cached) return cached;
 
   return DEFAULT_SUPPORT_CONTACTS;
-};
-
-export const saveSupportContacts = async (contacts) => {
-  try {
-    const jsonStr = JSON.stringify(contacts);
-    const { error } = await supabase
-      .from('subjects')
-      .update({ description: jsonStr })
-      .eq('id', 1);
-
-    if (error) throw error;
-    try {
-      localStorage.setItem('rb_support_contacts', jsonStr);
-    } catch {}
-    return { success: true };
-  } catch (e) {
-    console.error('saveSupportContacts error:', e);
-    return { success: false, error: e.message };
-  }
 };

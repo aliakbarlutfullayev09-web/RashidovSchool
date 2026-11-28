@@ -1,0 +1,62 @@
+name: CI Security & Build Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  python-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install bot, backend & audit deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r bot/requirements.txt -r backend/requirements.txt pytest pytest-asyncio pip-audit
+      - name: Compile Python sources
+        run: python -m compileall -q bot backend
+      - name: Run Python unit & security tests
+        run: pytest -v --ignore=tests/integration
+      - name: Run pip-audit
+        run: pip-audit -r bot/requirements.txt -r backend/requirements.txt
+
+  frontend-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install user-app & admin-app from lockfiles
+        run: |
+          npm --prefix user-app ci
+          npm --prefix admin-app ci
+      - name: Run Node security & exam tests
+        run: node --test tests/*.mjs
+      - name: Build user-app and admin-app
+        run: |
+          npm --prefix user-app run build
+          npm --prefix admin-app run build
+      - name: Check production dependencies with npm audit
+        run: |
+          npm --prefix user-app audit --omit=dev
+          npm --prefix admin-app audit --omit=dev
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run Gitleaks secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

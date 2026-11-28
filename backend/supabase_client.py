@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import datetime, timezone
 from typing import Any
 import httpx
@@ -38,7 +39,10 @@ class SupabaseRest:
         if q.isdigit():
             exact = await self.get_user(int(q))
             return [exact] if exact else []
-        clean = q.replace("*", "").replace("(", "").replace(")", "").replace(",", "")
+        # Allow only safe alphanumeric/apostrophe/space/hyphen characters and cap length to prevent PostgREST filter injection
+        clean = re.sub(r"[^0-9A-Za-zА-Яа-яЁёЎўҚқҒғҲҳ'\s-]", "", q)[:64].strip()
+        if not clean:
+            return []
         resp = await self.client.get(
             f"{self.base_url}/users",
             headers=self.headers,
@@ -260,3 +264,136 @@ class SupabaseRest:
             params={"user_id": f"eq.{user_id}"},
         )
         resp.raise_for_status()
+
+    async def create_payment_order(
+        self,
+        *,
+        user_id: int,
+        merchant_trans_id: str,
+        provider: str,
+        product_id: str,
+        currency: str,
+        amount_minor: int,
+        xp_credited: int,
+    ) -> dict[str, Any]:
+        resp = await self.client.post(
+            f"{self.base_url}/payments",
+            headers={**self.headers, "Prefer": "return=representation"},
+            json={
+                "user_id": int(user_id),
+                "merchant_trans_id": merchant_trans_id,
+                "provider": provider,
+                "product_id": product_id,
+                "currency": currency,
+                "amount": amount_minor,
+                "amount_minor": amount_minor,
+                "xp_credited": xp_credited,
+                "status": "pending",
+            },
+        )
+        resp.raise_for_status()
+        rows = resp.json()
+        return rows[0]
+
+    async def create_referral(self, referrer_id: int, referred_id: int) -> bool:
+        if int(referrer_id) == int(referred_id):
+            return False
+        resp = await self.client.post(
+            f"{self.base_url}/referrals",
+            headers={**self.headers, "Prefer": "resolution=ignore-duplicates,return=representation"},
+            params={"on_conflict": "referred_id"},
+            json={"referrer_id": int(referrer_id), "referred_id": int(referred_id)},
+        )
+        if resp.status_code == 409:
+            return False
+        resp.raise_for_status()
+        rows = resp.json()
+        return bool(rows)
+
+    async def get_payment_by_charge_or_order(self, lookup: str) -> dict[str, Any] | None:
+        resp = await self.client.get(
+            f"{self.base_url}/payments",
+            headers=self.headers,
+            params={"telegram_payment_charge_id": f"eq.{lookup}", "select": "*", "limit": "1"},
+        )
+        resp.raise_for_status()
+        rows = resp.json()
+        if rows:
+            return rows[0]
+        return await self.get_payment_by_merchant_trans_id(lookup)
+
+    async def get_payment_by_merchant_trans_id(self, merchant_trans_id: str) -> dict[str, Any] | None:
+        resp = await self.client.get(
+            f"{self.base_url}/payments",
+            headers=self.headers,
+            params={"merchant_trans_id": f"eq.{merchant_trans_id}", "select": "*", "limit": "1"},
+        )
+        resp.raise_for_status()
+        rows = resp.json()
+        return rows[0] if rows else None
+
+    async def update_payment_status(self, merchant_trans_id: str, status: str) -> None:
+        resp = await self.client.post(
+            f"{self.base_url}/rpc/fail_pending_payment",
+            headers=self.headers,
+            json={"p_merchant_trans_id": merchant_trans_id, "p_target_status": status},
+        )
+        resp.raise_for_status()
+
+    async def complete_stars_payment(
+        self,
+        *,
+        merchant_trans_id: str,
+        user_id: int,
+        total_stars: int,
+        telegram_charge_id: str,
+    ) -> dict[str, Any]:
+        resp = await self.client.post(
+            f"{self.base_url}/rpc/complete_stars_payment",
+            headers=self.headers,
+            json={
+                "p_merchant_trans_id": merchant_trans_id,
+                "p_user_id": int(user_id),
+                "p_total_stars": int(total_stars),
+                "p_telegram_charge_id": telegram_charge_id,
+            },
+        )
+        resp.raise_for_status()
+        return dict(resp.json())
+
+    async def refund_stars_payment(
+        self,
+        *,
+        user_id: int,
+        total_stars: int,
+        telegram_charge_id: str,
+    ) -> dict[str, Any]:
+        resp = await self.client.post(
+            f"{self.base_url}/rpc/refund_stars_payment",
+            headers=self.headers,
+            json={
+                "p_user_id": int(user_id),
+                "p_total_stars": int(total_stars),
+                "p_telegram_charge_id": telegram_charge_id,
+            },
+        )
+        resp.raise_for_status()
+        return dict(resp.json())
+
+    async def check_rate_limit(self, key: str, limit: int, window_seconds: int) -> dict[str, Any]:
+        resp = await self.client.post(
+            f"{self.base_url}/rpc/check_rate_limit",
+            headers=self.headers,
+            json={"p_key": key, "p_limit": limit, "p_window_seconds": window_seconds},
+        )
+        resp.raise_for_status()
+        return dict(resp.json())
+
+    async def check_lesson_access(self, user_id: int, lesson_id: int) -> dict[str, Any]:
+        resp = await self.client.post(
+            f"{self.base_url}/rpc/check_lesson_access",
+            headers=self.headers,
+            json={"p_user_id": int(user_id), "p_lesson_id": int(lesson_id)},
+        )
+        resp.raise_for_status()
+        return dict(resp.json())

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import VideoPlayer from '../components/VideoPlayer';
 import RashidovLogo from '../components/RashidovLogo';
 import SubjectBannerEffects from '../components/SubjectBannerEffects';
-import { getSubjects, getCoursesAndLessons, getProgress, getVideoCheckpoints, getQuestions, saveLessonQuizProgress, sendLessonVideoToBot } from '../api/supabase';
+import { getSubjects, getCoursesAndLessons, getProgress, getVideoCheckpoints, getQuestions, submitLessonQuiz, sendLessonVideoToBot } from '../api/supabase';
 import { mockSubjects } from '../mock/data';
 import { 
   Play, Search, X, Bookmark, BookmarkCheck, Clock, 
@@ -300,7 +300,7 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
     impactLight();
     if (!lesson || downloadingLessonId === lesson.id) return;
 
-    if (!lesson.video_url) {
+    if (!lesson.video_url && !lesson.has_video) {
       showDownloadNotice(
         lang === 'ru'
           ? 'Видео для этого урока пока не добавлено'
@@ -310,15 +310,9 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
       return;
     }
 
-    const uid = user?.telegram_id || user?.id;
     setDownloadingLessonId(lesson.id);
 
-    const res = await sendLessonVideoToBot({
-      userId: uid,
-      lessonId: lesson.id,
-      videoUrl: lesson.video_url,
-      title: lesson.title,
-    });
+    const res = await sendLessonVideoToBot({ lessonId: lesson.id });
 
     setDownloadingLessonId(null);
 
@@ -453,32 +447,55 @@ export default function LessonsPage({ user, onPlayingChange, onRegisterBackActio
 
     const handleAnswerQuiz = async (selectedOptionIndex) => {
       impactLight();
-      const newAnswers = { ...lessonQuiz.answers, [lessonQuiz.currentQ]: selectedOptionIndex };
-      
+      const currentQuestion = lessonQuiz.questions[lessonQuiz.currentQ];
+      const newAnswers = {
+        ...lessonQuiz.answers,
+        [lessonQuiz.currentQ]: selectedOptionIndex,
+        ...(currentQuestion?.id !== undefined ? { [String(currentQuestion.id)]: selectedOptionIndex } : {}),
+      };
+
       if (!isLast) {
         setLessonQuiz({ ...lessonQuiz, currentQ: lessonQuiz.currentQ + 1, answers: newAnswers });
       } else {
-        let correctCount = 0;
-        lessonQuiz.questions.forEach((question, idx) => {
-          if (newAnswers[idx] === question.correct_option_index) {
-            correctCount++;
-          }
-        });
-        const ratio = correctCount / (lessonQuiz.questions.length || 1);
-        const stars = ratio >= 0.8 ? 3 : ratio >= 0.5 ? 2 : 1;
         const uid = user?.telegram_id || user?.id;
+        const attemptId =
+          lessonQuiz.attemptId ||
+          (typeof crypto !== 'undefined' && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `00000000-0000-4000-8000-${Date.now().toString(16).padStart(12, '0').slice(-12)}`);
+
+        let gradedQuestions = lessonQuiz.questions;
+        let correctCount = 0;
+        let pct = 0;
+        let stars = 1;
+
+        const serverRes = uid
+          ? await submitLessonQuiz(attemptId, lessonQuiz.lesson.id, newAnswers)
+          : { ok: false };
+
+        if (serverRes?.ok) {
+          correctCount = Number(serverRes.correct_count || 0);
+          pct = Number(serverRes.pct || 0);
+          stars = Number(serverRes.stars || 1);
+          const qResults = Array.isArray(serverRes.question_results) ? serverRes.question_results : [];
+          gradedQuestions = lessonQuiz.questions.map((question, idx) => {
+            const matched = qResults.find((r) => Number(r.id) === Number(question.id)) || qResults[idx];
+            return matched ? { ...question, correct_option_index: matched.correct_option_index } : question;
+          });
+        }
 
         setLessonQuiz({
           ...lessonQuiz,
+          attemptId,
+          questions: gradedQuestions,
           answers: newAnswers,
           finished: true,
           correctCount,
           stars,
-          pct: Math.round(ratio * 100),
+          pct,
         });
 
         if (uid) {
-          await saveLessonQuizProgress(uid, lessonQuiz.lesson.id, stars, Math.round(ratio * 100));
           const prog = await getProgress(uid);
           const pMap = {};
           (prog || []).forEach(p => { pMap[p.lesson_id] = p; });

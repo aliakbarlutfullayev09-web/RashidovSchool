@@ -4,10 +4,15 @@ import logging
 from aiogram import Router, F, Bot
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
-from aiogram.filters import Command
+from aiogram.filters import Command, CommandObject
 from bot.states.admin import AdminStates
 from bot.utils.messages import msg
 from bot.db import get_subject_stats, get_admin_subjects
+from bot.services.phase4_guards import (
+    evaluate_admin_refund_prompt,
+    extract_clean_text,
+    format_teacher_stats_entry,
+)
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -35,8 +40,9 @@ async def send_message_confirm(callback: CallbackQuery, state: FSMContext):
         try:
             await callback.bot.copy_message(chat_id=target_id, from_chat_id=callback.message.chat.id, message_id=msg_id)
             await callback.message.edit_text("✅ Сообщение успешно отправлено!")
-        except Exception as e:
-            await callback.message.edit_text(f"❌ Ошибка отправки: пользователь заблокировал бота или ID неверен. ({e})")
+        except Exception as exc:
+            logger.warning("Admin direct message failed err=%s", type(exc).__name__)
+            await callback.message.edit_text("❌ Ошибка отправки: пользователь заблокировал бота или ID неверен.")
     else:
         await callback.message.edit_text("❌ Ошибка данных сессии.")
     await state.clear()
@@ -147,12 +153,9 @@ async def cmd_stats(message: Message, db_user, pool):
             
         text = ""
         for s in subjects:
-            stats = await get_subject_stats(pool, s['id'])
-            st_text = msg('admin_subscribers', lang, 
-                          students=stats.get('student_count') or 0,
-                          tests=stats.get('test_count') or 0,
-                          avg=stats.get('avg_score') or 0.0)
-            text += f"📚 {s['name']}\n{st_text}\n\n"
+            s_dict = dict(s)
+            stats = await get_subject_stats(pool, s_dict['id'])
+            text += format_teacher_stats_entry(s_dict, stats) + "\n\n"
             
         await message.answer(text)
 
@@ -230,12 +233,124 @@ async def confirm_tg_gift(callback: CallbackQuery, state: FSMContext):
             await callback.message.edit_text(f"✅ Подарок ({gift_id}) успешно отправлен пользователю {target_id}!")
         else:
             await callback.message.edit_text("❌ Данная версия Aiogram еще не поддерживает send_gift. Обновите библиотеку.")
-    except Exception as e:
-        await callback.message.edit_text(f"❌ Ошибка отправки подарка: {e}\nВозможно, у бота недостаточно звёзд или ID неверен.")
+    except Exception as exc:
+        logger.warning("Admin send_gift failed err=%s", type(exc).__name__)
+        await callback.message.edit_text("❌ Ошибка отправки подарка. Возможно, у бота недостаточно звёзд или ID неверен.")
         
     await state.clear()
 
 @router.callback_query(AdminStates.confirming_gift, F.data == "cancel_tg_gift")
 async def cancel_tg_gift(callback: CallbackQuery, state: FSMContext):
     await callback.message.edit_text("❌ Отправка подарка отменена.")
+    await state.clear()
+
+
+# ─────────────────────────────────────────────
+# 5. КОМАНДА: /refund (Возврат Telegram Stars с проверкой баланса/долга)
+# ─────────────────────────────────────────────
+async def _prepare_refund_prompt(message: Message, lookup: str, pool, state: FSMContext) -> None:
+    async with pool.acquire() as conn:
+        payment_row = await conn.fetchrow(
+            """
+            SELECT * FROM payments
+            WHERE telegram_payment_charge_id = $1 OR merchant_trans_id = $1
+            LIMIT 1
+            """,
+            lookup,
+        )
+        user_row = (
+            await conn.fetchrow("SELECT * FROM users WHERE telegram_id = $1 LIMIT 1", payment_row["user_id"])
+            if payment_row
+            else None
+        )
+
+    plan = evaluate_admin_refund_prompt(
+        dict(payment_row) if payment_row else None,
+        dict(user_row) if user_row else None,
+    )
+    if not plan.get("ok"):
+        reason = plan.get("reason")
+        if reason == "already_refunded":
+            await message.answer("ℹ️ Этот платёж уже возвращён.")
+        elif reason == "invalid_status":
+            await message.answer(f"❌ Платёж в статусе `{plan.get('status')}` нельзя вернуть.")
+        else:
+            await message.answer("❌ Платёж с таким charge_id / order_id не найден.")
+        await state.clear()
+        return
+
+    await state.update_data(refund_plan=plan)
+    btn_label = "✅ Подтвердить возврат с долгом" if plan["requires_debt_confirmation"] else "✅ Подтвердить возврат"
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=btn_label, callback_data="confirm_stars_refund")],
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_stars_refund")],
+    ])
+    await message.answer(plan["prompt_text"], reply_markup=keyboard)
+    await state.set_state(AdminStates.confirming_refund)
+
+
+@router.message(Command("refund"))
+async def cmd_refund(message: Message, command: CommandObject, db_user, pool, state: FSMContext):
+    if not db_user or db_user.get('role') not in ['superadmin', 'admin']:
+        await message.answer(msg('no_permission'))
+        return
+
+    lookup = extract_clean_text(command.args if command else None)
+    if not lookup:
+        await message.answer("↩️ Введите `telegram_payment_charge_id` или `merchant_trans_id` заказа:")
+        await state.set_state(AdminStates.waiting_for_refund_charge)
+        return
+
+    await _prepare_refund_prompt(message, lookup, pool, state)
+
+
+@router.message(AdminStates.waiting_for_refund_charge)
+async def process_refund_lookup(message: Message, pool, state: FSMContext):
+    lookup = extract_clean_text(getattr(message, 'text', None))
+    if not lookup:
+        await message.answer("❌ Отправьте текстовый `telegram_payment_charge_id` или `merchant_trans_id`.")
+        return
+    await _prepare_refund_prompt(message, lookup, pool, state)
+
+
+@router.callback_query(AdminStates.confirming_refund, F.data == "confirm_stars_refund")
+async def confirm_stars_refund(callback: CallbackQuery, state: FSMContext, pool):
+    data = await state.get_data()
+    plan = data.get("refund_plan")
+    if not plan:
+        await callback.message.edit_text("❌ Сессия возврата не найдена.")
+        await state.clear()
+        return
+
+    user_id = int(plan["user_id"])
+    charge_id = str(plan["telegram_payment_charge_id"])
+    total_stars = int(plan["total_stars"])
+
+    await callback.message.edit_text("⏳ Выполняем возврат Telegram Stars...")
+    try:
+        await callback.bot.refund_star_payment(user_id=user_id, telegram_payment_charge_id=charge_id)
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                raw = await conn.fetchval(
+                    "SELECT public.refund_stars_payment($1, $2, $3)",
+                    user_id,
+                    total_stars,
+                    charge_id,
+                )
+        res = json.loads(raw) if isinstance(raw, str) else dict(raw)
+        await callback.message.edit_text(
+            f"✅ Возврат выполнен!\n"
+            f"Списано с баланса: {res.get('xp_deducted', 0)} 🧠\n"
+            f"Добавлено в долг: {res.get('debt_added', 0)} 🧠\n"
+            f"Новый баланс: {res.get('new_balance', 0)} 🧠 | Долг: {res.get('new_debt', 0)} 🧠"
+        )
+    except Exception:
+        logger.warning("Admin /refund failed for charge=%s", charge_id)
+        await callback.message.edit_text("❌ Ошибка при выполнении возврата через Telegram Bot API или БД.")
+    await state.clear()
+
+
+@router.callback_query(AdminStates.confirming_refund, F.data == "cancel_stars_refund")
+async def cancel_stars_refund(callback: CallbackQuery, state: FSMContext):
+    await callback.message.edit_text("❌ Возврат отменён.")
     await state.clear()

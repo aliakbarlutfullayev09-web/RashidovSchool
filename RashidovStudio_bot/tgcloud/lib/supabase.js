@@ -1,7 +1,12 @@
 import { fetch } from 'sdk';
 import { CONFIG } from './config.js';
 
-const REST_BASE = `${CONFIG.SUPABASE_URL.replace(/\/$/, '')}/rest/v1`;
+function getRestBase() {
+  if (!CONFIG.SUPABASE_URL || !CONFIG.SUPABASE_KEY) {
+    throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY/SUPABASE_KEY env vars are required');
+  }
+  return `${CONFIG.SUPABASE_URL.replace(/\/$/, '')}/rest/v1`;
+}
 
 function headers(extra = {}) {
   return {
@@ -13,7 +18,7 @@ function headers(extra = {}) {
 }
 
 async function sbRequest(path, options = {}) {
-  const res = await fetch(`${REST_BASE}${path}`, {
+  const res = await fetch(`${getRestBase()}${path}`, {
     ...options,
     headers: headers(options.headers),
   });

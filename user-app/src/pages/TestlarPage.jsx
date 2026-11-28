@@ -16,7 +16,7 @@ import ExamMistakeReview, {
   loadSavedExamResults,
   saveExamResultLocal
 } from '../components/ExamMistakeReview';
-import { getSubjects, getExamPortalData, saveExamProgress } from '../api/supabase';
+import { getSubjects, getExamPortalData, submitExamAttempt } from '../api/supabase';
 import { mockSubjects } from '../mock/data';
 import {
   DEFAULT_EXAM_PORTAL_DATA,
@@ -77,12 +77,14 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
 
   // Results & Mistake Review State
   const [examFinished, setExamFinished] = useState(false);
+  const [serverResult, setServerResult] = useState(null);
   const [confettiKey, setConfettiKey] = useState(0);
   const [savedResultsMap, setSavedResultsMap] = useState(() =>
     loadSavedExamResults(user?.telegram_id || user?.id)
   );
   const [reviewEntry, setReviewEntry] = useState(null);
   const userAnswersRef = useRef({});
+  const attemptIdRef = useRef(null);
   const finishedOnceRef = useRef(false);
 
   useEffect(() => {
@@ -111,7 +113,7 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
       }
     }
     load();
-  }, []);
+  }, [user?.telegram_id]);
 
   const activeSubject = subjects[activeSubjectIndex] || subjects[0] || { 
     id: 1, 
@@ -216,7 +218,12 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
     }
     impactMedium();
     userAnswersRef.current = {};
+    attemptIdRef.current =
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `00000000-0000-4000-8000-${Date.now().toString(16).padStart(12, '0').slice(-12)}`;
     finishedOnceRef.current = false;
+    setServerResult(null);
     setReviewEntry(null);
     setSelectedTest(test);
     setCurrentQIndex(0);
@@ -243,8 +250,8 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
     }
   };
 
-  // Finish Exam Handler
-  const handleFinishExam = () => {
+  // Finish Exam Handler (server-side grading + idempotent attemptId)
+  const handleFinishExam = async () => {
     if (finishedOnceRef.current) return;
     finishedOnceRef.current = true;
 
@@ -257,16 +264,34 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
 
     const uid = user?.telegram_id || user?.id;
     const targetMaxScore = selectedTest?.maxScore || activeModeConfig?.maxScore || (selectedMode === 'dtm' ? 93 : 75);
-    const {
+    const testId = selectedTest?.id || 'exam-1';
+    const attemptId =
+      attemptIdRef.current ||
+      (typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `00000000-0000-4000-8000-${Date.now().toString(16).padStart(12, '0').slice(-12)}`);
+
+    const res = await submitExamAttempt({
+      attemptId,
+      subjectKey: selectedSubjectKey,
+      mode: selectedMode,
+      testId,
+      answers: latestAnswers,
+    });
+
+    const cCount = Number(res?.correctCount ?? 0);
+    const score = String(res?.score ?? '0.0');
+    const percentage = Number(res?.percentage ?? 0);
+    const grade = res?.certGrade ?? null;
+
+    setServerResult({
       correctCount: cCount,
       score,
       percentage,
-      ratio,
       certGrade: grade,
-    } = calculateExamMetrics(activeQuestions, latestAnswers, selectedMode, targetMaxScore);
-    const stars = ratio >= 0.8 ? 3 : ratio >= 0.5 ? 2 : 1;
+      error: res?.ok ? null : (res?.error || 'Server grading unavailable'),
+    });
 
-    const testId = selectedTest?.id || 'exam-1';
     const nextMap = saveExamResultLocal(uid, selectedSubjectKey, selectedMode, testId, {
       testId,
       subjectKey: selectedSubjectKey,
@@ -281,10 +306,6 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
       completedAt: new Date().toISOString(),
     });
     setSavedResultsMap(nextMap);
-
-    if (uid) {
-      saveExamProgress(uid, selectedSubjectKey, selectedMode, testId, score, stars);
-    }
   };
 
   // Back Navigation Registration
@@ -630,13 +651,11 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
     );
   };
 
-  // Results Calculation
-  const {
-    correctCount,
-    score: totalScore,
-    percentage: grantProb,
-    certGrade,
-  } = calculateExamMetrics(activeQuestions, userAnswers, selectedMode, examMaxScore);
+  // Results (computed on server in submitExamAttempt — aggregate score only)
+  const correctCount = serverResult?.correctCount ?? 0;
+  const totalScore = serverResult?.score ?? '0.0';
+  const grantProb = serverResult?.percentage ?? 0;
+  const certGrade = serverResult?.certGrade ?? null;
 
   // ──────────────────────────────────────────────────────────
   // SCREEN 4: EXAM RUNNER
@@ -1191,20 +1210,12 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
             <span>{lang === 'ru' ? 'Смотреть другие варианты' : "Boshqa variantlarni ko'rish"}</span>
           </button>
         </div>
-
-        {/* Full Mistake Breakdown right after completing test */}
-        <ExamMistakeReview
-          questions={activeQuestions}
-          userAnswers={userAnswers}
-          isLight={isLight}
-          lang={lang}
-        />
       </div>
     );
   }
 
   // ──────────────────────────────────────────────────────────
-  // COMPLETED TEST MISTAKE REVIEW & RETAKE VIEW (FROM VARIANT LIST)
+  // COMPLETED TEST RETAKE SUMMARY VIEW (FROM VARIANT LIST)
   // ──────────────────────────────────────────────────────────
   if (reviewEntry) {
     const { test: revTest, result: revRes } = reviewEntry;
@@ -1281,14 +1292,6 @@ export default function TestlarPage({ user, onRegisterBackAction, onExamActiveCh
             </button>
           </div>
         </div>
-
-        {/* Mistake Breakdown */}
-        <ExamMistakeReview
-          questions={revQuestions}
-          userAnswers={revRes?.userAnswers || {}}
-          isLight={isLight}
-          lang={lang}
-        />
       </div>
     );
   }

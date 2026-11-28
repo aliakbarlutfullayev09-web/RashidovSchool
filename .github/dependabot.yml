@@ -1,0 +1,22 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /user-app
+    schedule:
+      interval: weekly
+  - package-ecosystem: npm
+    directory: /admin-app
+    schedule:
+      interval: weekly
+  - package-ecosystem: pip
+    directory: /bot
+    schedule:
+      interval: weekly
+  - package-ecosystem: pip
+    directory: /backend
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
